@@ -1,0 +1,45 @@
+# ---- Game files: NEVER commit these ----
+*.3ds
+*.cia
+*.cci
+*.cxi
+*.3dsx
+*.app
+*.rom
+*.nds
+*.arc
+*.bin
+!data/supp_template.bin
+romfs/
+exefs/
+extdata/
+sdmc/
+MH3U_Extraction/
+Extraction/
+extracted/
+quest[0-9]
+quest[0-9].*
+supp[0-9][0-9][0-9].supp
+*.supp
+*.sav
+*.dec
+
+# ---- Your own data (settings, backups, quests, output mods) ----
+settings.json
+custom_supply.json
+backups/
+library/
+output/
+error_log.txt
+*.mh3uq
+
+# ---- Python / tools / OS ----
+__pycache__/
+*.pyc
+.venv/
+venv/
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store

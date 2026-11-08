@@ -1,0 +1,886 @@
+{
+"_about": "map -> Starttype -> how many game monsters start there, with examples",
+"maps": {
+"1": {
+"0": {
+"n": 60,
+"ex": [
+[
+15,
+1103,
+"Guts: It's What's for Dinner"
+],
+[
+42,
+1203,
+"My Lord's Errand"
+],
+[
+12,
+1206,
+"Who's the Boss?"
+],
+[
+3,
+1303,
+"Trapping a Trickster"
+],
+[
+16,
+1305,
+"A Royal Pain"
+],
+[
+1,
+1407,
+"Dragon Lady"
+]
+]
+},
+"1": {
+"n": 5,
+"ex": [
+[
+60,
+11713,
+"Silent but Deadly"
+],
+[
+41,
+11733,
+"[Advanced] Cloudless Thunder"
+],
+[
+64,
+11737,
+"[Advanced] Blue, Blue Skies"
+],
+[
+1,
+12202,
+"Double Trouble"
+],
+[
+3,
+20202,
+"Gathering of Songbirds"
+]
+]
+},
+"2": {
+"n": 2,
+"ex": [
+[
+15,
+2402,
+"Trial of the Sea Dragon"
+],
+[
+56,
+11650,
+"[Advanced] Ludroth Ambush"
+]
+]
+},
+"3": {
+"n": 6,
+"ex": [
+[
+68,
+2902,
+"Conqueror of Land and Sea"
+],
+[
+12,
+11631,
+"Island Warfare"
+]
+]
+},
+"4": {
+"n": 3,
+"ex": [
+[
+42,
+1204,
+"Bear Trap"
+],
+[
+41,
+11413,
+"Unwanted Visitor"
+]
+]
+},
+"5": {
+"n": 1,
+"ex": [
+[
+42,
+11607,
+"Deserted Island Dustup"
+]
+]
+},
+"6": {
+"n": 1,
+"ex": [
+[
+42,
+11607,
+"Deserted Island Dustup"
+]
+]
+}
+},
+"2": {
+"0": {
+"n": 56,
+"ex": [
+[
+3,
+1302,
+"Playing with Fire"
+],
+[
+8,
+1306,
+"Leading the Charge"
+],
+[
+47,
+1507,
+"The Desert Gourmand"
+],
+[
+6,
+1510,
+"The Horned Wyvern"
+],
+[
+1,
+1618,
+"Desert Warfare"
+],
+[
+53,
+1902,
+"Desert Storm"
+]
+]
+},
+"1": {
+"n": 12,
+"ex": [
+[
+12,
+1205,
+"Pain in the Plains"
+],
+[
+44,
+1711,
+"Rockslide"
+],
+[
+58,
+1905,
+"Triumph of the Tyrants"
+],
+[
+8,
+11312,
+"Mud Brothers"
+],
+[
+73,
+11649,
+"[Advanced] Tale of Tails"
+],
+[
+6,
+11814,
+"Operation: Last Stand"
+]
+]
+},
+"2": {
+"n": 7,
+"ex": [
+[
+44,
+1711,
+"Rockslide"
+],
+[
+6,
+11409,
+"Four Horns"
+],
+[
+47,
+11648,
+"[Advanced] Today's Special"
+],
+[
+73,
+11649,
+"[Advanced] Tale of Tails"
+],
+[
+58,
+11735,
+"[Advanced] Death's Embrace"
+]
+]
+},
+"3": {
+"n": 4,
+"ex": [
+[
+6,
+1905,
+"Triumph of the Tyrants"
+],
+[
+47,
+11648,
+"[Advanced] Today's Special"
+]
+]
+}
+},
+"3": {
+"0": {
+"n": 44,
+"ex": [
+[
+16,
+1304,
+"Save Our Boat"
+],
+[
+45,
+1307,
+"Toxic Troublemaker"
+],
+[
+1,
+1408,
+"A Royal Rumble"
+],
+[
+15,
+1503,
+"The Lord of the Seas"
+],
+[
+46,
+1505,
+"Hammer Time"
+],
+[
+18,
+1703,
+"Scene of the Crime"
+]
+]
+},
+"1": {
+"n": 11,
+"ex": [
+[
+51,
+1605,
+"Bye-Bye, Bloom"
+],
+[
+46,
+2503,
+"Shakalaka Savior II"
+],
+[
+16,
+11307,
+"Ludroth Lament"
+],
+[
+45,
+11317,
+"Supply Constraints"
+],
+[
+67,
+11644,
+"[Advanced] Seeing Green"
+],
+[
+62,
+11651,
+"[Advanced] Pretty and Pink"
+]
+]
+},
+"2": {
+"n": 5,
+"ex": [
+[
+18,
+11625,
+"Accident Investigation"
+],
+[
+62,
+11646,
+"[Advanced] Beauty Kills"
+]
+]
+}
+},
+"4": {
+"0": {
+"n": 59,
+"ex": [
+[
+14,
+1402,
+"Leader of the Icepack"
+],
+[
+43,
+1406,
+"The Snowbound Slider"
+],
+[
+4,
+1409,
+"The Creeping Venom"
+],
+[
+5,
+1509,
+"A Bard's Tale"
+],
+[
+54,
+1702,
+"Snowball Fight"
+],
+[
+52,
+1704,
+"Shocking Development"
+]
+]
+},
+"1": {
+"n": 9,
+"ex": [
+[
+4,
+11404,
+"Toxic Tundra"
+],
+[
+14,
+11415,
+"Frost Bitten"
+],
+[
+54,
+11645,
+"[Advanced] Snow Stampede"
+],
+[
+52,
+11647,
+"[Advanced] Shock Treatment  "
+],
+[
+72,
+11716,
+"Souls of Darkness"
+],
+[
+43,
+11724,
+"Save the Princess!"
+]
+]
+},
+"2": {
+"n": 9,
+"ex": [
+[
+4,
+1708,
+"Toxin Avenger"
+],
+[
+43,
+1710,
+"On Thin Ice"
+],
+[
+54,
+11645,
+"[Advanced] Snow Stampede"
+],
+[
+52,
+11647,
+"[Advanced] Shock Treatment  "
+]
+]
+},
+"3": {
+"n": 5,
+"ex": [
+[
+43,
+1710,
+"On Thin Ice"
+],
+[
+72,
+11715,
+"Infernal Overlord"
+]
+]
+}
+},
+"5": {
+"0": {
+"n": 37,
+"ex": [
+[
+44,
+1506,
+"Walk 'n' Roll"
+],
+[
+2,
+1508,
+"The Wrath of Rathalos"
+],
+[
+9,
+1512,
+"The Volcano's Fury"
+],
+[
+19,
+1514,
+"Denizen of the Molten Deep"
+],
+[
+74,
+1810,
+"\"Brachydios\" Means Trouble"
+],
+[
+55,
+1907,
+"Ace in the Hole"
+]
+]
+},
+"1": {
+"n": 5,
+"ex": [
+[
+19,
+11507,
+"Dancing Flames"
+],
+[
+55,
+11734,
+"[Advanced] Nerves of Steel"
+],
+[
+9,
+11746,
+"[Advanced] Hot Feet"
+],
+[
+72,
+20302,
+"Descent into Hades"
+],
+[
+74,
+20303,
+"Clashing Fists!"
+]
+]
+},
+"2": {
+"n": 2,
+"ex": [
+[
+55,
+11734,
+"[Advanced] Nerves of Steel"
+]
+]
+}
+},
+"6": {
+"0": {
+"n": 4,
+"ex": [
+[
+25,
+1712,
+"Rumble in the Great Desert"
+],
+[
+85,
+11823,
+"Festival on the Sea of Sand"
+]
+]
+}
+},
+"7": {
+"0": {
+"n": 5,
+"ex": [
+[
+20,
+1515,
+"The Decisive Battle"
+],
+[
+69,
+11825,
+"Abyssal Awakening"
+],
+[
+70,
+12502,
+"Throne of the Abyss"
+]
+]
+}
+},
+"8": {
+"0": {
+"n": 68,
+"ex": [
+[
+68,
+2904,
+"Mark of a Hero"
+],
+[
+74,
+2904,
+"Mark of a Hero"
+],
+[
+64,
+2904,
+"Mark of a Hero"
+],
+[
+7,
+11804,
+"Rage Match"
+],
+[
+3,
+11805,
+"Qurupeco Two-step"
+],
+[
+8,
+11806,
+"Ode to Barroth"
+]
+]
+},
+"1": {
+"n": 7,
+"ex": [
+[
+7,
+11804,
+"Rage Match"
+],
+[
+53,
+11807,
+"Eyes of the Storm"
+],
+[
+57,
+11816,
+"Opposites Detract"
+],
+[
+68,
+11829,
+"The March of Victory"
+],
+[
+52,
+20203,
+"A Strange Breed"
+],
+[
+71,
+20318,
+"The Face of Fear"
+]
+]
+},
+"2": {
+"n": 5,
+"ex": [
+[
+46,
+11803,
+"The Hammer and the Axe"
+],
+[
+73,
+11803,
+"The Hammer and the Axe"
+],
+[
+51,
+11805,
+"Qurupeco Two-step"
+],
+[
+54,
+11806,
+"Ode to Barroth"
+],
+[
+41,
+11817,
+"Fang, Fang: You're Dead"
+]
+]
+},
+"3": {
+"n": 1,
+"ex": [
+[
+72,
+11817,
+"Fang, Fang: You're Dead"
+]
+]
+},
+"4": {
+"n": 4,
+"ex": [
+[
+72,
+11821,
+"The Earth Quakers"
+],
+[
+41,
+20324,
+"The Greatest Hunter"
+]
+]
+}
+},
+"11": {
+"0": {
+"n": 3,
+"ex": [
+[
+24,
+2905,
+"The Brilliant Darkness"
+]
+]
+}
+},
+"12": {
+"0": {
+"n": 12,
+"ex": [
+[
+16,
+11511,
+"Jump the Sharq"
+],
+[
+67,
+11809,
+"[Canteen] Submarine Struggle"
+],
+[
+18,
+11822,
+"The Sea Shakers"
+],
+[
+66,
+11822,
+"The Sea Shakers"
+],
+[
+15,
+11822,
+"The Sea Shakers"
+]
+]
+}
+},
+"13": {
+"0": {
+"n": 29,
+"ex": [
+[
+12,
+1604,
+"Field Trip"
+],
+[
+62,
+1607,
+"Pink Queen of the Peaks"
+],
+[
+46,
+1807,
+"The Moving Mountain"
+],
+[
+42,
+1911,
+"Lurkers in the Woods"
+],
+[
+59,
+1911,
+"Lurkers in the Woods"
+],
+[
+41,
+1913,
+"Howl at the Moon"
+]
+]
+},
+"1": {
+"n": 5,
+"ex": [
+[
+46,
+1808,
+"Twin Peaks"
+],
+[
+64,
+1903,
+"Heaven and Earth"
+],
+[
+12,
+11316,
+"Jumping for Jaggi"
+],
+[
+56,
+11643,
+"[Advanced] Miracle Drug"
+]
+]
+},
+"2": {
+"n": 4,
+"ex": [
+[
+41,
+1911,
+"Lurkers in the Woods"
+],
+[
+60,
+11744,
+"[Advanced] Swift Shadows"
+]
+]
+},
+"3": {
+"n": 1,
+"ex": [
+[
+42,
+1615,
+"Double Jeopardy"
+]
+]
+},
+"4": {
+"n": 1,
+"ex": [
+[
+42,
+1615,
+"Double Jeopardy"
+]
+]
+}
+},
+"14": {
+"0": {
+"n": 4,
+"ex": [
+[
+63,
+11801,
+"Ring of the Golden Lune"
+],
+[
+65,
+11802,
+"Ring of the Silver Sol"
+],
+[
+61,
+11824,
+"The Invisible Predator"
+]
+]
+},
+"1": {
+"n": 2,
+"ex": [
+[
+63,
+11815,
+"Moonlit Tryst"
+],
+[
+65,
+11815,
+"Moonlit Tryst"
+]
+]
+}
+},
+"15": {
+"0": {
+"n": 2,
+"ex": [
+[
+75,
+12801,
+"The Black Flame of Calamity"
+]
+]
+}
+}
+}
+}

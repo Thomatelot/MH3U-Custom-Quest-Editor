@@ -55,6 +55,10 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
         add("warning", f"A time limit of {t} minutes is above what was tested (99 and 120 freeze the "
                        "clock): the game may not handle it. 99 minutes already freezes the clock.")
 
+    hw = startpos.hunter_warning(q.get("map"), q.get("supp_enemy_num"))
+    if hw:
+        add("info", hw)
+
     mons = q.monsters
     first_done = False
     seen_empty = False

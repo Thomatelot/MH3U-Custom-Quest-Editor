@@ -16,7 +16,9 @@
   (`spawn_lists.json`, `stray_sets.json`); reward and supply patterns (`autofill.json`,
   `supp_sets.json`); the position of each icon in the game's picture archives (`icons.json`); and
   the start area of each start position, per monster and map (`start_areas.json`, read from the
-  placement table of the game's `code.bin`, identical in the EU and US versions).
+  placement table of the game's `code.bin`, identical in the EU and US versions); where the hunters
+  start (`hunter_starts.json`, read from the 3DS `code.bin`); and the number painted on the in-game
+  map for each area (`area_labels.json`), collected in the game by mh3u-quest-studio (MIT, below).
   They were computed from the author's own copy of the game with the scripts in `tools/`
   (`build_benchmarks.py`, `build_spawns.py`, `build_start_usage.py`). They contain numbers and names,
   not pictures, text blocks, maps, sounds or program code of the game.

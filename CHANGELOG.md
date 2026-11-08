@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.2.0
+
+* **Monster pack: every map.** The siege maps (Great Desert, Underwater Ruin, Tainted Sea) are open
+  to every large monster too; only Ceadeus, Jhen Mohran and their variants stay on their own maps
+  (they still lend their data). 497 combinations, all 14 maps for 47 monsters. On the Underwater
+  Ruin a monster gets only a start point in area 3, as Abyssal Lagiacrus has in the game. The pack
+  reuses the space of the old start lists, and for each new map picks the game's start list with
+  the most start areas the monster can use.
+* **Starts in** (monster card, no longer developer-only): the start points the game has for that
+  monster on that map, shown with the numbers painted on the in-game map (the game's own area
+  numbers differ; version 1.1 showed those). Copies of one species are spread over start points
+  that exist.
+* **Hunters start** (General tab): base camp, random area (with the game's odds for the map) or
+  fixed area, read from the 3DS code (table identical to the Wii U one). The checks say when the
+  value does nothing on the map.
+* **Field labels corrected:** following mh3u-quest-studio's latest work (the game's own field
+  names), checked against all 3DS quests: "Progress level" is the monster rank, "Monster level" is
+  the intro cutscene, "Gathering table" is the supply rank plus story step, and the supply
+  delivery fields were one field off; the old delivery "Count" was where the hunters start (now on
+  the General tab). Quest files are unchanged: only labels and explanations changed.
+* Supply auto-fill no longer changes where the hunters start.
+
 ## 1.1.0
 
 * **North American version** (title id `00040000000AE400`, save folder `00000AE4`): choose the

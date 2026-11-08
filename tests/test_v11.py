@@ -50,6 +50,18 @@ class Regions(unittest.TestCase):
 
 
 class StartAreas(unittest.TestCase):
+    def test_map_numbers(self):
+        self.assertEqual(startpos.area_label(1, 10), "area 8")         # Rathian's usual start, as the map shows it
+        self.assertEqual(startpos.choice_text(0, startpos.areas(1, 1), 1),
+                         "0  -  starts in area 8  (usual start)")
+        self.assertIn("entrance", startpos.area_label(7, 0))
+
+    def test_hunter_starts(self):
+        self.assertEqual(startpos.hunter_text(7, 2), "Always in area 3.")
+        self.assertIn("area 1 15%", startpos.hunter_text(1, 1))
+        self.assertIsNone(startpos.hunter_warning(1, 1))
+        self.assertIn("does nothing", startpos.hunter_warning(2, 2))
+
     def test_data(self):
         self.assertEqual(startpos.areas(1, 1), [10, 2, 5, 4])       # Rathian, Deserted Island
         self.assertEqual(startpos.areas(41, 13), [5, 6, 5])         # Zinogre, Misty Peaks (quest map 13)
@@ -95,10 +107,16 @@ class Pack(unittest.TestCase):
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
+    def test_siege_maps_follow_the_game(self):
+        ruin = [a for a in self.man["added"] if a["stage"] == 7]
+        self.assertTrue(ruin and all(a["donor"] == 69 and a["start_areas"] == [3] for a in ruin))  # Abyssal Lagiacrus
+
     def test_scope(self):
         ems = {a["em"] for a in self.man["added"]}
         self.assertFalse(ems & P.EXCLUDED_MONSTERS)
-        self.assertFalse({a["stage"] for a in self.man["added"]} & P.SIEGE_STAGES)
+        self.assertEqual({a["stage"] for a in self.man["added"]}, set(range(1, 15)))      # every map, siege ones too
+        for em in {a['em'] for a in self.man['added']}:
+            self.assertEqual(len(G.PLACEMENT[em] | {a['stage'] for a in self.man['added'] if a['em'] == em}), 14, em)
         self.assertIn((41, 2), {(a["em"], a["stage"]) for a in self.man["added"]})
         z = [a for a in self.man["added"] if (a["em"], a["stage"]) == (41, 2)][0]
         self.assertEqual(z["donor"], 44)                       # Volvidon: the combination tested in the game
@@ -113,7 +131,7 @@ class Pack(unittest.TestCase):
         while i < len(p) - 3:
             off, n = int.from_bytes(p[i:i + 3], "big"), int.from_bytes(p[i + 3:i + 5], "big")
             va = off + P.BASE
-            self.assertTrue(any(a <= va and va + n <= b for a, b in regions) or table <= va < table + 4 * 86)
+            self.assertTrue(any(a <= va and va + n <= b for a, b in regions) or table - 0x700 <= va < table + 4 * 86)
             code[off:off + n] = p[i + 5:i + 5 + n]
             i += 5 + n
         before, after = P.read_placement(orig, table), P.read_placement(bytes(code), table)
@@ -121,8 +139,11 @@ class Pack(unittest.TestCase):
         for em in range(86):
             for st, ptr in before[em]:
                 self.assertEqual(dict(after[em])[st], ptr)
+            game_lists = lambda st: {q for e2 in before for s_, q in before[e2] if s_ == st}   # noqa: E731
             for st in set(dict(after[em])) - set(dict(before[em])):
-                self.assertEqual(dict(after[em])[st], dict(before[added[(em, st)]])[st])
+                self.assertIn(dict(after[em])[st], game_lists(st))      # one of the game's own start lists
+        for a in self.man["added"]:
+            self.assertEqual(P.start_areas(bytes(code), dict(after[a["em"]])[a["stage"]]), a["start_areas"])
 
     def test_archives(self):
         for em in self.man["monsters"]:
@@ -136,7 +157,7 @@ class Pack(unittest.TestCase):
                     self.assertTrue(k.rsplit("\\", 1)[-1].startswith("em_"), k)
             m = P.MonsterData(f.read_bytes())
             for a in self.man["added"]:
-                if a["em"] == em:
+                if a["em"] == em and a["stage"] not in P.ROUTELESS_STAGES:
                     self.assertTrue(P.tables_complete(m, a["stage"]), (em, a["stage"]))
 
     def test_deterministic(self):

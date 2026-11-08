@@ -41,8 +41,13 @@ ALIGN = 0x8000                                    # data alignment of the game's
 
 # Internal stage ids (not quest map ids): see gamedata.MAP_TO_INTERNAL.
 SIEGE_STAGES = {6, 7, 14}                          # Great Desert, Underwater Ruin, Tainted Sea
-TARGET_STAGES = (1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13)
+TARGET_STAGES = tuple(range(1, 15))                # every map
 EXCLUDED_MONSTERS = {20, 70, 25, 85}               # Ceadeus, Goldbeard Ceadeus, Jhen Mohran, Hallowed Jhen Mohran
+                                                   # (never moved; they can still lend their data)
+# Maps whose residents have no route tables. Underwater Ruin: Abyssal Lagiacrus starts there in the
+# game with no spawn or route table for it at all (only its start record); Great Desert: Jhen Mohran
+# has a spawn table but no routes. A monster added there gets exactly what its donor has.
+ROUTELESS_STAGES = {6, 7}
 SPECIAL_BOSSES = {24, 75}                          # Alatreon, Dire Miralis: scripted fights, extra risk
 WATER_STAGES = {9, 11}                             # the two water arenas
 
@@ -369,6 +374,8 @@ def _donor_ok(mons, place, em, d, stage, need_tables) -> bool:
         return False
     if not need_tables:
         return True
+    if stage in ROUTELESS_STAGES:
+        return True                                # copy what the resident has, even nothing
     if stage not in mons[d].spawn.stages:
         return False
     if len(mons[d].spawn.stages[stage]) <= 1:     # single-area stages (arenas) need no route tables
@@ -382,6 +389,8 @@ def _donor_ok(mons, place, em, d, stage, need_tables) -> bool:
 
 def tables_complete(m: MonsterData, stage: int) -> bool:
     """True when the monster has every stage table the game's own quests always provide."""
+    if stage in ROUTELESS_STAGES:
+        return stage in m.spawn.stages
     if stage not in m.spawn.stages:
         return False
     if len(m.spawn.stages[stage]) <= 1:
@@ -405,7 +414,7 @@ def plan_pack(mons, place, monsters, stages) -> list[dict]:
             cands = [d for d in sorted(mons) if _donor_ok(mons, place, em, d, st, need_tables)]
             if not cands:
                 continue
-            donor = max(cands, key=lambda d: (_score(mons, em, d, st), -d))
+            donor = max(cands, key=lambda d: (d not in EXCLUDED_MONSTERS, _score(mons, em, d, st), -d))
             out.append({"em": em, "stage": st, "donor": donor, "tables": need_tables})
     return out
 
@@ -426,7 +435,6 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print) -> dic
             mons[em] = MonsterData(p.read_bytes())
     if monsters is None:
         monsters = [em for em in sorted(mons) if is_large(em) and em not in EXCLUDED_MONSTERS]
-    stages = [s for s in stages if s not in SIEGE_STAGES]
     plan = plan_pack(mons, place, monsters, stages)
     out_dir = Path(out_dir)
     if out_dir.exists():
@@ -437,15 +445,17 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print) -> dic
     for p in plan:
         by_em.setdefault(p["em"], []).append(p)
     content_hash = hashlib.sha256()
+    final = {}                                     # monsters whose tables change: their new data
     for em, items in sorted(by_em.items()):
         add = [p for p in items if p["tables"]]
         if not add:
             continue
         m = copy.deepcopy(mons[em])
+        final[em] = m
         changed = set()
         for p in add:
             st, d = p["stage"], mons[p["donor"]]
-            if st not in m.spawn.stages:
+            if st not in m.spawn.stages and st in d.spawn.stages:
                 m.spawn.stages[st] = copy.deepcopy(d.spawn.stages[st])
                 changed.add("em_mappos00")
             for k, tb in m.tables.items():
@@ -453,6 +463,8 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print) -> dic
                         and (tb.stages or k == "em_arearoute00"):          # keep the monster's own data
                     tb.stages[st] = d.tables[k].stages[st]
                     changed.add(k)
+        if not changed:
+            continue
         repl = {m.names[k]: (m.spawn.build() if k == "em_mappos00" else m.tables[k].build())
                 for k in sorted(changed)}
         for name in sorted(repl):
@@ -460,23 +472,56 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print) -> dic
         (enemy / f"em{em:03d}.arc").write_bytes(arc_replace(game.archive(em).read_bytes(), repl))
         log(f"  {G.mon_name(em)}: {len(add)} new map(s)")
     # code patch: one new placement list per monster that gains stages
-    records, cursor = [], 0
-    pos = regions[0][0]
+    stage_arrays = {}                              # stage -> every start-record array the game has there
+    for e2, lst in place.items():
+        for st, ptr in lst:
+            stage_arrays.setdefault(st, set()).add(ptr)
+    lists, blobs = {}, []
     for em, items in sorted(by_em.items()):
         lst = list(place[em])
+        spawn = (final.get(em) or mons[em]).spawn.stages
         for p in sorted(items, key=lambda x: x["stage"]):
-            dl = dict(place[p["donor"]])
-            lst.append((p["stage"], dl[p["stage"]]))
-            p["start_areas"] = start_areas(code, dl[p["stage"]])
-        blob = b"".join(struct.pack("<II", s, ptr) for s, ptr in lst) + struct.pack("<II", 0xFF, 0)
-        while pos + len(blob) > regions[cursor][1]:
-            cursor += 1
-            if cursor >= len(regions):
-                raise PackError("Not enough free space in code.bin for the placement lists.")
-            pos = regions[cursor][0]
+            st = p["stage"]
+            ptr = dict(place[p["donor"]])[st]
+            areas_ok = set(spawn.get(st, {}))
+            if st not in ROUTELESS_STAGES and len(areas_ok) > 1:
+                # the start list offering the most zones among those the monster has spawn data for
+                best = [(len(set(start_areas(code, q))), q == ptr, -q, q) for q in stage_arrays[st]
+                        if set(start_areas(code, q)) <= areas_ok]
+                if best:
+                    ptr = max(best)[3]
+            lst.append((st, ptr))
+            p["start_areas"] = start_areas(code, ptr)
+        lists[em] = b"".join(struct.pack("<II", s_, q) for s_, q in lst) + struct.pack("<II", 0xFF, 0)
+    # free space: the padding after two segments, plus the old lists no longer pointed to
+    free = [list(r) for r in regions]
+    old_users: dict[int, set] = {}
+    for e2 in range(86):
+        p_ = struct.unpack_from("<I", code, table_va - BASE + 4 * e2)[0]
+        if p_:
+            old_users.setdefault(p_, set()).add(e2)
+    for p_, users in sorted(old_users.items()):
+        refs = code.count(struct.pack("<I", p_))
+        if users <= set(lists) and refs == len(users):    # nothing else points to it
+            free.append([p_, p_ + 8 * (len(place[min(users)]) + 1)])
+    merged = []
+    for a_, b_ in sorted(free):                    # neighbouring old lists form one block
+        if merged and a_ <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], b_)
+        else:
+            merged.append([a_, b_])
+    free = merged
+    records = []
+    for em in sorted(lists, key=lambda e2: -len(lists[e2])):      # biggest first
+        blob = lists[em]
+        slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= len(blob)), None)
+        if slot is None:
+            raise PackError("Not enough free space in code.bin for the placement lists.")
+        pos = slot[0]
+        slot[0] += (len(blob) + 7) // 8 * 8
         records.append((pos - BASE, blob))
         records.append((table_va - BASE + 4 * em, struct.pack("<I", pos)))
-        pos += len(blob)
+    records.sort()
     patch = ips(records)
     (out_dir / "exefs").mkdir()
     (out_dir / "exefs" / "code.ips").write_bytes(patch)
@@ -574,6 +619,9 @@ def risk_notes(em: int, quest_map: int) -> list[str]:
         notes.append("This is a water arena: a monster that can not swim may float, freeze or crash the game.")
     if internal in (10, 13):
         notes.append("This single-area arena is normally reserved for a few monsters: untested.")
+    if internal in SIEGE_STAGES:
+        notes.append("This is a siege map (Jhen Mohran, Ceadeus or Dire Miralis fight): the map's own "
+                     "scripts may not suit another monster.")
     return notes
 
 

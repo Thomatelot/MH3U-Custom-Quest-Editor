@@ -235,6 +235,27 @@ def run():
     card = next(c for c in mon.cards if c.winfo_ismapped())
     check(card.stamina is None and "Starttype" not in card.vars, "obscure monster settings hidden outside dev mode")
     check(not hasattr(sup, "bound") or "supp_set_no" not in sup.bound, "second supply delivery hidden outside dev mode")
+    # 1.2: where the monster and the hunters start
+    vals = card.start_box.cget("values")
+    check(len(vals) >= 1 and "start" in str(vals[0]), f"the card lists the monster's start areas: {vals[:2]}")
+    if len(vals) > 1:
+        card.start_box.current(1)
+        card._start_pick()
+        settle()
+        check(q2.monsters[card.slot]["Starttype"] == 1, "picking a start area writes Starttype")
+    shot("19_card_starts_in")
+    app.editor.nb.select(0)
+    settle(0.3)
+    hv = gen.hunt.cget("values")
+    check(len(hv) >= 3 and gen.hunt_lab.cget("text"), f"hunters start list and odds shown: {gen.hunt_lab.cget('text')[:60]}")
+    before_hs = q2.get("supp_enemy_num")
+    gen.hunt.current(0)
+    gen._hunt_pick()
+    check(q2.get("supp_enemy_num") == 0, "hunters start written to the quest")
+    q2.set("supp_enemy_num", before_hs)
+    shot("20_general_hunters")
+    app.editor.nb.select(1)
+    settle(0.3)
     # tiers
     slot = card.slot
     q2.set_monster(slot, Nando_hp=96, Nando_at=10, Nando_etc=10)

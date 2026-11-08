@@ -23,7 +23,8 @@ TEMPLATES: list = _D.get("templates", [])
 POOLS = ("LR", "HR", "G")
 POOL_LABEL = {"LR": "Low Rank (1-2 star)", "HR": "High Rank (3-5 star)", "G": "G Rank (6+ star)"}
 SMALL_FIELDS = ("main_zako1", "main_zako2", "zako_nando_hp", "zako_nando_at", "zako_nando_etc")
-SUPPLY_FIELDS = ("item_set_no", "supp_set_no", "supp_time_flag", "supp_enemy_type", "supp_enemy_num")
+# supp_enemy_num is not a supply field: it is where the hunters start (see quest.py)
+SUPPLY_FIELDS = ("item_set_no", "supp_set_no", "supp_time_flag", "supp_enemy_type")
 
 
 def available() -> bool:

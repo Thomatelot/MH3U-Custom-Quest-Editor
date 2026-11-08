@@ -20,10 +20,12 @@ from .widgets import ScrollFrame, Section, StatusDot, Tooltip, center_on, info, 
 PATTERNS = {0: "One objective", 1: "Both objectives", 2: "Either objective"}
 # Stamina values used by the game's own quests (see helptext 'Stamina')
 STAMINA = {0: "Village", 1: "Port Low / High Rank", 2: "Port G Rank", 3: "Grudge Match / Challenge"}
-OTHER_FIELDS = (("start_param", "Monster arrival pattern"), ("hagi_no", "Gathering table"),
-                ("prog_no", "Progress level"), ("enemy_lv", "Monster level"),
+# The record field names are the editor's historical ones; the game's own names of this part of the
+# record are given in quest.py. The labels below say what the fields do.
+OTHER_FIELDS = (("start_param", "Monster arrival pattern"), ("hagi_no", "Supply rank / story step"),
+                ("prog_no", "Monster rank"), ("enemy_lv", "Intro cutscene"),
                 ("special_flag", "Special flag"), ("special_cond", "Special condition"),
-                ("special_cond2", "Special condition 2"), ("demo_no", "Cutscene"))
+                ("special_cond2", "Special condition 2"), ("ren_pattern", "Rannyu_limite (0)"))
 MODE_TYPES = (0x0001, 0x0081, 0x0101)        # objectives whose 'mode' means something
 UP, DOWN = "▲", "▼"
 
@@ -117,8 +119,7 @@ class StartDialog(tk.Toplevel):
             row = ttk.Frame(left)
             row.pack(anchor="w", fill="x", pady=1)
             if self.areas is not None:
-                text = startpos.label(pos) + (f"  -  area {self.areas[pos]}" if pos < len(self.areas)
-                                              else "  -  does not exist for this monster here")
+                text = startpos.choice_text(pos, self.areas, map_id)
             else:
                 text = startpos.label(pos) + (f"   ({u['n']} in the game)" if u else "   (not used on this map)")
             ttk.Radiobutton(row, text=text, value=pos, variable=self.var, command=self._show).pack(side="left")
@@ -153,7 +154,8 @@ class StartDialog(tk.Toplevel):
         text = startpos.describe(self.map_id, self.var.get())
         if self.areas is not None:
             pos = self.var.get()
-            text = (f"Starts in area {self.areas[pos]}. " if pos < len(self.areas) else
+            text = (f"Starts in {startpos.area_label(self.map_id, self.areas[pos])} (number shown on the map). "
+                    if pos < len(self.areas) else
                     "This position does not exist for this monster on this map: choose another one. ") + \
                 (text if startpos.usage(self.map_id, pos) else "")
         self.what.configure(text=text)
@@ -310,6 +312,16 @@ class GeneralTab(Tab):
         self.map_btn.grid(row=r, column=1, sticky="w", pady=3)
         info(g, H.tip("map"), "Card.").grid(row=r, column=2, sticky="w", padx=4)
         r += 1
+        ttk.Label(g, text="Hunters start", style="Card.TLabel").grid(row=r, column=0, sticky="w", pady=3)
+        self.hunt = ttk.Combobox(g, state="readonly", width=34)
+        self.hunt.grid(row=r, column=1, sticky="w")
+        self.hunt.bind("<<ComboboxSelected>>", self._hunt_pick)
+        info(g, H.tip("supp_enemy_num"), "Card.").grid(row=r, column=2, sticky="w", padx=4)
+        r += 1
+        self.hunt_lab = ttk.Label(g, text="", style="Card.Muted.TLabel", wraplength=430, justify="left")
+        self.hunt_lab.grid(row=r, column=0, columnspan=4, sticky="w", pady=(0, 4))
+        self._hunt_values: list[int] = []
+        r += 1
         self.field(g, r, "Time limit", "time_min", tip=lambda: H.tip("time_min"), suffix="minutes")
         self.hooks["time_min"] = self._sync_frozen
         r += 1
@@ -410,6 +422,7 @@ class GeneralTab(Tab):
         self.star.current(max(0, min(10, q.get("star"))))
         m = q.get("map")
         self.map_btn.show(self.app.icons.map(m, 64), G.map_name(m) + (f"  (map {m})" if self.dev else ""))
+        self._hunt_load(q)
         self.auto_pen.set(q.get("penalty") == math.ceil(q.get("reward_money") / 3))
         self.pattern.set(q.get("clr_pattern") if q.get("clr_pattern") in PATTERNS else 0)
         for o in self.objs:
@@ -422,6 +435,26 @@ class GeneralTab(Tab):
         if self.q is not None:
             self.summary.configure(text="In the game:  " + G.objectives_sentence(self.q))
             self.win_lab.configure(text=waves.win_text(self.q))
+
+    # ----- where the hunters start (the field the game calls StartParam)
+    def _hunt_load(self, q):
+        v, m = q.get("supp_enemy_num"), q.get("map")
+        values = sorted(set(startpos.HUNTER_CHOICES) | {v})
+        self._hunt_values = values
+        self.hunt.configure(values=[f"{x}  {startpos.HUNTER_CHOICES.get(x, '(not used by the game)')}"
+                                    for x in values])
+        self.hunt.current(values.index(v))
+        warn = startpos.hunter_warning(m, v)
+        self.hunt_lab.configure(text=warn or startpos.hunter_text(m, v),
+                                style="Card.Warn.TLabel" if warn else "Card.Muted.TLabel")
+
+    def _hunt_pick(self, _e=None):
+        i = self.hunt.current()
+        if self.loading or self.q is None or not 0 <= i < len(self._hunt_values):
+            return
+        self.q.set("supp_enemy_num", self._hunt_values[i])
+        self._hunt_load(self.q)
+        self.editor.changed()
 
     # ----- frozen clock
     def _sync_frozen(self):
@@ -725,6 +758,15 @@ class MonsterCard(ttk.Frame):
         self.size_pre.pack(side="left", padx=6)
         self.size_pre.bind("<<ComboboxSelected>>", self._size_preset)
         info(sz, H.SIZE_TIP, "Card.").pack(side="left")
+        sp_row = ttk.Frame(g, style="Card.TFrame")
+        sp_row.grid(row=2, column=0, columnspan=6, sticky="w", pady=(4, 0))
+        ttk.Label(sp_row, text="Starts in", style="Card.TLabel").pack(side="left")
+        self.start_box = ttk.Combobox(sp_row, state="readonly", width=38)
+        self.start_box.pack(side="left", padx=6)
+        self.start_box.bind("<<ComboboxSelected>>", self._start_pick)
+        ttk.Button(sp_row, text="Map...", width=6, command=self._start).pack(side="left")
+        info(sp_row, H.tip("Starttype"), "Card.").pack(side="left", padx=4)
+        self._start_values: list[int] = []
         pre = ttk.Frame(self, style="Card.TFrame")
         pre.pack(fill="x", pady=(8, 2))
         ttk.Label(pre, text="Strength like", style="Card.TLabel").pack(side="left")
@@ -838,13 +880,15 @@ class MonsterCard(ttk.Frame):
                 self.stamina.current(list(STAMINA).index(st))
             else:
                 self.stamina.set(f"{st} (not used by the game)")
+        self._fill_starts(m, pack)
         self.preset.set("")
         match = [p[0] for p in H.SIZE_PRESETS if p[1] == m["Size"]]
         self.size_pre.set(match[0] if match else f"Custom ({m['Size']} %)")
         self._describe(m)
         if self.start_btn is not None:
             ar = startpos.areas(em, self.q.get("map"), pack)
-            where_txt = (f", area {ar[m['Starttype']]}" if ar is not None and m["Starttype"] < len(ar) else
+            where_txt = (f", {startpos.area_label(self.q.get('map'), ar[m['Starttype']])}"
+                         if ar is not None and m["Starttype"] < len(ar) else
                          (", does not exist here" if ar is not None else ""))
             self.start_btn.configure(text=f"Start positions on the map...  (now: {startpos.label(m['Starttype'])}{where_txt})")
         self.set_count_visible(self.tab.dev or self.tab.n_large <= 1)
@@ -894,6 +938,25 @@ class MonsterCard(ttk.Frame):
             return
         self._describe(self.q.monsters[self.slot])
         self.tab.editor.changed()
+
+    def _fill_starts(self, m, pack):
+        """The 'Starts in' list: the start points the game has for this monster on this map."""
+        mp = self.q.get("map")
+        ar = startpos.areas(m["Type"], mp, pack)
+        values = list(range(len(ar))) if ar is not None else startpos.positions(mp)
+        if m["Starttype"] not in values:
+            values.append(m["Starttype"])
+        self._start_values = values
+        self.start_box.configure(values=[startpos.choice_text(v, ar, mp) for v in values])
+        self.start_box.current(values.index(m["Starttype"]))
+
+    def _start_pick(self, _e=None):
+        i = self.start_box.current()
+        m = self.q.monsters[self.slot]
+        if 0 <= i < len(self._start_values) and self._start_values[i] != m["Starttype"]:
+            self.q.set_monster(self.slot, Starttype=self._start_values[i])
+            self.tab.do_load(self.q)
+            self.tab.editor.changed()
 
     def _start(self):
         m = self.q.monsters[self.slot]
@@ -1136,8 +1199,8 @@ class MonstersTab(Tab):
         self._pat_lab = {}
         self.note = ttk.Label(self.body, style="Muted.TLabel", wraplength=900, justify="left", text=(
             "Tip: 'Copy from a quest...' copies a monster with every setting from another quest; it is "
-            "the safest way to get a working monster. A monster must have spawn data on the quest's "
-            "map, otherwise the game can crash when the quest loads."))
+            "the safest way to get a working monster. A monster the game does not allow on the "
+            "quest's map is skipped and never appears (the card warns; the Monster pack can add the map)."))
         # small monsters
         self.small = Section(self.body, "Small monsters",
                              "The small monsters of the zone and how strong they are.")
@@ -1315,17 +1378,22 @@ class MonstersTab(Tab):
             self._spread_starts(q)
         self._structural(change)
 
-    @staticmethod
-    def _spread_starts(q):
+    def _spread_starts(self, q):
         """Copies of one species must not all start on the same spot: the game's own quests give
-        each copy another start number (0, 1, 2...). A single monster keeps the game's default."""
+        each copy another start number (0, 1, 2...). A single monster keeps the game's default.
+        Only start numbers the monster really has on this map are used."""
+        pack, _inst = self.app.monster_pack()
         seen: dict = {}
         for i, m in enumerate(q.monsters):
             if not m["Type"]:
                 continue
+            ar = startpos.areas(m["Type"], q.get("map"), pack)
+            n = len(ar) if ar else 1
+            if m["Starttype"] >= n:
+                q.set_monster(i, Starttype=0)
             k = seen.get(m["Type"], 0)
-            if k > 0 and m["Starttype"] == 0:
-                q.set_monster(i, Starttype=k)
+            if k > 0 and q.monsters[i]["Starttype"] == 0 and n > 1:
+                q.set_monster(i, Starttype=k % n)
             seen[m["Type"]] = k + 1
 
     def remove(self, slot):
@@ -1418,12 +1486,14 @@ class SupplyTab(Tab):
                                       command=self.app.install_supply_mod)
 
         if self.dev:
-            s3 = Section(body, "Second supply delivery",
-                         "A second supply delivery during the quest. The exact meaning of these fields "
-                         "is not documented; each (i) gives the values the game's quests use.")
+            s3 = Section(body, "Later deliveries",
+                         "When the rest of the supply box arrives: on a timer, after 2 minutes, or once a "
+                         "monster is hunted. Each (i) explains the values (from mh3u-quest-studio, checked "
+                         "in the game on the Wii U version).")
             s3.grid(row=0, column=1, sticky="new", padx=(6, 0))
-            for r, (field, label) in enumerate((("supp_set_no", "Delivery set"), ("supp_time_flag", "Time condition"),
-                                                ("supp_enemy_type", "Monster condition"), ("supp_enemy_num", "Count"))):
+            for r, (field, label) in enumerate((("supp_set_no", "Timed delivery"),
+                                                ("supp_time_flag", "Hunt delivery: monster"),
+                                                ("supp_enemy_type", "Hunt delivery: how many"))):
                 self.field(s3.body, r, label, field, tip=H.tip(field), width=7)
         self.hooks["item_set_no"] = self._fill_supply
 

@@ -65,6 +65,12 @@ Star rank shown on the quest board. It is only a label: how strong the monsters 
 
 Where the quest takes place. The game lets each large monster start only on some maps; on another map it simply does not appear (the editor warns you). The Monster pack page can lift that limit (ROM hack). When you create a quest, copy one that already uses the same map: the hidden data at the end of a quest (small monsters, events) depends on the map.
 
+### Hunters start
+
+WHERE THE HUNTERS START (the game calls it StartParam). 0 = base camp; 1 = a random area on the main hunting maps, with the game's own odds for each map; 2 = a fixed area on the Underwater Ruin, Sacred Land and Tainted Sea. Elsewhere 1 and 2 change nothing. The odds were read from the game's table (3DS code.bin, the same as the Wii U one, where random and fixed starts were confirmed in the game by mh3u-quest-studio). Values used by the game's 365 quests: 1 (208×), 0 (153×), 2 (4×).
+
+The line under the list gives the odds for the quest's map, with the area numbers of the in-game map.
+
 ### Time limit
 
 Time limit in minutes. The game's quests use 50 minutes (348 quests) or 30 minutes (16 quests, mostly arena and special fights).
@@ -102,7 +108,7 @@ How it is counted (for hunts):
 
 Normally you do not need to touch these: the Monsters tab sets them for you.
 
-Target: The monster. Pick one that has spawn data on the quest's map.
+Target: The monster. Pick one the game allows on the quest's map (or install the Monster pack).
 
 Count: How many. The game's own quests write it like this: 'Hunt 2 Arzuros' (Double Jeopardy), 'Slay 12 Altaroth' (Bug Hunt), 'Deliver 3 Unique Mushrooms' (Tutorial 1).
 
@@ -120,13 +126,13 @@ At most at the same time: Most roaming monsters at the same time (1 or 2).
 
 ### Developer mode: other gameplay settings
 
-Arrival pattern (start_param): ARRIVAL PATTERN of the large monsters (read in the order of their cards). 0 = all at the start; 1 = one after another; 5 = the first, then the other two together (3 monsters); 6 = the first two together, then the last one (3 monsters); 4 = the first, then two together, then the last (4 monsters); 8 = two together, then two together (4 monsters). Found by comparing the game's 100 multi-monster quests; the Monsters tab sets it for you. Values used by the game's 365 quests: 0 (326×), 1 (26×), 8 (6×), 6 (4×), 4 (2×), 5 (1×).
+Arrival pattern (start_param): ARRIVAL PATTERN of the large monsters (the game calls this field Ren_pattern; read in the order of their cards). 0 = all at the start; 1 = one after another; 5 = the first, then the other two together (3 monsters); 6 = the first two together, then the last one (3 monsters); 4 = the first, then two together, then the last (4 monsters); 8 = two together, then two together (4 monsters). Found by comparing the game's 100 multi-monster quests; the Monsters tab sets it for you. Values used by the game's 365 quests: 0 (326×), 1 (26×), 8 (6×), 6 (4×), 4 (2×), 5 (1×).
 
-Gathering table (hagi_no): Which gathering / carving table the quest uses (not confirmed: the game uses 0 to 4 depending on map and rank). Values used by the game's 365 quests: 2 (107×), 1 (100×), 0 (95×), 4 (37×), 3 (12×), 1280 (1×).
+Supply rank / story step (hagi_no): Two values in one number. Low byte: the supply rank (the game's HagiNo): 0 = low rank, no timed delivery; 1 = high rank; 2 = G rank; 3 = arena, the whole box and no deliveries; 4 = multi-monster hunts. High byte: the story step (ProgNo), 0 except in a few quests. Source: mh3u-quest-studio (read in the game's code and checked in the game on the Wii U version, whose quest data is the same). Values used by the game's 365 quests: 2 (107×), 1 (100×), 0 (95×), 4 (37×), 3 (12×), 1280 (1×).
 
-Progress level (prog_no): Progress level of the quest. The game uses 0 or 2 in the Village, 1 in Port Low Rank, 3 in High Rank and 4 in G Rank.
+Monster rank (prog_no): MONSTER RANK (the game calls it EnemyLv): 0 = low rank (Village), 1 = low rank (Port), 2 = high rank (Village), 3 = high rank (Port), 4 = G rank. It does not change the monsters' health (that is the Health row). Source: mh3u-quest-studio (read in the game's code and checked in the game on the Wii U version, whose quest data is the same).
 
-Monster level (enemy_lv): Monster level override used by a few Village key quests (0 = normal). Values used by the game's 365 quests: 0 (338×), 17 (1×), 23 (1×), 24 (1×), 25 (1×), 27 (1×).
+Intro cutscene (enemy_lv): INTRO CUTSCENE (the game calls it DemoNo): 0 = none; the other values play the opening cutscene of a story quest. Values used by the game's 365 quests: 0 (338×), 17 (1×), 23 (1×), 24 (1×), 25 (1×), 27 (1×).
 
 Special flag: Special quest behaviour (arena fights, Harvest Tours, final battles...). Meaning of each value not confirmed: keep the value of the quest you copied.
 
@@ -145,7 +151,11 @@ Special condition: Goes with the special flag above.
 
 Special condition 2: Second special condition. Values used by the game's 365 quests: 0 (357×), 13 (4×), 14 (4×).
 
-Cutscene (demo_no): Cutscene played at the start. 0 (none) in every quest of the game.
+Unused (demo_no): Low byte of a field the game does not use (ItemSetNo): 0 in every quest. Leave it at 0.
+
+Rannyu_limite (ren_pattern): A field the game calls Rannyu_limite: 0 in every quest of the game. Leave it at 0.
+
+Field names: this part of the quest record was named one field off in version 1.1 and older; the labels now follow the names of the game's own reader (found by mh3u-quest-studio and checked against every 3DS quest). Only the labels changed: quests made before keep exactly the same bytes.
 
 Roaming list settings: use roaming list (1 when the quest uses a roaming-monster list, 0 otherwise.) / second % (A second percentage next to the chance (10, 20, 30, 50, 80 or 100 in the game's quests). Purpose not confirmed.) / list number (Number of the roaming-monster list of the map. The lists live in the game, so only numbers that a game quest on the same map uses are safe.) / always comes (1 in a few quests whose roaming monster always comes (100 % / 100 %).)
 
@@ -162,6 +172,12 @@ The tab also lists every numeric field of the quest (double-click to edit) and t
 ### Large monsters: the cards
 
 Each large monster has a card, numbered #1, #2, #3 in the order they are read. Change... picks another species. Copy from a quest... copies a monster with every setting from another quest: it is the safest way to get a working monster. Remove takes it out of the quest. The arrows ◀ ▶ reorder the cards. The game lets each monster start only on some maps; on any other map it skips the monster, which then never appears (tested in the game). The card says 'Appears on <map>' or warns you; the Monster pack page can add the missing maps. Up to 5 large monsters fit in a quest.
+
+### Starts in: where a monster starts
+
+Start position number of the monster on the map. 0 = the game's usual start (3 large monsters out of 4 in the game). The game keeps, for every monster and map, a short list of start areas and this number picks one: Rathian on the Deserted Island has 4 (areas 10, 2, 5, 4), Zinogre on Misty Peaks 3. The 'Start positions' button shows the area of each number, read from the game's code. A number past the end of the list is flagged by the checks.
+
+The list shows the area numbers painted on the in-game map (the game's own numbering of the areas is different: e.g. Rathian's usual start on the Deserted Island is the area the map shows as 8). Map... opens the map of the zone next to the list. Copies of one species are spread over different start points automatically.
 
 ### Size % and Size like
 
@@ -205,7 +221,7 @@ Strength of all small monsters: Strength of the small monsters: rows of the same
 
 Stamina: How fast the monster gets tired (stamina table). The game uses: Village 0, Port Low and High Rank 1, Port G Rank 2, Grudge Matches and Challenge quests 3.
 
-Start type: Start position number of the monster on the map. 0 = the game's usual start (3 large monsters out of 4 in the game). The game keeps, for every monster and map, a short list of start areas and this number picks one: Rathian on the Deserted Island has 4 (areas 10, 2, 5, 4), Zinogre on Misty Peaks 3. The 'Start positions' button shows the area of each number, read from the game's code. A number past the end of the list is flagged by the checks.
+Start type: the raw number behind 'Starts in'.
 
 Size spread: Size spread: which table decides how much smaller or bigger than 'Size %' the monster can be (this is what makes crowns possible). The game uses: Village 1, 10 or 13; Port Low Rank 1; Port High Rank 3 to 7; Port G Rank 18 to 28; Grudge Matches and Challenge quests 0 (fixed size).
 
@@ -233,15 +249,15 @@ The files must be installed: the 'Install the supply files into Citra' button co
 
 The 'Supply boxes' button at the top (also 'My supply boxes...' in the Supply Box tab) opens the manager: rename a box, edit its items, see which quests use it and whether it is installed in Citra, install it, remove its file from Citra, or delete the box. Deleting a box also removes its file from Citra, after listing the quests that use it (they will open the game's own box with that number). Boxes are kept until you delete them; there is room for 10.
 
-### Developer mode: second supply delivery
+### Developer mode: later deliveries
 
-Delivery set: Second supply delivery: which set is delivered (not fully confirmed). Values used by the game's 365 quests: 1 (203×), 0 (135×), 2 (26×), 3 (1×).
+Timed delivery: TIMED DELIVERY (the game calls it SuppTimeFlag). 0 = the whole box at the start; 1 = part of the box at the start (by rank), the rest later on a random timer; 2 = the first 8 slots at the start, the rest after 2 minutes; 3 = part at the start, the rest only from the hunt delivery. Meanings from mh3u-quest-studio (read in the game's code and checked in the game on the Wii U version, whose quest data is the same). Values used by the game's 365 quests: 1 (203×), 0 (135×), 2 (26×), 3 (1×).
 
-Time condition: Delivery condition based on time (not confirmed). Values used by the game's 365 quests: 0 (364×), 3 (1×).
+Hunt delivery, monster: HUNT DELIVERY, monster (the game's SuppEnemyType): the rest of the supplies comes once this monster is hunted. 0 = no hunt delivery. Source: mh3u-quest-studio (read in the game's code and checked in the game on the Wii U version, whose quest data is the same). Values used by the game's 365 quests: 0 (364×), 3 (1×).
 
-Monster condition: Delivery condition based on a monster (not confirmed). Values used by the game's 365 quests: 0 (364×), 2 (1×).
+Hunt delivery, how many: HUNT DELIVERY, count (the game's SuppEnemyNum): how many of that monster must be hunted. Source: mh3u-quest-studio (read in the game's code and checked in the game on the Wii U version, whose quest data is the same). Values used by the game's 365 quests: 0 (364×), 2 (1×).
 
-Count: Count used by the delivery condition (not confirmed). Values used by the game's 365 quests: 1 (208×), 0 (153×), 2 (4×).
+Version 1.1 and older called these 'Delivery set', 'Time condition', 'Monster condition' and showed a 'Count' that is in fact where the hunters start (now on the General tab).
 
 ## Rewards and Text
 
@@ -297,26 +313,28 @@ They are medians measured on the game's own quests (365 quests of the base game 
 
 ### What it does
 
-The game keeps, inside its program (code.bin), a table of the maps where each large monster may start a quest. A monster put on another map is silently skipped. Each monster's own file also holds its spawn areas, routes between areas and special moves for each map it knows. The Monster pack gives every large monster the maps it is missing: for each new map it borrows the start positions and map data of a 'donor' monster that lives there (same kind of habitat and size where possible), and adds them to the monster's tables. The result: 358 new monster/map combinations for 47 monsters.
+The game keeps, inside its program (code.bin), a table of the maps where each large monster may start a quest. A monster put on another map is silently skipped. Each monster's own file also holds its spawn areas, routes between areas and special moves for each map it knows. The Monster pack gives every large monster the maps it is missing: for each new map it borrows the start positions and map data of a 'donor' monster that lives there (same kind of habitat and size where possible), and adds them to the monster's tables. For each new map it also picks, among the game's own start lists for that map, the one offering the most start areas the monster can use. The result: 497 new monster/map combinations: every one of 47 large monsters can start on all 14 maps.
+
+The siege maps follow the game's own example: on the Underwater Ruin a monster gets only a start point in area 3, exactly like Abyssal Lagiacrus in the game (which has no other data for that map); on the Great Desert it gets Jhen Mohran's data; on the Tainted Sea Dire Miralis'.
 
 ### What it changes (ROM hack)
 
-It is a mod, built on your PC from your own extracted game: 47 files romfs/arc/enemy/emNNN.arc, a 5 KB patch exefs/code.ips (only new start lists, written in unused space of the program, and one pointer per monster) and mhqe_monster_pack.json. Your ROM and your save are not modified; removing the mod (button 'Remove from Citra') brings the game back exactly. It can not be combined with another code.ips/code.bin mod.
+It is a mod, built on your PC from your own extracted game: 47 files romfs/arc/enemy/emNNN.arc, a 6 KB patch exefs/code.ips (only new start lists, written in unused space of the program and over the old lists it replaces, and one pointer per monster) and mhqe_monster_pack.json. Your ROM and your save are not modified; removing the mod (button 'Remove from Citra') brings the game back exactly. It can not be combined with another code.ips/code.bin mod.
 
 ### Left out
 
-Ceadeus, Goldbeard Ceadeus, Jhen Mohran and Hallowed Jhen Mohran (siege bosses), and the siege maps Great Desert, Underwater Ruin and Tainted Sea. Small monsters are not concerned.
+Ceadeus, Goldbeard Ceadeus, Jhen Mohran and Hallowed Jhen Mohran stay on their own maps (they still lend their map data to the others). Small monsters are not concerned.
 
 ### How to use it
 
 1. Settings: set your game version and choose the extracted romfs folder (exefs/code.bin must be next to it).
 2. Monster pack page: 'Build the pack from my game' (a few seconds), then 'Install in Citra' (close Citra first). On a real 3DS, copy the content of the pack folder into luma/titles/<title id>/ and enable game patching in Luma.
-3. Make your quest as usual: the monster card says 'thanks to the Monster pack'. Keep the start position to one the card offers (the checks say when a number does not exist for the borrowed start list).
+3. Make your quest as usual: the monster card says 'thanks to the Monster pack'. Choose where it starts in the card's 'Starts in' list (the checks say when a number does not exist for its start list).
 4. Restart the game and test the quest.
 
 ### Risks
 
-Only Zinogre on Sandy Plains was tested in the game. Every other combination follows the same rules but is untested: the monster may get stuck, move oddly, or the game may crash when the quest loads. Riskier: the water arenas (a monster that can not swim), Sacred Land and Tower, and Alatreon or Dire Miralis away from their own maps; the table marks them '+!'. Back up your save first.
+Only Zinogre on Sandy Plains was tested in the game. Every other combination follows the same rules but is untested: the monster may get stuck, move oddly, or the game may crash when the quest loads. Riskier: the water arenas (a monster that can not swim), Sacred Land and Tower, the siege maps (their scripts are made for Jhen Mohran, Ceadeus or Dire Miralis), and Alatreon or Dire Miralis away from their own maps; the table marks them '+!'. Back up your save first.
 
 ### Multiplayer
 

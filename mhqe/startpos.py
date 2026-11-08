@@ -62,3 +62,75 @@ def describe(map_id: int, pos: int) -> str:
         return "Not used by any game quest on this map: it may not be a valid start here."
     ex = ", ".join(G.mon_name(em) for em, _no, _n in u["ex"][:4])
     return f"Used by {u['n']} monster{'s' if u['n'] > 1 else ''} of the game's quests here, e.g. {ex}."
+
+
+# --------------------------------------------------------------- map numbers
+try:
+    _LAB = {int(k): v for k, v in json.loads((G.DATA_DIR / "area_labels.json").read_text(encoding="utf-8"))
+            .get("maps", {}).items()}
+except (OSError, ValueError):
+    _LAB = {}
+
+
+def area_number(map_id: int, internal: int) -> int | None:
+    """Number painted on the in-game map for a (game-internal) area number."""
+    shown = _LAB.get(map_id)
+    if shown is None:
+        return internal
+    return shown[internal] if 0 <= internal < len(shown) else None
+
+
+def area_label(map_id: int, internal: int, monster: bool = True) -> str:
+    """'area 7' with the number the in-game map shows. Area 0 is the base camp for hunters; the
+    only monster start there (Ceadeus on the Underwater Ruin) is its entrance."""
+    if internal == 0:
+        return ("its entrance (swims into area 1)" if map_id == 7 else "its entrance off the map") \
+            if monster else "base camp"
+    n = area_number(map_id, internal)
+    return f"area {n}" if n is not None else f"area ? (game number {internal})"
+
+
+def choice_text(pos: int, areas: list[int] | None, map_id: int) -> str:
+    """Text of one entry of the 'Starts in' list."""
+    if areas is None:
+        return f"{pos}  -  " + (label(pos) if pos else "game default")
+    if 0 <= pos < len(areas):
+        where = area_label(map_id, areas[pos])
+        return f"{pos}  -  {'starts at' if areas[pos] == 0 else 'starts in'} {where}" + \
+            ("  (usual start)" if pos == 0 else "")
+    return f"{pos}  -  no such start for this monster here"
+
+
+# --------------------------------------------------------------- hunters
+try:
+    _H = {int(k): v for k, v in json.loads((G.DATA_DIR / "hunter_starts.json").read_text(encoding="utf-8"))
+          .get("maps", {}).items()}
+except (OSError, ValueError):
+    _H = {}
+
+HUNTER_CHOICES = {0: "Base camp", 1: "Random area (main hunting maps)",
+                  2: "Fixed area (Underwater Ruin, Sacred Land, Tainted Sea)"}
+
+
+def hunter_text(map_id: int, value: int) -> str:
+    """Where the hunters start on this map with this value, as the game reads its table."""
+    per = _H.get(map_id)
+    if not per or not 0 <= value < len(per):
+        return "Base camp (the game has no start list for this value)."
+    pairs = per[value]
+    if len(pairs) == 1:
+        a = pairs[0][0]
+        return "Always at the base camp." if a == 0 else f"Always in {area_label(map_id, a, monster=False)}."
+    return "At random: " + ", ".join(f"{area_label(map_id, a, monster=False)} {w}%" for a, w in pairs) + "."
+
+
+def hunter_warning(map_id: int, value: int) -> str | None:
+    """Why this value does nothing on this map (the hunters start at the camp), or None."""
+    if value == 0:
+        return None
+    per = _H.get(map_id)
+    if per and 0 <= value < len(per) and per[value] != [[0, 100]]:
+        return None
+    where = [G.map_name(m) for m, p in sorted(_H.items()) if 0 <= value < len(p) and p[value] != [[0, 100]]]
+    text = f"Hunters start {value} does nothing on {G.map_name(map_id)}: the hunters start at the base camp"
+    return text + (f". It changes the start only on {', '.join(where)}." if where else ".")

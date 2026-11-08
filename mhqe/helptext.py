@@ -240,6 +240,10 @@ def by_class(field: str, top: int = 3) -> str:
     return "Values in the game's quests:\n" + "\n".join(parts)
 
 
+_QS = ("mh3u-quest-studio (read in the game's code and checked in the game on the Wii U "
+       "version, whose quest data is the same)")
+
+
 def common(field: str) -> str:
     vals = COMMON.get(field)
     if not vals:
@@ -343,7 +347,7 @@ TEXT = {
                  "Normally you do not need to touch these: the Monsters tab sets them for you.",
     "obj_count": "How many. The game's own quests write it like this: 'Hunt 2 Arzuros' (Double Jeopardy), "
                  "'Slay 12 Altaroth' (Bug Hunt), 'Deliver 3 Unique Mushrooms' (Tutorial 1).",
-    "species": "The monster. Pick one that has spawn data on the quest's map.",
+    "species": "The monster. Pick one the game allows on the quest's map (or install the Monster pack).",
     "Num": "How many copies of this monster arrive one after another. The game uses 1 almost "
            "everywhere, and 3 (or 5) in the 'Hunt 3 X in succession' quests, which have a single "
            "monster card. To have several copies together or in waves, add several cards.",
@@ -379,14 +383,23 @@ TEXT = {
                "reward; table B is drawn separately.",
     "item_set_no": "The supply box at the base camp. Each set is a fixed list of items "
                    "defined by the game; pick the one whose contents fit your quest.",
-    "supp_set_no": "Second supply delivery: which set is delivered (not fully confirmed). "
-                   + common("supp_set_no"),
-    "supp_time_flag": "Delivery condition based on time (not confirmed). " + common("supp_time_flag"),
-    "supp_enemy_type": "Delivery condition based on a monster (not confirmed). "
-                       + common("supp_enemy_type"),
-    "supp_enemy_num": "Count used by the delivery condition (not confirmed). "
-                      + common("supp_enemy_num"),
-    "start_param": "ARRIVAL PATTERN of the large monsters (read in the order of their cards). 0 = "
+    "supp_set_no": "TIMED DELIVERY (the game calls it SuppTimeFlag). 0 = the whole box at the start; "
+                   "1 = part of the box at the start (by rank), the rest later on a random timer; 2 = "
+                   "the first 8 slots at the start, the rest after 2 minutes; 3 = part at the start, the "
+                   "rest only from the hunt delivery. Meanings from " + _QS + ". " + common("supp_set_no"),
+    "supp_time_flag": "HUNT DELIVERY, monster (the game's SuppEnemyType): the rest of the supplies comes "
+                      "once this monster is hunted. 0 = no hunt delivery. Source: " + _QS + ". "
+                      + common("supp_time_flag"),
+    "supp_enemy_type": "HUNT DELIVERY, count (the game's SuppEnemyNum): how many of that monster must be "
+                       "hunted. Source: " + _QS + ". " + common("supp_enemy_type"),
+    "supp_enemy_num": "WHERE THE HUNTERS START (the game calls it StartParam). 0 = base camp; 1 = a "
+                      "random area on the main hunting maps, with the game's own odds for each map; 2 = a "
+                      "fixed area on the Underwater Ruin, Sacred Land and Tainted Sea. Elsewhere 1 and 2 "
+                      "change nothing. The odds were read from the game's table (3DS code.bin, the same as "
+                      "the Wii U one, where random and fixed starts were confirmed in the game by "
+                      "mh3u-quest-studio). " + common("supp_enemy_num"),
+    "ren_pattern": "A field the game calls Rannyu_limite: 0 in every quest of the game. Leave it at 0.",
+    "start_param": "ARRIVAL PATTERN of the large monsters (the game calls this field Ren_pattern; read in the order of their cards). 0 = "
                    "all at the start; 1 = one after another; 5 = the first, then the other two "
                    "together (3 monsters); 6 = the first two together, then the last one (3 monsters); "
                    "4 = the first, then two together, then the last (4 monsters); 8 = two together, "
@@ -407,13 +420,16 @@ TEXT = {
     "nora_pekko": "1 in a few quests whose roaming monster always comes (100 % / 100 %).",
     "zako_rows": "Strength of the small monsters: rows of the same difficulty table as the "
                  "large monsters (health / attack / toughness).",
-    "hagi_no": "Which gathering / carving table the quest uses (not confirmed: the game uses "
-               "0 to 4 depending on map and rank). " + common("hagi_no"),
-    "prog_no": "Progress level of the quest. The game uses 0 or 2 in the Village, 1 in Port "
-               "Low Rank, 3 in High Rank and 4 in G Rank.",
-    "enemy_lv": "Monster level override used by a few Village key quests (0 = normal). "
-                + common("enemy_lv"),
-    "demo_no": "Cutscene played at the start. 0 (none) in every quest of the game.",
+    "hagi_no": "Two values in one number. Low byte: the supply rank (the game's HagiNo): 0 = low rank, "
+               "no timed delivery; 1 = high rank; 2 = G rank; 3 = arena, the whole box and no "
+               "deliveries; 4 = multi-monster hunts. High byte: the story step (ProgNo), 0 except in a few "
+               "quests. Source: " + _QS + ". " + common("hagi_no"),
+    "prog_no": "MONSTER RANK (the game calls it EnemyLv): 0 = low rank (Village), 1 = low rank (Port), "
+               "2 = high rank (Village), 3 = high rank (Port), 4 = G rank. It does not change the monsters' "
+               "health (that is the Health row). Source: " + _QS + ".",
+    "enemy_lv": "INTRO CUTSCENE (the game calls it DemoNo): 0 = none; the other values play the opening "
+                "cutscene of a story quest. " + common("enemy_lv"),
+    "demo_no": "Low byte of a field the game does not use (ItemSetNo): 0 in every quest. Leave it at 0.",
     "special_flag": "Special quest behaviour (arena fights, Harvest Tours, final battles...). "
                     "Meaning of each value not confirmed: keep the value of the quest you "
                     "copied.\n\n" + special_examples(),

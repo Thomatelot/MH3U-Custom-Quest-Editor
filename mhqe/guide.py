@@ -88,6 +88,8 @@ def _general():
     return [
         ("Star rank", H.tip("star")),
         ("Map", H.tip("map")),
+        ("Hunters start", H.tip("supp_enemy_num") + "\n\nThe line under the list gives the odds for the quest's "
+         "map, with the area numbers of the in-game map."),
         ("Time limit", H.tip("time_min") + "\n\nThe 'Frozen clock' box sets 99 minutes, the lowest frozen value."),
         ("Fee, Reward, Penalty", (
             "Fee: " + H.tip("contract") + "\nReward: " + H.tip("reward_money") + "\nPenalty: " + H.tip("penalty")
@@ -108,13 +110,17 @@ def _general():
         )),
         ("Developer mode: other gameplay settings", (
             "Arrival pattern (start_param): " + H.tip("start_param") + "\n\n"
-            "Gathering table (hagi_no): " + H.tip("hagi_no") + "\n\n"
-            "Progress level (prog_no): " + H.tip("prog_no") + "\n\n"
-            "Monster level (enemy_lv): " + H.tip("enemy_lv") + "\n\n"
+            "Supply rank / story step (hagi_no): " + H.tip("hagi_no") + "\n\n"
+            "Monster rank (prog_no): " + H.tip("prog_no") + "\n\n"
+            "Intro cutscene (enemy_lv): " + H.tip("enemy_lv") + "\n\n"
             "Special flag: " + H.tip("special_flag") + "\n\n"
             "Special condition: " + H.tip("special_cond") + "\n\n"
             "Special condition 2: " + H.tip("special_cond2") + "\n\n"
-            "Cutscene (demo_no): " + H.tip("demo_no") + "\n\n"
+            "Unused (demo_no): " + H.tip("demo_no") + "\n\n"
+            "Rannyu_limite (ren_pattern): " + H.tip("ren_pattern") + "\n\n"
+            "Field names: this part of the quest record was named one field off in version 1.1 and older; the "
+            "labels now follow the names of the game's own reader (found by mh3u-quest-studio and checked against "
+            "every 3DS quest). Only the labels changed: quests made before keep exactly the same bytes.\n\n"
             "Roaming list settings: use roaming list (" + H.tip("nora_set_type") + ") / second % ("
             + H.tip("nora_per_type") + ") / list number (" + H.tip("nora_set_table") + ") / always comes ("
             + H.tip("nora_pekko") + ")\n\n"
@@ -138,6 +144,12 @@ def _monsters():
             "(tested in the game). The card says 'Appears on <map>' or warns you; the Monster pack page can add the "
             "missing maps. Up to 5 large monsters fit in a quest."
         )),
+        ("Starts in: where a monster starts", (
+            H.tip("Starttype") + "\n\nThe list shows the area numbers painted on the in-game map (the game's own "
+            "numbering of the areas is different: e.g. Rathian's usual start on the Deserted Island is the area the map "
+            "shows as 8). Map... opens the map of the zone next to the list. Copies of one species are spread over "
+            "different start points automatically."
+        )),
         ("Size % and Size like", H.tip("Size") + "\n\n" + H.SIZE_TIP),
         ("Strength like, Health, Attack, Toughness", (
             "'Strength like' sets Health, Attack and Toughness (and the hidden stamina and size spread) to the typical "
@@ -154,7 +166,7 @@ def _monsters():
         )),
         ("Developer mode: per-monster details", (
             "Stamina: " + H.tip("Stamina") + "\n\n"
-            "Start type: " + H.tip("Starttype") + "\n\n"
+            "Start type: the raw number behind 'Starts in'.\n\n"
             "Size spread: " + H.tip("Sizeparam") + "\n\n"
             "Set type: " + H.tip("Settype") + "\n\n"
             "Nando2: " + H.tip("Nando2") + "\n\n"
@@ -185,9 +197,11 @@ def _supply():
             "listing the quests that use it (they will open the game's own box with that number). Boxes are kept "
             "until you delete them; there is room for 10."
         )),
-        ("Developer mode: second supply delivery", (
-            "Delivery set: " + H.tip("supp_set_no") + "\n\nTime condition: " + H.tip("supp_time_flag")
-            + "\n\nMonster condition: " + H.tip("supp_enemy_type") + "\n\nCount: " + H.tip("supp_enemy_num")
+        ("Developer mode: later deliveries", (
+            "Timed delivery: " + H.tip("supp_set_no") + "\n\nHunt delivery, monster: " + H.tip("supp_time_flag")
+            + "\n\nHunt delivery, how many: " + H.tip("supp_enemy_type") + "\n\nVersion 1.1 and older called "
+            "these 'Delivery set', 'Time condition', 'Monster condition' and showed a 'Count' that is in fact where "
+            "the hunters start (now on the General tab)."
         )),
     ]
 
@@ -267,18 +281,23 @@ def _pack():
             "areas, routes between areas and special moves for each map it knows. The Monster pack gives every large "
             "monster the maps it is missing: for each new map it borrows the start positions and map data of a "
             "'donor' monster that lives there (same kind of habitat and size where possible), and adds them to the "
-            "monster's tables. The result: 358 new monster/map combinations for 47 monsters."
+            "monster's tables. For each new map it also picks, among the game's own start lists for that map, the one "
+            "offering the most start areas the monster can use. The result: 497 new monster/map combinations: every "
+            "one of 47 large monsters can start on all 14 maps.\n\n"
+            "The siege maps follow the game's own example: on the Underwater Ruin a monster gets only a start point "
+            "in area 3, exactly like Abyssal Lagiacrus in the game (which has no other data for that map); on the "
+            "Great Desert it gets Jhen Mohran's data; on the Tainted Sea Dire Miralis'."
         )),
         ("What it changes (ROM hack)", (
-            "It is a mod, built on your PC from your own extracted game: 47 files romfs/arc/enemy/emNNN.arc, a 5 KB "
-            "patch exefs/code.ips (only new start lists, written in unused space of the program, and one pointer per "
-            "monster) and mhqe_monster_pack.json. Your ROM and your save are not modified; removing the mod (button "
+            "It is a mod, built on your PC from your own extracted game: 47 files romfs/arc/enemy/emNNN.arc, a 6 KB "
+            "patch exefs/code.ips (only new start lists, written in unused space of the program and over the old "
+            "lists it replaces, and one pointer per monster) and mhqe_monster_pack.json. Your ROM and your save are not modified; removing the mod (button "
             "'Remove from Citra') brings the game back exactly. It can not be combined with another code.ips/code.bin "
             "mod."
         )),
         ("Left out", (
-            "Ceadeus, Goldbeard Ceadeus, Jhen Mohran and Hallowed Jhen Mohran (siege bosses), and the siege maps "
-            "Great Desert, Underwater Ruin and Tainted Sea. Small monsters are not concerned."
+            "Ceadeus, Goldbeard Ceadeus, Jhen Mohran and Hallowed Jhen Mohran stay on their own maps (they still lend "
+            "their map data to the others). Small monsters are not concerned."
         )),
         ("How to use it", (
             "1. Settings: set your game version and choose the extracted romfs folder (exefs/code.bin must be next to "
@@ -286,15 +305,16 @@ def _pack():
             "2. Monster pack page: 'Build the pack from my game' (a few seconds), then 'Install in Citra' (close Citra "
             "first). On a real 3DS, copy the content of the pack folder into luma/titles/<title id>/ and enable game "
             "patching in Luma.\n"
-            "3. Make your quest as usual: the monster card says 'thanks to the Monster pack'. Keep the start position "
-            "to one the card offers (the checks say when a number does not exist for the borrowed start list).\n"
+            "3. Make your quest as usual: the monster card says 'thanks to the Monster pack'. Choose where it starts in "
+            "the card's 'Starts in' list (the checks say when a number does not exist for its start list).\n"
             "4. Restart the game and test the quest."
         )),
         ("Risks", (
             "Only Zinogre on Sandy Plains was tested in the game. Every other combination follows the same rules but is "
             "untested: the monster may get stuck, move oddly, or the game may crash when the quest loads. Riskier: the "
-            "water arenas (a monster that can not swim), Sacred Land and Tower, and Alatreon or Dire Miralis away from "
-            "their own maps; the table marks them '+!'. Back up your save first."
+            "water arenas (a monster that can not swim), Sacred Land and Tower, the siege maps (their scripts are made "
+            "for Jhen Mohran, Ceadeus or Dire Miralis), and Alatreon or Dire Miralis away from their own maps; the table "
+            "marks them '+!'. Back up your save first."
         )),
         ("Multiplayer", (
             "Every player in a local game must have the same pack installed, or the others do not see the monster (or "

@@ -172,6 +172,15 @@ class Quest:
         scalar("penalty", "<i")           # == ceil(reward / 3) in every game quest
         scalar("main_hrp", "<i")
         scalar("failure_hrp", "<i")
+        # Field names below are the editor's historical names. The game's reader (as found by
+        # mh3u-quest-studio, field by field, and checked against the 3DS quests) names them:
+        #   hagi_no (u16)  = HagiNo (u8, supply rank) + ProgNo (u8, story step)
+        #   prog_no = EnemyLv (monster rank)     enemy_lv = DemoNo (intro cutscene)
+        #   demo_no + pad  = ItemSetNo (u16, 0)   item_set_no = SuppSetNo (supply box)
+        #   supp_set_no = SuppTimeFlag   supp_time_flag = SuppEnemyType   supp_enemy_type = SuppEnemyNum
+        #   supp_enemy_num = StartParam (where the hunters start)
+        #   start_param = Ren_pattern (monster arrival pattern)   ren_pattern = Rannyu_limite (0)
+        # The names are kept so that existing files, tables and settings stay valid.
         scalar("hagi_no", "<H")
         scalar("prog_no", "B")
         scalar("enemy_lv", "B")

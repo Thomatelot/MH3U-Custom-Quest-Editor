@@ -375,16 +375,16 @@ class MonsterPackPage(ttk.Frame):
         ttk.Label(warn, text="Monster placement pack  -  ROM hack, read this first", style="Card.H2.TLabel").pack(anchor="w")
         ttk.Label(warn, style="Card.Danger.TLabel", wraplength=1150, justify="left", text=(
             "This pack changes how the game works: it adds a small patch to the game's code (exefs/code.ips) and "
-            "replaces the files of 47 monsters (romfs/arc/enemy). It is built from YOUR extracted game, on your "
+            "replaces the files of the monsters that need new map data (romfs/arc/enemy). It is built from YOUR extracted game, on your "
             "computer, and installed as a mod: your ROM and your save are not modified, and removing the mod "
             "brings the game back exactly as it was.")).pack(anchor="w", pady=(4, 0))
         ttk.Label(warn, style="Card.Muted.TLabel", wraplength=1150, justify="left", text=(
             "- Only Zinogre on Sandy Plains has been tested in the game. The other combinations follow the same "
             "rules but are untested: a monster may get stuck, behave oddly, or crash the game when the quest "
             "loads. Test a quest in Citra before playing it seriously.\n"
-            "- Water arenas, Sacred Land and Tower, and the bosses Alatreon and Dire Miralis away from their "
-            "own maps, are the most likely to go wrong. Ceadeus and Jhen Mohran (and their variants) and the "
-            "siege maps (Great Desert, Underwater Ruin, Tainted Sea) are left out.\n"
+            "- Water arenas, Sacred Land, Tower, the siege maps (Great Desert, Underwater Ruin, Tainted Sea) and "
+            "the bosses Alatreon and Dire Miralis away from their own maps are the most likely to go wrong. "
+            "Ceadeus and Jhen Mohran (and their variants) stay on their own maps.\n"
             "- Multiplayer: every player must install the same pack. Built from the same game version it is "
             "identical for everybody: compare the fingerprint below. A player without it does not see the monster.\n"
             "- Back up your save before trying (Backups button). The pack can not be combined with another "
@@ -395,23 +395,27 @@ class MonsterPackPage(ttk.Frame):
                               "+! added, higher risk)", style="H3.TLabel").pack(anchor="w", pady=(10, 2))
         box = ttk.Frame(outer)
         box.pack(fill="both", expand=True, pady=(0, 10))
-        self.maps = [m for m in sorted(G.MAP_NAMES) if G.MAP_TO_INTERNAL.get(m)
-                     and G.MAP_TO_INTERNAL[m] not in monsterpack.SIEGE_STAGES]
+        self.maps = [m for m in sorted(G.MAP_NAMES) if G.MAP_TO_INTERNAL.get(m)]
         cols = [f"m{m}" for m in self.maps]
         self.tree = ttk.Treeview(box, columns=cols, show="tree headings", style="Small.Treeview", height=14)
         self.tree.heading("#0", text="Monster")
-        self.tree.column("#0", width=190, stretch=False)
-        short = {1: "Deserted Is.", 3: "Flooded For.", 9: "Arena (ev.)", 10: "Water Ar. (ev.)"}
+        short = {1: "Island", 2: "Sandy", 3: "Forest", 4: "Tundra", 5: "Volcano", 6: "Desert", 7: "Ruin",
+                 8: "Arena", 10: "W.Arena ev.", 11: "Sacred", 12: "W.Arena", 13: "Misty", 14: "Tower",
+                 15: "T.Sea"}
         try:
             from tkinter import font as tkfont
             hfont = tkfont.nametofont("TkHeadingFont")
         except (tk.TclError, ImportError):
             hfont = None
+        self.tree.column("#0", width=160, stretch=False)
         for m, c in zip(self.maps, cols):
             text = short.get(m, G.map_name(m))
-            width = max(70, hfont.measure(text) + 18) if hfont else 96
+            width = max(52, hfont.measure(text) + 14) if hfont else 70
             self.tree.heading(c, text=text)
             self.tree.column(c, width=width, minwidth=width, anchor="center", stretch=True)
+        ttk.Label(outer, style="Muted.TLabel", wraplength=1200, justify="left", text="   ".join(
+            f"{short.get(m, G.map_name(m))} = {G.map_name(m)}" for m in self.maps)).pack(side="bottom", anchor="w",
+                                                                                  pady=(0, 6), before=box)
         sb = ttk.Scrollbar(box, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=sb.set)
         self.tree.pack(side="left", fill="both", expand=True)

@@ -60,7 +60,7 @@ what it does, with the values the game's own quests use; the built-in **Guide** 
 | **In-game quests** | The quest files of your save: *Event quests* (packs 1-3), *Challenge quests* (pack 4) and *Backups*. Edit, new quest, put a quest from the library, duplicate, export, clear a slot. |
 | **Quest library** | Your quests kept on your PC as `.mh3uq` files, to keep, share and send back to a slot. |
 | **Base game** | Optional: edit the game's own Village and Port quests as a Citra mod (the ROM is never changed). |
-| **Monster pack** | Optional ROM hack: build and install the pack that lets large monsters start on any (non-siege) map. |
+| **Monster pack** | Optional ROM hack: build and install the pack that lets large monsters start on any map. |
 | **Guide** | Tabs: Getting started, General, Monsters, Supply Box, Rewards and Text, Game values, Monster pack, Files and backups, Tested or not. |
 
 ### Features
@@ -75,8 +75,10 @@ what it does, with the values the game's own quests use; the built-in **Guide** 
 * **Text:** quest name, client, description, objectives in the 5 languages.
 * **Safety:** checks that warn about mistakes that can stop a quest from loading, **automatic backups
   before every save**, a copy of the original files that is never deleted, *Undo changes*.
-* **Start positions:** the start area of every position number, read from the game's own table.
-* **Monster pack (ROM hack, optional):** 358 new monster/map combinations for 47 large monsters.
+* **Where they start:** each monster card's *Starts in* list shows the start areas the game has for that
+  monster on that map, with the numbers of the in-game map; *Hunters start* (General tab) shows where the
+  hunters begin, with the game's odds.
+* **Monster pack (ROM hack, optional):** 47 large monsters on all 14 maps (497 new combinations).
 * **Game versions:** European (EU) and North American (US); choose yours in *Settings*.
 * Two themes: *Moga Parchment* (light) and *Tanzia Night* (dark). *Developer mode* shows raw fields.
 
@@ -170,20 +172,23 @@ current files first.
 The game keeps, **inside its program** (`code.bin`), a table of the maps where each large monster may
 start a quest; on any other map the monster is silently skipped. Each monster's own file also holds
 its spawn areas, routes and special moves per map. The *Monster pack* page builds, **from your own
-extracted game**, a mod that gives 47 large monsters the maps they are missing (358 combinations): for
-each new map it borrows the start positions and map data of a monster that lives there.
+extracted game**, a mod that gives 47 large monsters every map they are missing (497 combinations, all 14
+maps): for each new map it borrows the start positions and map data of a monster that lives there,
+and picks the game's start list offering the most start areas.
 
 <p align="center"><img src="docs/images/monster-pack.png" width="820" alt="The Monster pack page"></p>
 
-* **What it changes:** a 5 KB patch `exefs/code.ips` (new start lists written in unused space of the
-  program, and one pointer per monster) and 47 files `romfs/arc/enemy/emNNN.arc`. It is a mod: the
+* **What it changes:** a 6 KB patch `exefs/code.ips` (new start lists written in unused space of the
+  program and over the old lists they replace, and one pointer per monster) and 47 files
+  `romfs/arc/enemy/emNNN.arc`. It is a mod: the
   ROM and the save are untouched, and *Remove from Citra* brings the game back exactly. It cannot be
   combined with another `code.ips` / `code.bin` mod.
-* **Left out:** Ceadeus, Goldbeard Ceadeus, Jhen Mohran, Hallowed Jhen Mohran, and the siege maps
-  (Great Desert, Underwater Ruin, Tainted Sea).
+* **Left out:** Ceadeus, Goldbeard Ceadeus, Jhen Mohran and Hallowed Jhen Mohran stay on their own
+  maps. The siege maps are open to the others, following the game's own example (on the Underwater
+  Ruin a monster gets only a start point in area 3, like Abyssal Lagiacrus in the game).
 * **Tested:** only **Zinogre on Sandy Plains** (Citra). Everything else follows the same rules but is
-  **untested**: a monster may get stuck or the game may crash. Water arenas, Sacred Land, Tower, and
-  Alatreon / Dire Miralis away from their maps are the riskiest (marked `+!`).
+  **untested**: a monster may get stuck or the game may crash. Water arenas, Sacred Land, Tower, the
+  siege maps, and Alatreon / Dire Miralis away from their maps are the riskiest (marked `+!`).
 * **Multiplayer:** every player needs the same pack. Built from the same game it is identical for
   everybody (the EU and US packs are even the same files): compare the **fingerprint** on the page.
 * **Real 3DS:** copy the content of the pack folder into `luma\titles\<title id>\` (game patching
@@ -220,7 +225,8 @@ rests on a test in the game and what rests on reading the game's files.
 | Time limit: up to **98 min** the clock counts down, from **99 min** it is frozen | ✅ Tested in Citra (values above 120 untested) |
 | *Environment: Unstable* appears on the quest board when the chance of roaming monsters is above 0 | ✅ Tested in Citra |
 | A monster on a map the game does not allow is skipped (never appears); with the Monster pack, Zinogre appears on Sandy Plains | ✅ Tested in Citra |
-| The other 357 combinations of the Monster pack | 🔎 Built and checked by the tests (same rules as the tested one), not played: please test and report |
+| The other 496 combinations of the Monster pack | 🔎 Built and checked by the tests (same rules as the tested one), not played: please test and report |
+| *Starts in*: start areas per monster and map; *Hunters start* odds | 🔎 Read from the game's code (3DS); identical to the Wii U tables, where random and fixed hunter starts were confirmed in the game by mh3u-quest-studio. Map numbers collected in that game by the same project |
 | **North American (US) version** | 🔎 Compared file by file with the EU version (same quest format, base quests, monster files and pack; different program id, save folder `00000AE4` and `us` folder). Not played: please report |
 | Quest fields: meaning of most settings, objectives, rewards, supply boxes | 🔎 Read from the game's own quests (the **(i)** says "not confirmed" where that is all there is) |
 | Three monsters arriving at once; five monsters one after the other | 🔎 Follow the same rule as the tested patterns but never appear in a game quest: please test |
@@ -303,7 +309,9 @@ patterns and objectives), `spawns.py`, `strays.py`, `artbuild.py` (pictures), `g
 
 * **Security and legal:** [SECURITY.md](SECURITY.md). The editor is offline and only touches the folders listed above.
 * **Credits:** the quest record layout and several tables started from
-  [mh3u-quest-studio](https://github.com/Matt-Wood-23/mh3u-quest-studio) by Matt Wood (MIT); the
+  [mh3u-quest-studio](https://github.com/Matt-Wood-23/mh3u-quest-studio) by Matt Wood (MIT), whose
+  later work also gave the game's names of the settings fields, the in-game map numbers of the areas
+  and the hunters' start table that this version checks against the 3DS game; the
   [MH3U wiki](https://monsterhunter.fandom.com/wiki/Monster_Hunter_3_Ultimate) was used to cross-check
   names. Interface layout inspired by the MH4U Custom Quest Editor. Details in [THIRD_PARTY.md](THIRD_PARTY.md).
 * **Licence:** MIT for the code and original files ([LICENSE](LICENSE)); the game and Capcom's

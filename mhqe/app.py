@@ -12,6 +12,7 @@ import os
 import shutil
 import struct
 import subprocess
+import threading
 import sys
 import tkinter as tk
 import traceback
@@ -21,6 +22,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from . import __version__
 from . import autofill, guide, spawns, supp
 from . import gamedata as G
+from . import monsterpack
 from . import helptext as H
 from . import picker, theme
 from .editor import EditorPage, stars
@@ -29,6 +31,7 @@ from .icons import ASSETS, Icons
 from .library import LibrarySource
 from .packs import PackError
 from .project import (APP_DIR, Backups, PackSource, RomSource, Settings, find_emulator_mod_dirs,
+                      find_emulator_title_dirs, pack_dir_region, regions_with_saves,
                       find_emulator_pack_dirs, find_pack_dir, read_base_numbers)
 from .quest import Quest, QuestFormatError
 from .supp import CustomBoxes
@@ -39,6 +42,7 @@ from .widgets import (ScrollFrame, SearchBox, StatusDot, Tooltip, center_on, dis
 APP_TITLE = "MH3U Quest Editor"
 ROOT_DIR = Path(__file__).resolve().parent.parent
 ROM_OUTPUT = APP_DIR / "output" / "MH3U_Quest_Mod" / "romfs"
+PACK_OUTPUT = APP_DIR / "output"                     # + MH3U_Monster_Pack_<EU|US>
 SUPPLY_OUTPUT = APP_DIR / "output" / "MH3U_Supply_Mod" / "romfs"
 LIBRARY_DIR = APP_DIR / "library"
 QUEST_TYPES = [("MH3U quest", "*.mh3uq *.quest"), ("All files", "*.*")]
@@ -357,6 +361,118 @@ class ListPage(ttk.Frame):
         ttk.Button(row, text="Open the mod folder", command=lambda: open_folder(ROM_OUTPUT.parent)).pack(side="left", padx=6)
         ttk.Button(row, text="Change folder...", command=self.app.choose_romfs).pack(side="left")
 
+# ========================================================== monster pack
+class MonsterPackPage(ttk.Frame):
+    """ROM hack: let any large monster appear on any map (see monsterpack.py)."""
+
+    def __init__(self, parent, app):
+        super().__init__(parent)
+        self.app = app
+        outer = ttk.Frame(self, padding=(10, 10, 10, 0))
+        outer.pack(fill="both", expand=True)
+        warn = ttk.Frame(outer, style="Box.TFrame", padding=(14, 10))
+        warn.pack(fill="x")
+        ttk.Label(warn, text="Monster placement pack  -  ROM hack, read this first", style="Card.H2.TLabel").pack(anchor="w")
+        ttk.Label(warn, style="Card.Danger.TLabel", wraplength=1150, justify="left", text=(
+            "This pack changes how the game works: it adds a small patch to the game's code (exefs/code.ips) and "
+            "replaces the files of 47 monsters (romfs/arc/enemy). It is built from YOUR extracted game, on your "
+            "computer, and installed as a mod: your ROM and your save are not modified, and removing the mod "
+            "brings the game back exactly as it was.")).pack(anchor="w", pady=(4, 0))
+        ttk.Label(warn, style="Card.Muted.TLabel", wraplength=1150, justify="left", text=(
+            "- Only Zinogre on Sandy Plains has been tested in the game. The other combinations follow the same "
+            "rules but are untested: a monster may get stuck, behave oddly, or crash the game when the quest "
+            "loads. Test a quest in Citra before playing it seriously.\n"
+            "- Water arenas, Sacred Land and Tower, and the bosses Alatreon and Dire Miralis away from their "
+            "own maps, are the most likely to go wrong. Ceadeus and Jhen Mohran (and their variants) and the "
+            "siege maps (Great Desert, Underwater Ruin, Tainted Sea) are left out.\n"
+            "- Multiplayer: every player must install the same pack. Built from the same game version it is "
+            "identical for everybody: compare the fingerprint below. A player without it does not see the monster.\n"
+            "- Back up your save before trying (Backups button). The pack can not be combined with another "
+            "code mod (code.ips / code.bin).")).pack(anchor="w", pady=(4, 0))
+        self.status = status_card(outer)
+        self.status.pack(fill="x", pady=(8, 0))
+        ttk.Label(outer, text="Which maps each monster can start on   (\u25cf in the game   + added by the pack   "
+                              "+! added, higher risk)", style="H3.TLabel").pack(anchor="w", pady=(10, 2))
+        box = ttk.Frame(outer)
+        box.pack(fill="both", expand=True, pady=(0, 10))
+        self.maps = [m for m in sorted(G.MAP_NAMES) if G.MAP_TO_INTERNAL.get(m)
+                     and G.MAP_TO_INTERNAL[m] not in monsterpack.SIEGE_STAGES]
+        cols = [f"m{m}" for m in self.maps]
+        self.tree = ttk.Treeview(box, columns=cols, show="tree headings", style="Small.Treeview", height=14)
+        self.tree.heading("#0", text="Monster")
+        self.tree.column("#0", width=190, stretch=False)
+        short = {1: "Deserted Is.", 3: "Flooded For.", 9: "Arena (ev.)", 10: "Water Ar. (ev.)"}
+        try:
+            from tkinter import font as tkfont
+            hfont = tkfont.nametofont("TkHeadingFont")
+        except (tk.TclError, ImportError):
+            hfont = None
+        for m, c in zip(self.maps, cols):
+            text = short.get(m, G.map_name(m))
+            width = max(70, hfont.measure(text) + 18) if hfont else 96
+            self.tree.heading(c, text=text)
+            self.tree.column(c, width=width, minwidth=width, anchor="center", stretch=True)
+        sb = ttk.Scrollbar(box, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        sb.pack(side="left", fill="y")
+        self.refresh()
+
+    def refresh(self):
+        app = self.app
+        for w in self.status.winfo_children():
+            w.destroy()
+        f = self.status
+        built = monsterpack.read_manifest(app.monster_pack_dir())
+        inst, where = app.installed_monster_pack()
+        ttk.Label(f, text=f"Game version: {G.region_name()}  ({G.TITLE_ID})", style="Card.H2.TLabel").pack(anchor="w")
+        romfs = app.romfs_dir()
+        ttk.Label(f, style="Card.Muted.TLabel", text="Extracted game: " + (short_path(romfs, 110) if romfs else
+                  "not set (Settings > Choose the romfs folder; exefs/code.bin must be next to romfs)")).pack(anchor="w")
+        ttk.Label(f, style="Card.TLabel" if built else "Card.Muted.TLabel", text=(
+            f"Pack built: {len(built.get('added', []))} monster/map combinations added for "
+            f"{len(built.get('monsters', []))} monsters.  Fingerprint {built.get('fingerprint')}"
+            if built else "Pack not built yet.")).pack(anchor="w", pady=(4, 0))
+        if inst:
+            same = built and built.get("fingerprint") == inst.get("fingerprint")
+            ttk.Label(f, style="Card.Ok.TLabel" if same or not built else "Card.Warn.TLabel", text=(
+                f"Installed in {short_path(where, 90)}  (fingerprint {inst.get('fingerprint')}"
+                + (")" if same or not built else ", different from the pack you built: install again)"))).pack(anchor="w")
+        else:
+            ttk.Label(f, style="Card.Muted.TLabel", text="Not installed in Citra. On a real 3DS, copy the pack "
+                      f"folder's content into luma/titles/{G.TITLE_ID}/ (game patching enabled in Luma)."
+                      ).pack(anchor="w")
+        row = ttk.Frame(f, style="Card.TFrame")
+        row.pack(anchor="w", pady=(6, 0))
+        self.build_btn = ttk.Button(row, text="Build the pack from my game", style="Accent.TButton",
+                                    command=app.build_monster_pack)
+        self.build_btn.pack(side="left")
+        ttk.Button(row, text="Install in Citra", command=app.install_monster_pack,
+                   state="normal" if built else "disabled").pack(side="left", padx=6)
+        ttk.Button(row, text="Remove from Citra", command=app.remove_monster_pack,
+                   state="normal" if inst else "disabled").pack(side="left")
+        ttk.Button(row, text="Open the pack folder", command=lambda: open_folder(app.monster_pack_dir()),
+                   state="normal" if built else "disabled").pack(side="left", padx=6)
+        self.progress = ttk.Label(f, text="", style="Card.Muted.TLabel")
+        self.progress.pack(anchor="w")
+        self.fill(inst or built)
+
+    def fill(self, manifest):
+        self.tree.delete(*self.tree.get_children())
+        for em in sorted(G.MONSTERS):
+            if not monsterpack.is_large(em):
+                continue
+            vals = []
+            for m in self.maps:
+                st, _p = monsterpack.pair_status(em, m, manifest)
+                if st == "native":
+                    vals.append("\u25cf")
+                elif st == "pack":
+                    vals.append("+!" if monsterpack.risk_notes(em, m) else "+")
+                else:
+                    vals.append("")
+            self.tree.insert("", "end", text=G.mon_name(em), values=vals)
+
 
 # ================================================================ backups
 class BackupsPanel(ttk.Frame):
@@ -558,6 +674,7 @@ class App(tk.Tk):
                 self.iconbitmap(default=str(ico))
             except tk.TclError:
                 pass
+        G.set_region(self._initial_region())
         self.backups = Backups()
         self.boxes = CustomBoxes(APP_DIR / "custom_supply.json")
         self.sources: dict = {"packs": None, "library": None, "rom": None}
@@ -582,11 +699,58 @@ class App(tk.Tk):
             pass
         messagebox.showerror(APP_TITLE, f"Unexpected error:\n\n{val}\n\nDetails were saved in error_log.txt")
 
+    # ---------------------------------------------------------- game version
+    def _initial_region(self) -> str:
+        """The version chosen in the settings; for a first start (or a 1.0 settings file) it is
+        guessed from the saves and extracted game already known, EU otherwise."""
+        r = self.settings.get("region")
+        if r in G.REGIONS:
+            return r
+        from .monsterpack import detect_region
+        r = pack_dir_region(self.settings.get("pack_dir"))
+        if r is None and self.settings.get("romfs"):
+            r = detect_region(self.settings.get("romfs"))
+        if r is None:
+            saves = regions_with_saves()
+            r = saves[0] if len(saves) == 1 else "eu"
+        self.settings.set("region", r)
+        return r
+
+    def setting_key(self, name: str) -> str:
+        """Paths are remembered per game version (the EU keys keep their 1.0 names)."""
+        return name if G.REGION == "eu" else f"{name}_{G.REGION}"
+
+    def romfs_dir(self):
+        return self.settings.get(self.setting_key("romfs"))
+
+    def switch_region(self, region: str) -> bool:
+        if region == G.REGION or region not in G.REGIONS:
+            return False
+        if self.editor.winfo_ismapped() and not self.editor.leave():
+            return False
+        dirty = self.dirty_sources()
+        if dirty and not messagebox.askyesno(APP_TITLE, "You have unsaved changes; they will be lost. "
+                                             "Switch the game version anyway?", parent=self):
+            return False
+        G.set_region(region)
+        self.settings.set("region", region)
+        self.forget_monster_pack()
+        self.backups = Backups()
+        self.sources = {"packs": None, "library": None, "rom": None}
+        self._base_cache = None
+        self.load_sources()
+        self.build_ui()
+        self.set_status(f"Game version: {G.region_name()}. "
+                        + ("Save found." if self.sources["packs"] else "No save of this version was found yet."))
+        return True
+
     # --------------------------------------------------------------- sources
     def load_sources(self):
-        romfs = self.settings.get("romfs")
+        romfs = self.romfs_dir()
         base = read_base_numbers(romfs) if romfs and Path(romfs).is_dir() else set()
-        pack = self.settings.get("pack_dir")
+        pack = self.settings.get(self.setting_key("pack_dir"))
+        if pack_dir_region(pack) not in (None, G.REGION):
+            pack = None                            # a save of the other version
         if pack and Path(pack).is_dir():
             self._set_packs(pack, base, quiet=True)
         if self.sources["packs"] is None:
@@ -618,11 +782,11 @@ class App(tk.Tk):
             if not quiet:
                 messagebox.showerror(APP_TITLE, str(exc))
             return False
-        self.settings.set("pack_dir", str(found))
+        self.settings.set(self.setting_key("pack_dir"), str(found))
         return True
 
     def _base_numbers(self):
-        romfs = self.settings.get("romfs")
+        romfs = self.romfs_dir()
         return read_base_numbers(romfs) if romfs and Path(romfs).is_dir() else set()
 
     def source_can_create(self):
@@ -641,7 +805,7 @@ class App(tk.Tk):
         ttk.Label(head, text=APP_TITLE, style="Header.TLabel").pack(side="left", padx=(8, 22))
         self.nav = {}
         for page, text in (("ingame", "In-game quests"), ("library", "Quest library"),
-                           ("rom", "Base game"), ("guide", "Guide")):
+                           ("rom", "Base game"), ("pack", "Monster pack"), ("guide", "Guide")):
             b = ttk.Button(head, text=text, style="Nav.TButton", width=0, command=lambda p=page: self.show_page(p))
             b.pack(side="left", padx=1)
             self.nav[page] = b
@@ -658,7 +822,8 @@ class App(tk.Tk):
         self.content = ttk.Frame(self)
         self.content.pack(fill="both", expand=True)
         self.pages = {"ingame": InGamePage(self.content, self), "library": ListPage(self.content, self, "library"),
-                      "rom": ListPage(self.content, self, "rom"), "guide": GuidePage(self.content, self)}
+                      "rom": ListPage(self.content, self, "rom"), "pack": MonsterPackPage(self.content, self),
+                      "guide": GuidePage(self.content, self)}
         self.editor = EditorPage(self.content, self)
         self.reload_lists(show=False)
         self.show_page(self.page)
@@ -781,8 +946,9 @@ class App(tk.Tk):
         src = self.sources.get(self.edit_kind)
         if src is None or quest is None:
             return []
+        pack, installed = self.monster_pack()
         found = validate_quest(quest, src.numbers_except(key), in_pack=src.kind == "packs",
-                               fit_problem=src.fit_problem(key))
+                               fit_problem=src.fit_problem(key), monster_pack=pack, pack_installed=installed)
         no = quest.get("item_set_no")
         if self.boxes.is_custom(no):
             from .validate import Issue
@@ -813,7 +979,7 @@ class App(tk.Tk):
     def _base_quests(self):
         if self._base_cache is None:
             self._base_cache = {}
-            romfs = self.settings.get("romfs")
+            romfs = self.romfs_dir()
             if romfs and Path(romfs).is_dir():
                 try:
                     self._base_cache = RomSource(romfs, load_edits=False).quests
@@ -1200,12 +1366,22 @@ class App(tk.Tk):
         folder = filedialog.askdirectory(parent=self, title="Choose the extracted 'romfs' folder of MH3U")
         if not folder:
             return
+        from .monsterpack import detect_region
+        found = detect_region(folder)
+        if found and found != G.REGION:
+            if not messagebox.askyesno(
+                    APP_TITLE, f"This extracted game is the {G.region_name(found)} version, but the editor is set "
+                    f"to the {G.region_name()} version.\n\nSwitch the editor to the {G.region_name(found)} "
+                    "version?", parent=self):
+                return
+            if not self.switch_region(found):
+                return
         try:
             self.sources["rom"] = RomSource(folder)
         except (PackError, OSError, ValueError) as exc:
             messagebox.showerror(APP_TITLE, f"This does not look like the game's romfs folder.\n\n{exc}", parent=self)
             return
-        self.settings.set("romfs", folder)
+        self.settings.set(self.setting_key("romfs"), folder)
         self._base_cache = None
         if self.sources["packs"]:
             self.sources["packs"].reserved = set(self.sources["rom"].originals)
@@ -1219,7 +1395,7 @@ class App(tk.Tk):
     def build_pictures(self):
         """Read the icons and map pictures from the player's own extracted game (see artbuild.py)."""
         from . import artbuild
-        romfs = self.settings.get("romfs")
+        romfs = self.romfs_dir()
         if not romfs or not Path(romfs).is_dir():
             messagebox.showinfo(APP_TITLE, "Choose the extracted game's romfs folder first "
                                 "(Settings > Choose the romfs folder...).", parent=self)
@@ -1372,6 +1548,107 @@ class App(tk.Tk):
             shutil.copytree(ROM_OUTPUT, dests[0], dirs_exist_ok=True)
             self.set_status(f"Mod installed in {dests[0]}")
 
+    # ----------------------------------------------------------- monster pack
+    def monster_pack_dir(self) -> Path:
+        return PACK_OUTPUT / f"MH3U_Monster_Pack_{G.REGION.upper()}"
+
+    def installed_monster_pack(self):
+        """(manifest, folder) of the pack installed in an emulator, or (None, None)."""
+        for d in find_emulator_title_dirs():
+            man = monsterpack.read_manifest(d)
+            if man:
+                return man, d
+        return None, None
+
+    def monster_pack(self):
+        """(manifest, installed) used by the quest checks: the installed pack, else the built one.
+        Cached; forget_monster_pack() after building, installing or removing."""
+        if getattr(self, "_pack_state", None) is None:
+            inst, _where = self.installed_monster_pack()
+            self._pack_state = (inst, True) if inst else (monsterpack.read_manifest(self.monster_pack_dir()), False)
+        return self._pack_state
+
+    def forget_monster_pack(self):
+        self._pack_state = None
+
+    def build_monster_pack(self):
+        romfs = self.romfs_dir()
+        if not romfs or not Path(romfs).is_dir():
+            messagebox.showinfo(APP_TITLE, "Choose your extracted game first (Settings > Choose the romfs "
+                                "folder). exefs/code.bin must be next to the romfs folder.", parent=self)
+            return
+        page = self.pages["pack"]
+        page.build_btn.configure(state="disabled")
+        self.configure(cursor="watch")
+        result = {}
+        msgs = []
+
+        def work():
+            try:
+                result["man"] = monsterpack.build(romfs, self.monster_pack_dir(), log=msgs.append)
+            except (monsterpack.PackError, OSError, ValueError, struct.error, KeyError) as exc:
+                result["err"] = exc
+
+        th = threading.Thread(target=work, daemon=True)
+        th.start()
+
+        def poll():
+            if msgs:
+                page.progress.configure(text=msgs[-1])
+            if th.is_alive():
+                self.after(150, poll)
+                return
+            self.configure(cursor="")
+            if "err" in result:
+                messagebox.showerror(APP_TITLE, f"The pack could not be built:\n\n{result['err']}", parent=self)
+            else:
+                man = result["man"]
+                if man.get("region") and man["region"] != G.REGION:
+                    messagebox.showwarning(APP_TITLE, f"Your extracted game is the {G.region_name(man['region'])} "
+                                           f"version, but the editor is set to {G.region_name()}.", parent=self)
+                self.set_status(f"Monster pack built: {len(man['added'])} combinations, fingerprint "
+                                f"{man['fingerprint']}.")
+            self.forget_monster_pack()
+            page.refresh()
+
+        poll()
+
+    def install_monster_pack(self):
+        dests = find_emulator_title_dirs()
+        if not dests:
+            messagebox.showinfo(APP_TITLE, "Citra's 'load' folder was not found. Copy the content of\n"
+                                f"{self.monster_pack_dir()}\ninto <Citra folder>/load/mods/{G.TITLE_ID}/  "
+                                f"(real 3DS with Luma: luma/titles/{G.TITLE_ID}/)", parent=self)
+            return
+        if not messagebox.askyesno(APP_TITLE, f"Install the monster pack (ROM hack) into:\n{dests[0]}\n\n"
+                                   "Close Citra first. Untested combinations may crash the game: back up your "
+                                   "save. Continue?", parent=self):
+            return
+        try:
+            n = len(monsterpack.install(self.monster_pack_dir(), dests[0]))
+        except (monsterpack.PackError, OSError) as exc:
+            messagebox.showerror(APP_TITLE, str(exc), parent=self)
+            return
+        self.forget_monster_pack()
+        self.set_status(f"Monster pack installed ({n} files). Restart the game in Citra to load it.")
+        self.pages["pack"].refresh()
+
+    def remove_monster_pack(self):
+        _man, where = self.installed_monster_pack()
+        if where is None:
+            return
+        if not messagebox.askyesno(APP_TITLE, f"Remove the monster pack from\n{where}?\n\nQuests that rely on it "
+                                   "will then miss their monster.", parent=self):
+            return
+        try:
+            n = monsterpack.uninstall(where)
+        except OSError as exc:
+            messagebox.showerror(APP_TITLE, str(exc), parent=self)
+            return
+        self.forget_monster_pack()
+        self.set_status(f"Monster pack removed ({n} files).")
+        self.pages["pack"].refresh()
+
     # ------------------------------------------------------------- dialogs
     def first_run(self):
         if self.settings.get("setup_done"):
@@ -1468,6 +1745,13 @@ class SetupDialog(Dialog):
             "This editor writes your quests straight into the game's event quest list. It works on the "
             "files Citra keeps for MH3U and finds them for you: there is no path to type.")).pack(anchor="w", pady=(4, 10))
         ttk.Label(f, text="1.  Your game", style="H3.TLabel").pack(anchor="w")
+        vrow = ttk.Frame(f)
+        vrow.pack(anchor="w", pady=(2, 2))
+        ttk.Label(vrow, text="Version of your copy of MH3U:").pack(side="left")
+        self.region = tk.StringVar(value=G.REGION)
+        for r, inf in G.REGIONS.items():
+            ttk.Radiobutton(vrow, text=f"{inf['name']}  ({inf['title_id']})", value=r, variable=self.region,
+                            command=self._version).pack(side="left", padx=(8, 0))
         self.status = ttk.Label(f, text="", wraplength=640, justify="left")
         self.status.pack(anchor="w", pady=(2, 4))
         row = ttk.Frame(f)
@@ -1497,6 +1781,12 @@ class SetupDialog(Dialog):
             self.status.configure(text="Not found yet. Start MH3U once in Citra, close it, then press "
                                        "'Find automatically'. For a real 3DS, copy its extra data to your PC "
                                        "and choose that folder.", style="Warn.TLabel")
+
+    def _version(self):
+        if not self.app.switch_region(self.region.get()):
+            self.region.set(G.REGION)
+        self.lift()
+        self._update()
 
     def _find(self):
         self.app.find_packs()
@@ -1533,6 +1823,13 @@ class SettingsDialog(Dialog):
                         variable=app.dev_mode, command=app.toggle_dev).pack(side="left")
         info(row, H.tip("dev_mode")).pack(side="left", padx=4)
         ttk.Label(f, text="Your game", style="H3.TLabel").pack(anchor="w", pady=(12, 2))
+        vrow = ttk.Frame(f)
+        vrow.pack(anchor="w", pady=(0, 4))
+        ttk.Label(vrow, text="Game version:").pack(side="left")
+        self.region = tk.StringVar(value=G.REGION)
+        for r, inf in G.REGIONS.items():
+            ttk.Radiobutton(vrow, text=f"{inf['name']}  ({inf['title_id']})", value=r,
+                            variable=self.region).pack(side="left", padx=(8, 0))
         packs = app.sources["packs"]
         ttk.Label(f, text="Quest files: " + (short_path(packs.folder, 90) if packs else "not found"),
                   style="Muted.TLabel").pack(anchor="w")
@@ -1540,7 +1837,7 @@ class SettingsDialog(Dialog):
         r.pack(anchor="w", pady=(2, 6))
         ttk.Button(r, text="Find automatically", command=lambda: (self.destroy(), app.find_packs())).pack(side="left")
         ttk.Button(r, text="Choose...", command=lambda: (self.destroy(), app.choose_packs())).pack(side="left", padx=6)
-        rom = app.settings.get("romfs")
+        rom = app.romfs_dir()
         ttk.Label(f, text="Extracted game (optional): " + (short_path(rom, 80) if rom else "not set"),
                   style="Muted.TLabel").pack(anchor="w")
         ttk.Button(f, text="Choose the romfs folder...",
@@ -1562,9 +1859,12 @@ class SettingsDialog(Dialog):
         app.settings.set("tooltips", bool(self.tips.get()))
         Tooltip.enabled = bool(self.tips.get())
         key = self.theme.get()
+        region = self.region.get()
         self.destroy()
         if key != app.settings.get("theme", theme.DEFAULT_THEME):
             app.apply_theme(key)
+        if region != G.REGION:
+            app.switch_region(region)
 
 
 def own_taskbar_identity():

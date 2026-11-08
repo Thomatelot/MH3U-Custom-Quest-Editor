@@ -9,7 +9,7 @@ import math
 from collections import namedtuple
 
 from . import gamedata as G
-from . import waves
+from . import monsterpack, startpos, waves
 from .quest import LANGS, NANDO_FIELDS, NANDO_MAX, OBJ_MONSTER_TYPES, Quest
 
 Issue = namedtuple("Issue", "level text")
@@ -18,7 +18,8 @@ EVENT_RANGES = ((20000, 29999), (61000, 61999))
 
 
 def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
-                   fit_problem: str | None = None) -> list[Issue]:
+                   fit_problem: str | None = None, monster_pack: dict | None = None,
+                   pack_installed: bool = True) -> list[Issue]:
     out: list[Issue] = []
     add = lambda level, text: out.append(Issue(level, text))     # noqa: E731
 
@@ -74,16 +75,27 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
             if m[f] > NANDO_MAX:
                 add("error", f"Monster slot {slot} ({name}): {f} is {m[f]}; "
                              f"difficulty rows only go up to {NANDO_MAX}.")
-        ok = G.stage_ok(m["Type"], q.get("map"))
-        if ok is False:
-            if not first_done:
-                add("error", f"{name} (first monster) has no spawn data on "
-                             f"{G.map_name(q.get('map'))}: the game crashes when "
-                             f"the quest loads.")
-            else:
-                add("warning", f"{name} (slot {slot}) has no spawn data on "
-                               f"{G.map_name(q.get('map'))}; it may fail to appear "
-                               f"or crash.")
+        where = G.map_name(q.get("map"))
+        status, added = monsterpack.pair_status(m["Type"], q.get("map"), monster_pack)
+        if status == "missing":
+            text = (f"{name} can not start a quest on {where}: the game's placement table does not allow it, "
+                    "so the game skips this monster (it never appears; tested in the game). The Monster pack "
+                    "page can add this combination (ROM hack).")
+            add("error" if not first_done else "warning", text)
+        elif status == "pack":
+            text = f"{name} on {where} is added by the Monster pack (ROM hack): an untested combination."
+            if not pack_installed:
+                text += (" The pack is built but not installed in Citra: install it (or copy it to your 3DS), "
+                         "otherwise the monster does not appear.")
+            add("info" if pack_installed else "warning", text)
+            for note in monsterpack.risk_notes(m["Type"], q.get("map")):
+                add("warning", f"{name}: {note}")
+        if status in ("native", "pack"):
+            ar = startpos.areas(m["Type"], q.get("map"), monster_pack)
+            if ar is not None and m["Starttype"] >= len(ar):
+                add("error" if status == "pack" else "warning",
+                    f"{name}: start position {m['Starttype']} does not exist for this monster on {where} "
+                    f"(the game has {len(ar)}: 0 to {len(ar) - 1}).")
         first_done = True
 
     used_n = sum(1 for m in mons if m["Type"])

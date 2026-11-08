@@ -7,14 +7,16 @@
   category-flag / supply tables in `data/` and the monster-to-map spawn rules were first taken
   from **mh3u-quest-studio** by Matt Wood (https://github.com/Matt-Wood-23/mh3u-quest-studio),
   used under the MIT licence reproduced below. The code in `mhqe/` is an independent
-  re-implementation that was re-verified against Monster Hunter 3 Ultimate (3DS, EU) files: the
+  re-implementation that was re-verified against Monster Hunter 3 Ultimate (3DS, EU and US) files: the
   128-row difficulty table was compared with the game's `code.bin` (identical), and all quest
   records round-trip byte for byte.
 * **`data/`**: tables of facts about the game that the editor needs to run: names of monsters,
   items, maps; difficulty and category tables; supply box templates; statistics (medians) of the game's
   own quests (`benchmarks.json`); small-monster places and roaming-monster settings per map
   (`spawn_lists.json`, `stray_sets.json`); reward and supply patterns (`autofill.json`,
-  `supp_sets.json`); and the position of each icon in the game's picture archives (`icons.json`).
+  `supp_sets.json`); the position of each icon in the game's picture archives (`icons.json`); and
+  the start area of each start position, per monster and map (`start_areas.json`, read from the
+  placement table of the game's `code.bin`, identical in the EU and US versions).
   They were computed from the author's own copy of the game with the scripts in `tools/`
   (`build_benchmarks.py`, `build_spawns.py`, `build_start_usage.py`). They contain numbers and names,
   not pictures, text blocks, maps, sounds or program code of the game.

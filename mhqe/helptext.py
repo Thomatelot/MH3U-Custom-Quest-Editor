@@ -312,8 +312,9 @@ TEXT = {
                 "New quests get the first free number automatically.",
     "star": "Star rank shown on the quest board. It is only a label: how strong the monsters "
             "are is set in the Monsters tab.",
-    "map": "Where the quest takes place. A monster can only appear on maps where the game has "
-           "spawn data for it (the editor warns you). When you create a quest, copy one that "
+    "map": "Where the quest takes place. The game lets each large monster start only on some "
+           "maps; on another map it simply does not appear (the editor warns you). The Monster "
+           "pack page can lift that limit (ROM hack). When you create a quest, copy one that "
            "already uses the same map: the hidden data at the end of a quest (small monsters, "
            "events) depends on the map.",
     "time_min": TIME_TIP,
@@ -363,11 +364,12 @@ TEXT = {
                  "the monster can be (this is what makes crowns possible). The game uses: "
                  "Village 1, 10 or 13; Port Low Rank 1; Port High Rank 3 to 7; Port G Rank "
                  "18 to 28; Grudge Matches and Challenge quests 0 (fixed size).",
-    "Starttype": "Start position number of the monster on the map. 0 = let the game choose "
-                  "(3 large monsters out of 4 in the game). Values 1 to 6 are the map's start "
-                  "positions, used mostly to keep two copies of one species apart. The quest file "
-                  "stores only the number: which area it is cannot be read from it, so the "
-                  "'Start positions' button shows which game monsters use each number.",
+    "Starttype": "Start position number of the monster on the map. 0 = the game's usual start "
+                  "(3 large monsters out of 4 in the game). The game keeps, for every monster and "
+                  "map, a short list of start areas and this number picks one: Rathian on the "
+                  "Deserted Island has 4 (areas 10, 2, 5, 4), Zinogre on Misty Peaks 3. The 'Start "
+                  "positions' button shows the area of each number, read from the game's code. A "
+                  "number past the end of the list is flagged by the checks.",
     "Settype": "0 in every quest of the game (all 403 quests checked). Leave it at 0.",
     "Nando2": "Second difficulty value (purpose not confirmed). The game uses 0 in most "
               "Village and Port G Rank quests, 1 in most Port Low/High Rank and event quests. "

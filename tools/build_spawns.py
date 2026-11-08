@@ -98,7 +98,7 @@ def main():
     a = ap.parse_args()
 
     quests = {}
-    for f in sorted(glob.glob(os.path.join(a.romfs, "quest", "eu", "q_*.quest"))):
+    for f in sorted(glob.glob(os.path.join(a.romfs, "quest", "*", "q_*.quest"))):
         q = Quest(open(f, "rb").read())
         recs = btl_records(os.path.join(a.romfs, "quest", "btl", os.path.basename(f) + "_btl"))
         quests[q.get("quest_no")] = (q, recs)

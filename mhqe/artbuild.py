@@ -114,7 +114,7 @@ def find_item_table(code: bytes) -> int:
         if all(struct.unpack_from("<I", code, i + ITEM_RECORD_SIZE * k)[0] == sell[k] for k in range(10)):
             return i - 12 - 9 * ITEM_RECORD_SIZE
         i = code.find(pat, i + 1)
-    raise ArtError("the item table was not found in code.bin (is it the EU version of MH3U?)")
+    raise ArtError("the item table was not found in code.bin (is it MH3U, EU or US version?)")
 
 
 def tint(cell, rgb):

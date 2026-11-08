@@ -7,8 +7,10 @@ from __future__ import annotations
 
 from . import helptext as H
 
+
 CITRA_USER = "C:\\Users\\<you>\\AppData\\Roaming\\Citra"
-SAVE_DIR = "sdmc\\Nintendo 3DS\\<id0>\\<id1>\\extdata\\00000000\\00000B1D\\user"
+SAVE_DIR = "sdmc\\Nintendo 3DS\\<id0>\\<id1>\\extdata\\00000000\\<00000B1D (EU) or 00000AE4 (US)>\\user"
+TITLES = "00040000000B1D00 (EU) or 00040000000AE400 (US)"
 
 
 def pages() -> list[tuple[str, list[tuple[str, str]]]]:
@@ -20,6 +22,7 @@ def pages() -> list[tuple[str, list[tuple[str, str]]]]:
         ("Supply Box", _supply()),
         ("Rewards and Text", _rewards_text()),
         ("Game values", _values()),
+        ("Monster pack", _pack()),
         ("Files and backups", _files()),
         ("Tested or not", _limits()),
     ]
@@ -28,7 +31,8 @@ def pages() -> list[tuple[str, list[tuple[str, str]]]]:
 def _start():
     return [
         ("What this editor does", (
-            "It creates and edits quests for Monster Hunter 3 Ultimate (3DS, European version) on Citra or on a real "
+            "It creates and edits quests for Monster Hunter 3 Ultimate (3DS, European or North American version; choose "
+            "yours in Settings > Game version) on Citra or on a real "
             "3DS. Custom quests are written into the game's event-quest slots (3 packs of 20 quests, plus the pack of "
             "challenge quests), where the game lists them like its own event quests. It can also edit the game's own "
             "Village and Port quests as a mod folder (the ROM is never changed)."
@@ -44,7 +48,7 @@ def _start():
             "of the small monsters, a block that is not understood). A copy keeps it consistent."
         )),
         ("Event quests or challenge quests", H.tip("challenge")),
-        ("The four pages", (
+        ("The five pages", (
             "In-game quests: the quest files of your save. Tabs: Event quests (packs 1-3, where custom quests go), "
             "Challenge quests (pack 4) and Backups. Actions: Edit, New quest here, Put a quest here (from the library, "
             "a file or a backup), Duplicate, To library, Export, Clear slot.\n\n"
@@ -52,7 +56,9 @@ def _start():
             "game slot with 'To game'.\n\n"
             "Base game: optional. The game's own Village and Port quests, saved as a Citra mod. Needs the extracted "
             "romfs folder. Install the mod into Citra with the button on that page; on a real 3DS copy the output folder "
-            "into luma/titles/00040000000B1D00/romfs.\n\n"
+            "into luma/titles/<title id>/romfs.\n\n"
+            "Monster pack: optional ROM hack that lets large monsters start on maps the game does not allow "
+            "(see its own tab in this Guide).\n\n"
             "Guide: this page."
         )),
         ("Keys, themes, developer mode", (
@@ -72,7 +78,8 @@ def _start():
         ("Real 3DS", (
             "Back up the game's extra data with Checkpoint (or JKSM), copy it to your PC, choose that folder (In-game "
             "quests > Change folder...), edit and save, then restore it to the 3DS with Checkpoint. Custom supply boxes "
-            "and base-game edits are romfs mods: copy their output folder into luma/titles/00040000000B1D00/romfs."
+            "and base-game edits are romfs mods: copy their output folder into luma/titles/<title id>/romfs. Title id: "
+            + TITLES + "."
         )),
     ]
 
@@ -126,9 +133,10 @@ def _monsters():
         ("Large monsters: the cards", (
             "Each large monster has a card, numbered #1, #2, #3 in the order they are read. Change... picks another "
             "species. Copy from a quest... copies a monster with every setting from another quest: it is the safest way "
-            "to get a working monster. Remove takes it out of the quest. The arrows ◀ ▶ reorder the cards. A monster "
-            "needs spawn data on the quest's map, otherwise the game can crash when the quest loads: the card says "
-            "'Appears on <map>' or warns you. Up to 5 large monsters fit in a quest."
+            "to get a working monster. Remove takes it out of the quest. The arrows ◀ ▶ reorder the cards. The game "
+            "lets each monster start only on some maps; on any other map it skips the monster, which then never appears "
+            "(tested in the game). The card says 'Appears on <map>' or warns you; the Monster pack page can add the "
+            "missing maps. Up to 5 large monsters fit in a quest."
         )),
         ("Size % and Size like", H.tip("Size") + "\n\n" + H.SIZE_TIP),
         ("Strength like, Health, Attack, Toughness", (
@@ -166,7 +174,7 @@ def _supply():
             "editor uses one of the 10 box numbers that no game quest uses, and writes your items into a supply file "
             "for that number.\n\n"
             "The files must be installed: the 'Install the supply files into Citra' button copies them into Citra's "
-            "load/mods folder; on a real 3DS copy output/MH3U_Supply_Mod/romfs into luma/titles/00040000000B1D00/romfs. "
+            "load/mods folder; on a real 3DS copy output/MH3U_Supply_Mod/romfs into luma/titles/<title id>/romfs (" + TITLES + "). "
             "Without the files the game opens the box it normally has under that number. Every player of a "
             "multiplayer quest needs the same files."
         )),
@@ -226,13 +234,15 @@ def _files():
             "   (the exact folder is found automatically). This is the only game data written by an ordinary save.\n"
             "2. Optional mods, written in the editor's own output folder and copied into Citra on request:\n"
             "   output/MH3U_Supply_Mod/romfs (your own supply boxes) and output/MH3U_Quest_Mod/romfs (edited base-game "
-            "quests), installed into <Citra>/load/mods/00040000000B1D00/romfs.\n"
+            "quests), installed into <Citra>/load/mods/<title id>/romfs, title id " + TITLES + ".\n"
+            "   The Monster pack (ROM hack, only if you build and install it) goes into <Citra>/load/mods/<title id>/: "
+            "romfs/arc/enemy (47 monster files), exefs/code.ips and mhqe_monster_pack.json.\n"
             "3. Files next to the program: settings.json, custom_supply.json, backups/, library/, error_log.txt (only "
             "if something went wrong)."
         )),
         ("What to back up yourself", (
             "Before the first save, copy your save's extra data folder (the 'user' folder above holding quest1-quest4) "
-            "and, if you use mods, the folder <Citra>/load/mods/00040000000B1D00. On a real 3DS, back up the save with "
+            "and, if you use mods, the folder <Citra>/load/mods/<title id>. On a real 3DS, back up the save with "
             "Checkpoint or JKSM. The editor makes its own backups too, but a copy you made yourself is the one that "
             "cannot be touched by a bug."
         )),
@@ -249,12 +259,60 @@ def _files():
     ]
 
 
+def _pack():
+    return [
+        ("What it does", (
+            "The game keeps, inside its program (code.bin), a table of the maps where each large monster may start a "
+            "quest. A monster put on another map is silently skipped. Each monster's own file also holds its spawn "
+            "areas, routes between areas and special moves for each map it knows. The Monster pack gives every large "
+            "monster the maps it is missing: for each new map it borrows the start positions and map data of a "
+            "'donor' monster that lives there (same kind of habitat and size where possible), and adds them to the "
+            "monster's tables. The result: 358 new monster/map combinations for 47 monsters."
+        )),
+        ("What it changes (ROM hack)", (
+            "It is a mod, built on your PC from your own extracted game: 47 files romfs/arc/enemy/emNNN.arc, a 5 KB "
+            "patch exefs/code.ips (only new start lists, written in unused space of the program, and one pointer per "
+            "monster) and mhqe_monster_pack.json. Your ROM and your save are not modified; removing the mod (button "
+            "'Remove from Citra') brings the game back exactly. It can not be combined with another code.ips/code.bin "
+            "mod."
+        )),
+        ("Left out", (
+            "Ceadeus, Goldbeard Ceadeus, Jhen Mohran and Hallowed Jhen Mohran (siege bosses), and the siege maps "
+            "Great Desert, Underwater Ruin and Tainted Sea. Small monsters are not concerned."
+        )),
+        ("How to use it", (
+            "1. Settings: set your game version and choose the extracted romfs folder (exefs/code.bin must be next to "
+            "it).\n"
+            "2. Monster pack page: 'Build the pack from my game' (a few seconds), then 'Install in Citra' (close Citra "
+            "first). On a real 3DS, copy the content of the pack folder into luma/titles/<title id>/ and enable game "
+            "patching in Luma.\n"
+            "3. Make your quest as usual: the monster card says 'thanks to the Monster pack'. Keep the start position "
+            "to one the card offers (the checks say when a number does not exist for the borrowed start list).\n"
+            "4. Restart the game and test the quest."
+        )),
+        ("Risks", (
+            "Only Zinogre on Sandy Plains was tested in the game. Every other combination follows the same rules but is "
+            "untested: the monster may get stuck, move oddly, or the game may crash when the quest loads. Riskier: the "
+            "water arenas (a monster that can not swim), Sacred Land and Tower, and Alatreon or Dire Miralis away from "
+            "their own maps; the table marks them '+!'. Back up your save first."
+        )),
+        ("Multiplayer", (
+            "Every player in a local game must have the same pack installed, or the others do not see the monster (or "
+            "worse). Built from the same game version the pack is identical for everybody (the EU and US packs are "
+            "even the same files): compare the fingerprint shown on the Monster pack page."
+        )),
+    ]
+
+
 def _limits():
     return [
         ("Confirmed in the game", (
             "Arrival patterns: 'one after another', 'the first, then the other two together' and 'the first two "
             "together, then the last' work as described; with 'all at the start' every monster is in the zone from the "
             "beginning and the quest ends when the target monsters are slain.\n"
+            "Monster placement: a monster the game does not allow on a map is skipped (Zinogre on Sandy Plains never "
+            "appeared); with the Monster pack it appears (Zinogre on Sandy Plains, Citra). The opposite case, a monster "
+            "allowed on a map without its spawn data, crashes the game when the quest loads.\n"
             "Time limit: up to 98 minutes the clock counts down; from 99 minutes it is frozen.\n"
             "Environment: Unstable is shown on the quest board when the chance of roaming monsters is above 0."
         )),
@@ -267,12 +325,17 @@ def _limits():
         ("Known limits", (
             "The monsters that roam an Unstable zone cannot be chosen: their list is stored in the game, not in the "
             "quest. There is no 'enraged' or 'charged' setting in the quest file: the game's 'Clashing Fists!' and "
-            "'Descent into Hades' use King Size monsters. Only the European version (title id 00040000000B1D00) was "
-            "studied. The block at the end of an event quest that is not understood is kept unchanged."
+            "'Descent into Hades' use King Size monsters. The block at the end of an event quest that is not understood "
+            "is kept unchanged.\n"
+            "Versions: the European version was studied and tested. The North American version was compared file by "
+            "file with it: same quest format and base quests, same monster files, only the program id, the save "
+            "folder (00000AE4) and the 'us' folder of the base quests differ. Its event quest files could not be "
+            "checked on a real US save yet."
         )),
         ("Not tested yet", (
-            "The editor was tested on Windows with Citra only. A real 3DS (the files are the same, but nobody has tried "
-            "on hardware yet), other regions, Linux and macOS are untested: this is a first version, so you may be the "
-            "first to find out. Please report what you find."
+            "The editor was tested on Windows with Citra only, with the European version. A real 3DS (the files are "
+            "the same, but nobody has tried on hardware yet), the North American version in play, Linux and macOS are "
+            "untested. In the Monster pack, only Zinogre on Sandy Plains was tried in the game. Please report what you "
+            "find."
         )),
     ]

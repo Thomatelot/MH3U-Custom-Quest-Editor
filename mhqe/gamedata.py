@@ -42,8 +42,32 @@ MAP_NAMES = {
     14: "Tower", 15: "Tainted Sea",
 }
 
-TITLE_ID = "00040000000B1D00"          # Monster Hunter 3 Ultimate (EU) program id
-EXTDATA_ID = "00000B1D"
+# Game versions. Both were compared file by file: same quest format (5 languages), same base
+# quests, same monster archives and supply files; they differ by program id, save (extdata) id,
+# the 'eu'/'us' folder of the base-game quests, and addresses inside code.bin.
+REGIONS = {
+    "eu": {"name": "Europe (EU)", "title_id": "00040000000B1D00", "extdata": "00000B1D", "dir": "eu"},
+    "us": {"name": "North America (US)", "title_id": "00040000000AE400", "extdata": "00000AE4", "dir": "us"},
+}
+REGION = "eu"
+TITLE_ID = REGIONS[REGION]["title_id"]      # program id of the selected version
+EXTDATA_ID = REGIONS[REGION]["extdata"]
+REGION_DIR = REGIONS[REGION]["dir"]
+
+
+def set_region(region: str) -> None:
+    """Select the game version every path and id of the editor refers to."""
+    global REGION, TITLE_ID, EXTDATA_ID, REGION_DIR
+    if region not in REGIONS:
+        raise ValueError(f"unknown game version {region!r}")
+    REGION = region
+    TITLE_ID = REGIONS[region]["title_id"]
+    EXTDATA_ID = REGIONS[region]["extdata"]
+    REGION_DIR = REGIONS[region]["dir"]
+
+
+def region_name(region: str | None = None) -> str:
+    return REGIONS.get(region or REGION, {}).get("name", "unknown version")
 
 _MON_KEYS = {re.sub(r"[^a-z0-9]", "", n.lower()): i for i, n in MONSTERS.items()}
 

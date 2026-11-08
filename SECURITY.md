@@ -20,8 +20,14 @@ is Capcom's data, so do not post those.
 * It only reads and writes in: the folder of your save's quest files (`quest1`..`quest4`) that you
   chose or that was found in Citra's folder; its own folder (`settings.json`, `custom_supply.json`,
   `backups/`, `library/`, `output/`, `error_log.txt`, and `assets/` if you rebuild the pictures); and, only when you press
-  the install buttons, the `load/mods/00040000000B1D00/romfs` folder of Citra.
+  the install buttons, the `load/mods/<title id>` folder of Citra (`00040000000B1D00` EU,
+  `00040000000AE400` US): `romfs/` for quest and supply mods, plus `exefs/code.ips`,
+  `romfs/arc/enemy/` and `mhqe_monster_pack.json` for the optional Monster pack.
 * It never modifies the ROM, the game's `romfs` or `exefs` that you extracted (it only reads them).
+* The optional **Monster pack** is a ROM hack: a code patch (`code.ips`) and modified monster files,
+  built on your PC from your own game and loaded by Citra or Luma as a mod. It is not distributed
+  with the editor, contains no executable code (only data: start lists and one pointer per monster),
+  and can be removed at any time. It is experimental: see the README.
 * It does not need administrator rights, and it contains no installer or auto-update.
 * Quest files (`.mh3uq`) are plain binary data (the same record layout as the game's quest files)
   read by the editor's own parser; nothing in them is executed. Still, only open quests from people

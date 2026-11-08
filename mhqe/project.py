@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
 
 from . import arc as arcmod
@@ -52,10 +53,13 @@ class Settings:
 
 # ------------------------------------------------------------------- backups
 class Backups(BackupManager):
-    """Backwards-compatible name (backups/ next to the program)."""
+    """backups/ next to the program for the EU version (as in 1.0), backups/us/ for the US one,
+    so the save files of the two versions are never mixed."""
 
     def __init__(self, root: Path | None = None):
-        super().__init__(Path(root) if root else APP_DIR / "backups")
+        if root is None:
+            root = APP_DIR / "backups" if G.REGION == "eu" else APP_DIR / "backups" / G.REGION
+        super().__init__(Path(root))
 
 
 def write_atomic(path: Path, data: bytes) -> None:
@@ -79,9 +83,11 @@ def _emulator_roots() -> list[Path]:
     return roots
 
 
-def find_pack_dir(start: str | Path, max_depth: int = 10) -> Path | None:
-    """Return the ``.../extdata/00000000/00000B1D/user`` folder found at or
-    below *start* (also accepts the folder that directly holds quest1..4)."""
+def find_pack_dir(start: str | Path, max_depth: int = 10, extdata: str | None = None) -> Path | None:
+    """Return the ``.../extdata/00000000/<extdata id>/user`` folder of the selected game version
+    (00000B1D for EU, 00000AE4 for US) found at or below *start* (also accepts the folder that
+    directly holds quest1..4)."""
+    want = (extdata or G.EXTDATA_ID).upper()
     start = Path(start)
     if not start.is_dir():
         return None
@@ -97,22 +103,45 @@ def find_pack_dir(start: str | Path, max_depth: int = 10) -> Path | None:
         except OSError:
             continue
         for c in subs:
-            if (p.name == "00000000" and c.name.upper() == G.EXTDATA_ID
+            if (p.name == "00000000" and c.name.upper() == want
                     and (c / "user").is_dir()):
                 return c / "user"
             stack.append((c, depth + 1))
     return None
 
 
-def find_emulator_pack_dirs() -> list[Path]:
+def find_emulator_pack_dirs(region: str | None = None) -> list[Path]:
+    ext = G.REGIONS[region]["extdata"] if region else None
     found = []
     for root in _emulator_roots():
         sdmc = root / "sdmc"
         if sdmc.is_dir():
-            hit = find_pack_dir(sdmc)
+            hit = find_pack_dir(sdmc, extdata=ext)
             if hit and hit not in found:
                 found.append(hit)
     return found
+
+
+def regions_with_saves() -> list[str]:
+    """Game versions that have a save in an emulator folder of this computer."""
+    return [r for r in G.REGIONS if find_emulator_pack_dirs(r)]
+
+
+def pack_dir_region(folder: str | Path | None) -> str | None:
+    """'eu' or 'us' when the folder is inside the extdata of one version, else None."""
+    if not folder:
+        return None
+    parts = [x.upper() for x in Path(folder).parts]
+    for r, info in G.REGIONS.items():
+        if info["extdata"] in parts:
+            return r
+    return None
+
+
+def find_emulator_title_dirs() -> list[Path]:
+    """Citra-style ``load/mods/<title id>`` folders of the selected version (where romfs/ and
+    exefs/ mods go), for every emulator whose ``load`` folder exists."""
+    return [root / "load" / "mods" / G.TITLE_ID for root in _emulator_roots() if (root / "load").is_dir()]
 
 
 def find_emulator_mod_dirs() -> list[Path]:
@@ -296,7 +325,8 @@ class PackSource:
 class RomSource:
     """Base-game quests read from quest00.arc (or the loose files) of an
     extracted ROM. Edits are kept in ``workspace/rom_edits`` and exported as a
-    mod folder (``romfs/quest/eu/*.quest`` + ``romfs/arc/quest/eu/quest00.arc``).
+    mod folder (``romfs/quest/<eu|us>/*.quest`` + ``romfs/arc/quest/<eu|us>/quest00.arc``; the
+    folder name is the one of the extracted game).
     """
 
     kind = "rom"
@@ -308,8 +338,10 @@ class RomSource:
         self.load_edits = load_edits
         self.romfs = Path(romfs)
         self.workspace = Path(workspace) if workspace else APP_DIR / "workspace" / "rom_edits"
-        self.arc_path = self.romfs / "arc" / "quest" / "eu" / "quest00.arc"
-        self.loose_dir = self.romfs / "quest" / "eu"
+        self.region_dir = "us" if (self.romfs / "arc" / "quest" / "us").is_dir() or \
+            (self.romfs / "quest" / "us").is_dir() else "eu"
+        self.arc_path = self.romfs / "arc" / "quest" / self.region_dir / "quest00.arc"
+        self.loose_dir = self.romfs / "quest" / self.region_dir
         self.quests: dict[int, Quest] = {}
         self.originals: dict[int, bytes] = {}
         self.modified: set[int] = set()       # differs from the original game file
@@ -330,7 +362,7 @@ class RomSource:
             for f in sorted(self.loose_dir.glob("q_*.quest")):
                 self.originals[int(f.name[2:7])] = f.read_bytes()
         else:
-            raise PackError(f"Could not find quest00.arc or romfs/quest/eu in {self.romfs}")
+            raise PackError(f"Could not find quest00.arc or romfs/quest/{self.region_dir} in {self.romfs}")
         for no, data in self.originals.items():
             edit = self.workspace / file_name_for(no)
             if self.load_edits and edit.is_file():
@@ -395,12 +427,17 @@ class RomSource:
         return written
 
     def export_mod(self, out_dir: str | Path) -> list[Path]:
-        """Write the mod folder: <out>/quest/eu/*.quest and
-        <out>/arc/quest/eu/quest00.arc (both overridable by the emulator /
+        """Write the mod folder: <out>/quest/<eu|us>/*.quest and
+        <out>/arc/quest/<eu|us>/quest00.arc (both overridable by the emulator /
         Luma, so it works whichever copy the game reads)."""
         out = Path(out_dir)
         written = []
-        loose = out / "quest" / "eu"
+        for other in ("eu", "us"):                 # a mod built earlier for the other version
+            if other != self.region_dir:
+                for d in (out / "quest" / other, out / "arc" / "quest" / other):
+                    if d.is_dir():
+                        shutil.rmtree(d)
+        loose = out / "quest" / self.region_dir
         loose.mkdir(parents=True, exist_ok=True)
         for no in sorted(self.modified):
             p = loose / file_name_for(no)
@@ -415,7 +452,7 @@ class RomSource:
                     no = int(e.leaf[2:])
                     if no in self.modified:
                         e.data = self.quests[no].to_bytes()
-            target = out / "arc" / "quest" / "eu" / "quest00.arc"
+            target = out / "arc" / "quest" / self.region_dir / "quest00.arc"
             target.parent.mkdir(parents=True, exist_ok=True)
             write_atomic(target, arcmod.build(arc))
             written.append(target)

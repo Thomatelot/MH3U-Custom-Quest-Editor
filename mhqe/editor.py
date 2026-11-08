@@ -10,6 +10,7 @@ from tkinter import messagebox, simpledialog, ttk
 
 from . import autofill, spawns, startpos, strays, supp, waves
 from . import gamedata as G
+from . import monsterpack
 from . import helptext as H
 from . import picker, theme
 from .quest import LANG_NAMES, LANGS, MON_SLOTS, NANDO_MAX, QuestFormatError
@@ -88,7 +89,7 @@ class StartDialog(tk.Toplevel):
     """Choose where a monster starts: the list of start positions on the left, the zone map
     (with its area numbers) on the right, like the MH4U editor."""
 
-    def __init__(self, app, map_id, current, name):
+    def __init__(self, app, map_id, current, name, em=None):
         super().__init__(app)
         self.withdraw()
         self.title(f"Where {name} starts")
@@ -97,22 +98,37 @@ class StartDialog(tk.Toplevel):
         self.result = None
         self.map_id = map_id
         self.var = tk.IntVar(value=current)
+        pack, _installed = app.monster_pack()
+        self.areas = startpos.areas(em, map_id, pack) if em else None
         f = ttk.Frame(self, padding=14)
         f.pack(fill="both")
         left = ttk.Frame(f)
         left.pack(side="left", anchor="n")
         ttk.Label(left, text=f"{G.map_name(map_id)}: start position of {name}", style="H2.TLabel").pack(anchor="w")
         self.what = ttk.Label(left, text="", wraplength=380, justify="left", style="Muted.TLabel")
-        for pos in startpos.positions(map_id):
+        if self.areas is not None:
+            choices = list(range(len(self.areas)))
+            if current not in choices:
+                choices.append(current)
+        else:
+            choices = startpos.positions(map_id)
+        for pos in choices:
             u = startpos.usage(map_id, pos)
             row = ttk.Frame(left)
             row.pack(anchor="w", fill="x", pady=1)
-            text = startpos.label(pos) + (f"   ({u['n']} in the game)" if u else "   (not used on this map)")
+            if self.areas is not None:
+                text = startpos.label(pos) + (f"  -  area {self.areas[pos]}" if pos < len(self.areas)
+                                              else "  -  does not exist for this monster here")
+            else:
+                text = startpos.label(pos) + (f"   ({u['n']} in the game)" if u else "   (not used on this map)")
             ttk.Radiobutton(row, text=text, value=pos, variable=self.var, command=self._show).pack(side="left")
         self.what.pack(anchor="w", pady=(10, 0))
-        ttk.Label(left, text=("The quest file stores this as a number only. The editor cannot tell which "
-                              "area of the map a number is, so each number lists the game's own monsters "
-                              "that start there. 'Game default' lets the game choose."),
+        ttk.Label(left, text=(("The quest file stores a number; the game turns it into a start area with its own "
+                               "table for this monster and map (read from the game's code). The map on the right "
+                               "shows the area numbers.") if self.areas is not None else
+                              ("The quest file stores this as a number only. The start areas of this monster on "
+                               "this map are not known, so each number lists the game's own monsters that "
+                               "start there.")),
                   wraplength=380, justify="left", style="Muted.TLabel").pack(anchor="w", pady=(10, 0))
         right = ttk.Frame(f)
         right.pack(side="left", padx=(18, 0), anchor="n")
@@ -134,7 +150,13 @@ class StartDialog(tk.Toplevel):
         make_modal(self)
 
     def _show(self):
-        self.what.configure(text=startpos.describe(self.map_id, self.var.get()))
+        text = startpos.describe(self.map_id, self.var.get())
+        if self.areas is not None:
+            pos = self.var.get()
+            text = (f"Starts in area {self.areas[pos]}. " if pos < len(self.areas) else
+                    "This position does not exist for this monster on this map: choose another one. ") + \
+                (text if startpos.usage(self.map_id, pos) else "")
+        self.what.configure(text=text)
 
     def _ok(self):
         self.result = self.var.get()
@@ -794,13 +816,19 @@ class MonsterCard(ttk.Frame):
         if number:
             label = f"#{number}   {label}"
         self.name.configure(text=label)
-        ok = G.stage_ok(em, self.q.get("map"))
-        if ok is False:
-            self.spawn.configure(text=f"No spawn data on {G.map_name(self.q.get('map'))}: the game may crash", style="Card.Danger.TLabel")
-        elif ok is None:
+        where = G.map_name(self.q.get("map"))
+        pack, installed = app.monster_pack()
+        status, _added = monsterpack.pair_status(em, self.q.get("map"), pack)
+        if status == "missing":
+            self.spawn.configure(text=f"Can not start on {where}: the game skips it (Monster pack page)",
+                                 style="Card.Danger.TLabel")
+        elif status == "pack":
+            self.spawn.configure(text=f"On {where} thanks to the Monster pack (untested)"
+                                 + ("" if installed else " - not installed!"), style="Card.Warn.TLabel")
+        elif status == "unknown":
             self.spawn.configure(text="Spawn data not known for this map", style="Card.Muted.TLabel")
         else:
-            self.spawn.configure(text=f"Appears on {G.map_name(self.q.get('map'))}", style="Card.Ok.TLabel")
+            self.spawn.configure(text=f"Appears on {where}", style="Card.Ok.TLabel")
         for f, var in self.vars.items():
             var.set(m[f])
         if self.stamina is not None:
@@ -815,7 +843,10 @@ class MonsterCard(ttk.Frame):
         self.size_pre.set(match[0] if match else f"Custom ({m['Size']} %)")
         self._describe(m)
         if self.start_btn is not None:
-            self.start_btn.configure(text=f"Start positions on the map...  (now: {startpos.label(m['Starttype'])})")
+            ar = startpos.areas(em, self.q.get("map"), pack)
+            where_txt = (f", area {ar[m['Starttype']]}" if ar is not None and m["Starttype"] < len(ar) else
+                         (", does not exist here" if ar is not None else ""))
+            self.start_btn.configure(text=f"Start positions on the map...  (now: {startpos.label(m['Starttype'])}{where_txt})")
         self.set_count_visible(self.tab.dev or self.tab.n_large <= 1)
         if self.tab.dev and self.more is not None and not self.more_open:
             self._toggle(True)
@@ -866,7 +897,7 @@ class MonsterCard(ttk.Frame):
 
     def _start(self):
         m = self.q.monsters[self.slot]
-        dlg = StartDialog(self.tab.app, self.q.get("map"), m["Starttype"], G.mon_name(m["Type"]))
+        dlg = StartDialog(self.tab.app, self.q.get("map"), m["Starttype"], G.mon_name(m["Type"]), em=m["Type"])
         self.tab.wait_window(dlg)
         if dlg.result is not None and dlg.result != m["Starttype"]:
             self.q.set_monster(self.slot, Starttype=dlg.result)

@@ -1,9 +1,10 @@
 """Start position of a large monster (the quest field called Starttype).
 
-The quest file stores only a number: 0 is the game's default start, 1 to 6 are start positions
-defined by the map's own data. Which area of the map each number is can not be read from the quest
-file, so the editor shows, for every number, which monsters the game's own quests start there
-(data/start_usage.json, built by tools/build_start_usage.py from the game's quests).
+The quest file stores only a number. The game turns it into a start area with its placement
+table (code.bin): for every monster and map there is a short list of start records, the number
+picks one (0 = the first, the game's usual start). The start area of each record was read from
+the game (data/start_areas.json); the editor also shows which monsters the game's own quests
+start with each number (data/start_usage.json, built by tools/build_start_usage.py).
 """
 from __future__ import annotations
 
@@ -16,7 +17,27 @@ try:
 except (OSError, ValueError):
     _D = {}
 
+try:
+    _A = json.loads((G.DATA_DIR / "start_areas.json").read_text(encoding="utf-8")).get("areas", {})
+except (OSError, ValueError):
+    _A = {}
+
 MAX_POSITION = 6
+
+
+def areas(em: int, map_id: int, pack: dict | None = None) -> list[int] | None:
+    """Start area of each position for this monster on this map (index = Starttype), from the
+    game's own table, or from the monster pack for a combination the pack adds. None if unknown."""
+    internal = G.MAP_TO_INTERNAL.get(map_id)
+    if internal is None:
+        return None
+    native = _A.get(str(em), {}).get(str(internal))
+    if native is not None:
+        return native
+    for p in (pack or {}).get("added", []):
+        if p["em"] == em and p["stage"] == internal:
+            return p.get("start_areas")
+    return None
 
 
 def positions(map_id: int) -> list[int]:

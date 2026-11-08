@@ -476,7 +476,7 @@ def run():
     check(card.stamina is not None and "Starttype" in card.vars, "dev mode shows the obscure monster settings")
     check(card.start_btn is not None, "dev mode shows the start-position button")
     import mhqe.editor as _E2
-    def _fake_dialog(app_, map_id, cur, name):
+    def _fake_dialog(app_, map_id, cur, name, em=None):
         import tkinter as _tk
         d = _tk.Toplevel(app_)
         d.result = 3
@@ -552,6 +552,45 @@ def run():
     app.after(900, lambda: grab_toplevel("14_picker_monsters"))
     picker.pick_monster(app)              # real dialog (no queued answer)
     settle(1.2)
+
+    # ---- 1.1: monster pack page (ROM hack) and game versions
+    import tempfile
+    from mhqe import gamedata as G, monsterpack as MP
+    app.show_page("pack")
+    shot("15_pack_before")
+    app.build_monster_pack()
+    end = time.time() + 120
+    while time.time() < end and MP.read_manifest(app.monster_pack_dir()) is None:
+        settle(0.5)
+    settle(1.0)
+    man = MP.read_manifest(app.monster_pack_dir())
+    check(man is not None and len(man["added"]) > 300, "monster pack built from the game")
+    fake_citra = Path(tempfile.mkdtemp()) / "load" / "mods" / G.TITLE_ID
+    A.find_emulator_title_dirs = lambda: [fake_citra]
+    app.install_monster_pack()
+    settle()
+    inst, where = app.installed_monster_pack()
+    check(inst is not None and inst["fingerprint"] == man["fingerprint"], "pack installed (fake Citra folder)")
+    check(app.monster_pack() == (inst, True), "quest checks use the installed pack")
+    shot("16_pack_installed")
+    dlg = StartDialogReal(app, 2, 0, "Zinogre", em=41)
+    settle(0.5)
+    check(dlg.areas == [6, 7, 8], f"start areas of Zinogre on Sandy Plains from the pack: {dlg.areas}")
+    shot("17_start_dialog_pack", dlg)
+    dlg.destroy()
+    app.remove_monster_pack()
+    settle()
+    check(app.installed_monster_pack() == (None, None), "pack removed")
+    check(not (fake_citra / "exefs" / "code.ips").exists(), "code.ips removed")
+    app.switch_region("us")
+    settle(0.6)
+    check(G.TITLE_ID == "00040000000AE400" and G.EXTDATA_ID == "00000AE4", "switched to the US version")
+    check(app.sources["packs"] is None, "the EU save is not used for the US version")
+    app.show_page("pack")
+    shot("18_pack_us")
+    app.switch_region("eu")
+    settle(0.6)
+    check(G.TITLE_ID == "00040000000B1D00" and app.sources["packs"] is not None, "back to the EU version and its save")
 
 
 try:

@@ -3,9 +3,15 @@
 # MH3U Custom Quest Editor
 
 Create and edit your own quests for **Monster Hunter 3 Ultimate** (3DS, **European or North
-American** version), on **Citra** or on a real **3DS**. A small offline tool for Windows, written in
-pure Python. New in 1.1: an optional **Monster pack** (ROM hack) that lets large monsters appear on
-maps the game does not allow, like Zinogre on the Sandy Plains.
+American** version), on **Citra** or on a real **3DS**. A small offline tool for Windows (and, untested,
+macOS and Linux), written in pure Python, in **English or French**. It includes an optional **Monster
+pack** (ROM hack) that lets large monsters appear on maps the game does not allow, like Zinogre on the
+Sandy Plains.
+
+New in 1.3: start areas lit up on the area map, a monster browser by type and difficulty and an item
+browser by family, an English / French interface with the game's own French names, monster sizes up to
+2000 % with the Monster pack (untested in the game), and backups that clean themselves up without ever
+touching your originals. See [CHANGELOG.md](CHANGELOG.md).
 
 <p align="center"><img src="docs/images/home.png" alt="The editor: list of the event quests of a save" width="820"></p>
 
@@ -75,12 +81,21 @@ what it does, with the values the game's own quests use; the built-in **Guide** 
 * **Text:** quest name, client, description, objectives in the 5 languages.
 * **Safety:** checks that warn about mistakes that can stop a quest from loading, **automatic backups
   before every save**, a copy of the original files that is never deleted, *Undo changes*.
-* **Where they start:** each monster card's *Starts in* list shows the start areas the game has for that
-  monster on that map, with the numbers of the in-game map; *Hunters start* (General tab) shows where the
-  hunters begin, with the game's odds.
-* **Monster pack (ROM hack, optional):** 47 large monsters on all 14 maps (497 new combinations).
+* **Where they start, on the map:** each monster card shows the area map with its start area in yellow;
+  the big map has a pin on every start area of that monster, click one to choose it. *Hunters start*
+  (General tab) shows where the hunters begin, with the game's odds, on the map too.
+* **Browsers:** monsters grouped by type (Flying Wyverns, Brute Wyverns...) with the easiest first and
+  difficulty stars, or listed by difficulty; items grouped by family (healing, bombs and traps, ores,
+  monster parts, jewels...) following the game's icons. Search finds anything.
+* **Monster pack (ROM hack, optional):** 47 large monsters on all 14 maps (497 new combinations), and
+  monster sizes above the game's 255 % limit, up to 2000 % (Developer mode; untested in the game).
 * **Game versions:** European (EU) and North American (US); choose yours in *Settings*.
-* Two themes: *Moga Parchment* (light) and *Tanzia Night* (dark). *Developer mode* shows raw fields.
+* **English or French** (*Settings > Language / Langue*): the interface, the guide and the checks, with
+  the game's own French names for items, monsters and maps.
+* **Backups that tidy up:** old backups are deleted automatically (how many to keep is in *Settings*),
+  but never your original files, the first full backup or the first copy of each quest.
+* Two themes: *Moga Parchment* (light) and *Tanzia Night* (dark). *Developer mode* shows raw fields and
+  the risky settings; the normal mode keeps to what a quest maker needs.
 
 <p align="center">
 <img src="docs/images/editor-general.png" width="400" alt="General tab">
@@ -90,6 +105,11 @@ what it does, with the values the game's own quests use; the built-in **Guide** 
 <img src="docs/images/editor-rewards.png" width="400" alt="Rewards tab">
 <img src="docs/images/guide.png" width="400" alt="The built-in guide, one tab per chapter">
 </p>
+<p align="center">
+<img src="docs/images/start-map.png" width="400" alt="Where a monster starts: the start area in yellow, pins on the other start areas">
+<img src="docs/images/picker-monsters.png" width="400" alt="Monster browser: by type, easiest first, with difficulty stars">
+</p>
+<p align="center"><img src="docs/images/french.png" width="560" alt="The editor in French"></p>
 
 
 ## Requirements
@@ -98,14 +118,15 @@ what it does, with the values the game's own quests use; the built-in **Guide** 
 |---|---|
 | **Game** | Your own legal copy of *Monster Hunter 3 Ultimate*, **European** (title id `00040000000B1D00`) or **North American** version (`00040000000AE400`). Choose yours in *Settings > Game version*. The Japanese version was not studied. |
 | **To play** | **Citra** (or a fork: Azahar, Lime3DS...) **or** a real 3DS with custom firmware and a save manager such as **Checkpoint** / JKSM. |
-| **Computer** | **Windows**. **Python 3.10 or newer** with **tkinter** (the installer from python.org includes it). |
+| **Computer** | **Windows** (tested), **macOS** or **Linux** (untested). **Python 3.10 or newer** with **tkinter** (the installer from python.org includes it). |
 | **Optional** | The game's extracted **`romfs`** folder: needed for the *Base game* page and to copy the game's own quests as templates. |
 | **Optional** | **Pillow** (`py -m pip install pillow`) and `exefs/code.bin`, only to rebuild the pictures from your own game. |
 | **Optional** | The extracted game **with `exefs/code.bin` next to `romfs`**, to build the *Monster pack*. |
 
 No internet connection is needed to run the editor, and it never uses one.
-The author tested on **Windows with Citra** only. Linux and macOS: the code is portable Python and looks
-for Citra's folders there too, but nobody has tried yet.
+The author tested on **Windows with Citra** only. macOS and Linux: the code is portable Python, has a
+launcher for each, and looks for Citra, Azahar and Lime3DS folders there too (including Flatpak), but
+nobody has tried yet.
 
 ## Installation
 
@@ -116,6 +137,10 @@ for Citra's folders there too, but nobody has tried yet.
    its settings, backups and library next to itself.
 3. **Start** it by double-clicking **`Launch Quest Editor.bat`** (or `python mh3u_quest_editor.py`).
    Run `Create shortcut.bat` once if you want a Desktop shortcut with the icon.
+   **macOS:** double-click **`Launch Quest Editor.command`** (the first time: right-click > *Open*).
+   Python from python.org includes Tk; with Homebrew install `python-tk`.
+   **Linux:** run **`./launch_quest_editor.sh`**. Tk usually comes as a separate package
+   (`sudo apt install python3-tk` on Debian/Ubuntu, `sudo dnf install python3-tkinter` on Fedora).
 4. **First start:** the editor finds your Citra save by itself. Start MH3U once in Citra and close it
    first if it says *Not found yet*. Then choose a theme.
 5. **Optional, for the Base game page and to copy the game's own quests:** extract the game's files
@@ -178,8 +203,9 @@ and picks the game's start list offering the most start areas.
 
 <p align="center"><img src="docs/images/monster-pack.png" width="820" alt="The Monster pack page"></p>
 
-* **What it changes:** a 6 KB patch `exefs/code.ips` (new start lists written in unused space of the
-  program and over the old lists they replace, and one pointer per monster) and 47 files
+* **What it changes:** a 7 KB patch `exefs/code.ips` (new start lists and the extended size table,
+  written in unused space of the program and over the old lists they replace, one pointer per monster
+  and one for the size table) and 47 files
   `romfs/arc/enemy/emNNN.arc`. It is a mod: the
   ROM and the save are untouched, and *Remove from Citra* brings the game back exactly. It cannot be
   combined with another `code.ips` / `code.bin` mod.
@@ -189,8 +215,13 @@ and picks the game's start list offering the most start areas.
 * **Tested:** only **Zinogre on Sandy Plains** (Citra). Everything else follows the same rules but is
   **untested**: a monster may get stuck or the game may crash. Water arenas, Sacred Land, Tower, the
   siege maps, and Alatreon / Dire Miralis away from their maps are the riskiest (marked `+!`).
-* **Multiplayer:** every player needs the same pack. Built from the same game it is identical for
-  everybody (the EU and US packs are even the same files): compare the **fingerprint** on the page.
+* **Big sizes:** a quest stores a monster's size in one byte (255 % at most). The game then adds a value
+  from a size table chosen by the quest, with no upper limit; the pack extends that table with exact
+  sizes from +100 % to +1900 %, so *Size %* accepts up to **2000 %** in Developer mode. Such a quest needs
+  the pack installed. Checked against the game's code, **not tried in the game**: a giant may clip
+  through walls or be hard to reach.
+* **Multiplayer:** every player needs the same pack. Built from the same game version it is identical
+  for everybody: compare the **fingerprint** on the page.
 * **Real 3DS:** copy the content of the pack folder into `luma\titles\<title id>\` (game patching
   enabled in Luma). Untested on hardware.
 * **Without the editor window:** `python tools/build_monster_pack.py --romfs <romfs> --out <folder>`.
@@ -232,6 +263,9 @@ rests on a test in the game and what rests on reading the game's files.
 | Three monsters arriving at once; five monsters one after the other | 🔎 Follow the same rule as the tested patterns but never appear in a game quest: please test |
 | Which monsters wander into an *Unstable* zone | ❌ Cannot be chosen: the list is stored in the game, not in the quest |
 | An "enraged" / "charged" monster | ❌ No such setting was found in the quest file. King Size (+ health and attack) is the closest |
+| Start areas on the map (yellow areas, pins) | 🔎 Area outlines from the game's map pictures, placed with mh3u-quest-studio's area markers (they line up on every map); the start areas themselves come from the game's code |
+| Monster sizes above 255 % (Monster pack) | 🔎 The size code and table were read in the 3DS program and the patched table checked by the tests; **not tried in the game** |
+| French interface | 🔎 Interface, checks and guide translated; item, monster and map names from the game's French text. A few rare texts may still show in English |
 | **Real 3DS**, Japanese version, Linux, macOS | ❔ Not tested by the author: you may be the first to find out. Please report |
 
 ## Advice
@@ -286,6 +320,8 @@ The editor needs nothing but the `.bat` / `python mh3u_quest_editor.py`. For dev
     python tools/build_guide_md.py                                          # regenerate docs/GUIDE.md
     python tools/make_icon.py                                               # regenerate the app icon
     python tools/build_monster_pack.py --romfs <romfs> --out <folder>       # build the Monster pack
+    python tools/build_map_zones.py <mh3u-quest-studio>/data/art_layout.json # area centres of the maps
+    python tools/build_fr_names.py <romfs>                                   # the game's French names
 
 `tools/build_benchmarks.py`, `build_spawns.py` and `build_start_usage.py` rebuild the tables in
 `data/` from your extracted game. **The tests need your own game files** (nothing of the game is in
@@ -302,16 +338,19 @@ the repository), and skip what they cannot find:
 Layout: `mhqe/quest.py` (quest record), `packs.py` (event packs), `arc.py` (archives), `project.py`,
 `backup.py`, `library.py`, `validate.py`, `supp.py` (supply files), `autofill.py`, `waves.py` (arrival
 patterns and objectives), `spawns.py`, `strays.py`, `artbuild.py` (pictures), `guide.py` /
-`helptext.py` (texts), `monsterpack.py` (Monster pack: placement table, monster stage tables, IPS),
-`app.py` / `editor.py` / `picker.py` (interface). `data/` holds the fact tables.
+`helptext.py` (texts), `monsterpack.py` (Monster pack: placement table, monster stage tables, size
+table, IPS), `catalog.py` (monster types, difficulty, item families), `i18n.py` (English / French),
+`zonemap.py` (area maps), `app.py` / `editor.py` / `picker.py` (interface). `data/` holds the fact
+tables; `data/lang/` the French texts. `tests/gui_lang.py` opens the main screens in one language.
 
 ## Security, credits and licence
 
 * **Security and legal:** [SECURITY.md](SECURITY.md). The editor is offline and only touches the folders listed above.
 * **Credits:** the quest record layout and several tables started from
   [mh3u-quest-studio](https://github.com/Matt-Wood-23/mh3u-quest-studio) by Matt Wood (MIT), whose
-  later work also gave the game's names of the settings fields, the in-game map numbers of the areas
-  and the hunters' start table that this version checks against the 3DS game; the
+  later work also gave the game's names of the settings fields, the in-game map numbers of the areas,
+  the area markers of the maps and the hunters' start table that this version checks against the 3DS
+  game; the
   [MH3U wiki](https://monsterhunter.fandom.com/wiki/Monster_Hunter_3_Ultimate) was used to cross-check
   names. Interface layout inspired by the MH4U Custom Quest Editor. Details in [THIRD_PARTY.md](THIRD_PARTY.md).
 * **Licence:** MIT for the code and original files ([LICENSE](LICENSE)); the game and Capcom's

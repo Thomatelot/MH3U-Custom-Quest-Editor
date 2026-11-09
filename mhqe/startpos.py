@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 
 from . import gamedata as G
+from .i18n import _
 
 try:
     _D = json.loads((G.DATA_DIR / "start_usage.json").read_text(encoding="utf-8")).get("maps", {})
@@ -96,9 +97,9 @@ def choice_text(pos: int, areas: list[int] | None, map_id: int) -> str:
         return f"{pos}  -  " + (label(pos) if pos else "game default")
     if 0 <= pos < len(areas):
         where = area_label(map_id, areas[pos])
-        return f"{pos}  -  {'starts at' if areas[pos] == 0 else 'starts in'} {where}" + \
-            ("  (usual start)" if pos == 0 else "")
-    return f"{pos}  -  no such start for this monster here"
+        return f"{pos}  -  {_('starts at' if areas[pos] == 0 else 'starts in')} {_(where)}" + \
+            (_("  (usual start)") if pos == 0 else "")
+    return _(f"{pos}  -  no such start for this monster here")
 
 
 # --------------------------------------------------------------- hunters
@@ -122,6 +123,19 @@ def hunter_text(map_id: int, value: int) -> str:
         a = pairs[0][0]
         return "Always at the base camp." if a == 0 else f"Always in {area_label(map_id, a, monster=False)}."
     return "At random: " + ", ".join(f"{area_label(map_id, a, monster=False)} {w}%" for a, w in pairs) + "."
+
+
+def hunter_areas(map_id: int, value: int) -> list[int]:
+    """Map numbers of the areas where the hunters can start (0 = base camp)."""
+    per = _H.get(map_id)
+    if not per or not 0 <= value < len(per):
+        return [0]
+    out = []
+    for a, _w in per[value]:
+        n = 0 if a == 0 else area_number(map_id, a)
+        if n is not None and n not in out:
+            out.append(n)
+    return out
 
 
 def hunter_warning(map_id: int, value: int) -> str | None:

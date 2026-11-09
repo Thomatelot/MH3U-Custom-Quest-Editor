@@ -353,7 +353,11 @@ TEXT = {
            "monster card. To have several copies together or in waves, add several cards.",
     "Size": "Size in percent: 100 = normal size. The base game uses 100 everywhere except a few "
             "special quests; event quests use 121 to 125 for King Size monsters, and 20, 40, 88, 180 and "
-            "200 for tiny or giant ones.",
+            "200 for tiny or giant ones.\n\nThe quest file keeps the size in one byte, so 255 % is the "
+            "most the game allows on its own. In Developer mode you can type up to 2000 %: above 255 the "
+            "editor uses a size table that only the Monster pack (code patch) adds, so the pack must be "
+            "installed, or the game reads past its own table. Giant monsters are untested in the game: "
+            "they may clip through walls or be hard to hit.",
     "Nando_hp": "HEALTH. Not an HP value: a row (0-127) of the game's difficulty table. The "
                 "row gives a multiplier applied to the monster's base HP.",
     "Nando_at": "ATTACK. A row (0-127) of the difficulty table; the row gives how hard the "
@@ -367,7 +371,9 @@ TEXT = {
     "Sizeparam": "Size spread: which table decides how much smaller or bigger than 'Size %' "
                  "the monster can be (this is what makes crowns possible). The game uses: "
                  "Village 1, 10 or 13; Port Low Rank 1; Port High Rank 3 to 7; Port G Rank "
-                 "18 to 28; Grudge Matches and Challenge quests 0 (fixed size).",
+                 "18 to 28; Grudge Matches and Challenge quests 0 (fixed size). The game's table "
+                 "ends at 34; with the Monster pack, 64 to 82 are exact sizes +100 % to +1900 % "
+                 "(set by 'Size %' above 255).",
     "Starttype": "Start position number of the monster on the map. 0 = the game's usual start "
                   "(3 large monsters out of 4 in the game). The game keeps, for every monster and "
                   "map, a short list of start areas and this number picks one: Rathian on the "

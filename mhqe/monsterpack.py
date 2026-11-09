@@ -333,6 +333,67 @@ def free_regions(code: bytes, layout: dict) -> list[list[int]]:
     return out
 
 
+# ----------------------------------------------------------------- big sizes
+# The quest stores a monster's size in one byte (Size, 0-255 %). At spawn the game adds a value
+# from the "size spread" table picked by Sizeparam: size % = Size + value - 100 (function at
+# 0x5C0754 in the EU code, no upper limit). The table holds 35 lists (u16 weight, low, high, ...,
+# 0xFFFF). The pack moves the table to free space, keeps the 35 lists, leaves 35-63 empty (exact
+# size; the game itself would read past its table there) and adds Sizeparam 64-82 = exact size
+# +100 % to +1900 %, so Size 255 + 1900 % = up to 2155 %; the editor offers up to 2000 %.
+BIG_SIZE_BASE, BIG_SIZE_STEP, BIG_SIZE_COUNT = 64, 100, 19
+MAX_BIG_SIZE = 2000
+
+
+def find_size_table(code: bytes, layout: dict) -> tuple[int, int] | None:
+    """(VA of the size spread pointer table, file offset of the one literal pointing to it), or None."""
+    first = struct.pack("<7H", 100, 98, 99, 900, 100, 105, 0xFFFF)     # list 1 of the game's table
+    i = code.find(first)
+    if i < 0 or code.find(first, i + 1) >= 0:
+        return None
+    ref = code.find(struct.pack("<I", i + BASE))
+    while ref >= 0:
+        if ref % 4 == 0 and struct.unpack_from("<I", code, ref - 4)[0] == 0:
+            table = ref - 4 + BASE
+            lit = struct.pack("<I", table)
+            text_va, _pages, text_size = layout["text"]
+            hits = [k for k in range(0, len(code) - 3, 4) if code[k:k + 4] == lit]
+            hits = [k for k in hits if text_va <= k + BASE < text_va + text_size]
+            if len(hits) == 1:
+                return table, hits[0]
+            return None
+        ref = code.find(struct.pack("<I", i + BASE), ref + 1)
+    return None
+
+
+def big_size_blobs(code: bytes, table_va: int, at: int) -> bytes:
+    """New pointer table (placed at VA ``at``) followed by the new lists."""
+    n = BIG_SIZE_BASE + BIG_SIZE_COUNT
+    old = [struct.unpack_from("<I", code, table_va - BASE + 4 * k)[0] for k in range(35)]
+    lists_at = at + 4 * n
+    ptrs = old + [0] * (BIG_SIZE_BASE - 35)
+    lists = bytearray()
+    for k in range(1, BIG_SIZE_COUNT + 1):
+        ptrs.append(lists_at + len(lists))
+        v = 100 + BIG_SIZE_STEP * k
+        lists += struct.pack("<4H", 1000, v, v, 0xFFFF)
+    return b"".join(struct.pack("<I", p) for p in ptrs) + bytes(lists)
+
+
+def split_size(percent: int) -> tuple[int, int | None]:
+    """Size % wanted -> (Size byte, Sizeparam or None to keep the current spread)."""
+    if percent <= 255:
+        return max(0, percent), None
+    k = min(BIG_SIZE_COUNT, -(-(percent - 255) // BIG_SIZE_STEP))
+    return percent - BIG_SIZE_STEP * k, BIG_SIZE_BASE - 1 + k
+
+
+def full_size(size: int, sizeparam: int) -> int:
+    """Size % of a monster, counting the pack's big-size settings."""
+    if BIG_SIZE_BASE <= sizeparam < BIG_SIZE_BASE + BIG_SIZE_COUNT:
+        return size + BIG_SIZE_STEP * (sizeparam - BIG_SIZE_BASE + 1)
+    return size
+
+
 def ips(records) -> bytes:
     out = bytearray(b"PATCH")
     for off, data in records:
@@ -521,6 +582,27 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print) -> dic
         slot[0] += (len(blob) + 7) // 8 * 8
         records.append((pos - BASE, blob))
         records.append((table_va - BASE + 4 * em, struct.pack("<I", pos)))
+    # big sizes: the size spread table, moved and extended
+    big = None
+    found = find_size_table(code, game.layout)
+    if found:
+        size_va, lit_off = found
+        need = 4 * (BIG_SIZE_BASE + BIG_SIZE_COUNT) + 8 * BIG_SIZE_COUNT
+        slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= need), None)
+        if slot is not None:
+            pos = slot[0]
+            slot[0] += (need + 7) // 8 * 8
+            records.append((pos - BASE, big_size_blobs(code, size_va, pos)))
+            records.append((lit_off, struct.pack("<I", pos)))
+            big = {"base": BIG_SIZE_BASE, "step": BIG_SIZE_STEP, "count": BIG_SIZE_COUNT,
+                   "table": f"0x{pos:X}", "game_table": f"0x{size_va:X}"}
+            log(f"Big sizes: monster sizes up to {255 + BIG_SIZE_STEP * BIG_SIZE_COUNT} % enabled.")
+        else:
+            log("Big sizes skipped: not enough free space in code.bin.")
+    else:
+        log("Big sizes skipped: the size table was not found in this code.bin.")
+    left = sum(b_ - a_ for a_, b_ in free)
+    log(f"Free space left in code.bin: {left} bytes.")
     records.sort()
     patch = ips(records)
     (out_dir / "exefs").mkdir()
@@ -532,6 +614,7 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print) -> dic
         "monsters": sorted(by_em), "stages": stages,
         "added": [{k: p[k] for k in ("em", "stage", "donor", "start_areas")} for p in plan],
         "placement_table": f"0x{table_va:X}",
+        "big_sizes": big,
     }
     (out_dir / MANIFEST).write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     log(f"Done: {len(plan)} monster/map pairs added for {len(by_em)} monsters, fingerprint {manifest['fingerprint']}.")

@@ -28,6 +28,7 @@ from mhqe import project  # noqa: E402
 cfg = project.Settings()
 cfg.set("setup_done", True)
 cfg.set("theme", THEME)
+cfg.set("language", os.environ.get("MHQE_LANG", "en"))
 cfg.set("pack_dir", PACKS)
 cfg.set("romfs", ROMFS)
 cfg.set("dev_mode", False)
@@ -273,7 +274,7 @@ def run():
     app.editor.nb.select(1)
     settle(0.4)
     check(card.start_btn is None, "'Starts at' is a developer-mode control")
-    large = [e for e, n in sorted(GD.MONSTERS.items()) if picker.monster_category(n) == "Large"]
+    large = [e for e, n in sorted(GD.MONSTERS.items()) if picker.monster_category(e) == "Large"]
     have = [m["Type"] for m in q2.monsters if m["Type"]]
     while len(set(have)) < 2:
         mon.set_species(len(have), next(e for e in (41, 2, 3, 4) if e not in have))

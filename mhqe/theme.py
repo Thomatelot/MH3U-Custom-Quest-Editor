@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import sys
 import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import ttk
@@ -19,6 +20,7 @@ THEMES = {
         "danger": "#A3301C", "warn": "#8E6008", "ok": "#4A7526", "entry": "#FFFDF7",
         "stripe": "#F4ECD6", "free": "#9A8869", "bar": "#B5531B", "bar_bg": "#DCCDA8",
         "tip_bg": "#3B2A18", "tip_ink": "#F7EDD3", "group": "#E2D5B4",
+        "map_bg": "#2E2216", "map_line": "#6B5236", "zone": "#FFCC28", "zone_ink": "#2B1D10",
     },
     "night": {
         "name": "Tanzia Night", "desc": "Dark: night-blue menus with gold",
@@ -29,6 +31,7 @@ THEMES = {
         "danger": "#EC7C64", "warn": "#E6B450", "ok": "#94C66D", "entry": "#0F1520",
         "stripe": "#1D2738", "free": "#6C7688", "bar": "#E3B44C", "bar_bg": "#2C384C",
         "tip_bg": "#E9D59C", "tip_ink": "#121A26", "group": "#16202E",
+        "map_bg": "#0B1018", "map_line": "#34445C", "zone": "#FFCC28", "zone_ink": "#1A1205",
     },
 }
 DEFAULT_THEME = "parchment"
@@ -55,14 +58,17 @@ def _family(root, wanted, fallback):
 
 def _make_fonts(root):
     base = tkfont.nametofont("TkDefaultFont").actual()
-    body = _family(root, ("Segoe UI", "Noto Sans", "DejaVu Sans", "Helvetica"), base["family"])
-    serif = _family(root, ("Georgia", "Palatino Linotype", "Book Antiqua", "Cambria",
-                           "DejaVu Serif", "Liberation Serif", "Times New Roman"), body)
+    body = _family(root, ("Segoe UI", "SF Pro Text", "Helvetica Neue", "Noto Sans", "Ubuntu", "Cantarell",
+                          "DejaVu Sans", "Helvetica"), base["family"])
+    serif = _family(root, ("Georgia", "Palatino Linotype", "Palatino", "Book Antiqua", "Cambria",
+                           "Noto Serif", "DejaVu Serif", "Liberation Serif", "Times New Roman"), body)
+    mono = _family(root, ("Consolas", "Menlo", "SF Mono", "DejaVu Sans Mono", "Liberation Mono"), "TkFixedFont")
+    up = 3 if sys.platform == "darwin" else 0      # Tk on macOS counts points at 72 dpi: text looks smaller
     spec = {
-        "body": (body, 10, "normal"), "small": (body, 9, "normal"), "bold": (body, 10, "bold"),
-        "title": (serif, 15, "bold"), "h2": (serif, 12, "bold"), "h3": (serif, 11, "bold"),
-        "big": (serif, 18, "bold"), "mono": ("Consolas" if "consolas" in {f.lower() for f in tkfont.families(root)} else "TkFixedFont", 9, "normal"),
-        "star": (serif, 12, "bold"),
+        "body": (body, 10 + up, "normal"), "small": (body, 9 + up, "normal"), "bold": (body, 10 + up, "bold"),
+        "title": (serif, 15 + up, "bold"), "h2": (serif, 12 + up, "bold"), "h3": (serif, 11 + up, "bold"),
+        "big": (serif, 18 + up, "bold"), "mono": (mono, 9 + up, "normal"),
+        "star": (serif, 12 + up, "bold"),
     }
     for key, (fam, size, weight) in spec.items():
         if key in FONTS:
@@ -70,7 +76,7 @@ def _make_fonts(root):
         else:
             FONTS[key] = tkfont.Font(root=root, family=fam, size=size, weight=weight)
     for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont"):
-        tkfont.nametofont(name).configure(family=body, size=10)
+        tkfont.nametofont(name).configure(family=body, size=10 + up)
 
 
 def apply(root: tk.Misc, key: str) -> None:

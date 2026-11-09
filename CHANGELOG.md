@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.3.0
+
+* **Start areas on the map.** Each monster card shows the area map with the monster's start area lit
+  in yellow; clicking it (or *Map...*) opens the big map, where every start area of that monster has a
+  pin and a click on a pin or an area chooses it. The General tab shows where the hunters start on the
+  map. The area outlines are taken from the game's own map pictures and placed with mh3u-quest-studio's
+  area markers (at exactly one third of the Wii U coordinates on every map).
+* **Monster and item browsers.** Monsters are grouped by type (Bird, Flying, Piscine and Brute Wyverns,
+  Leviathans, Fanged Beasts and Wyverns, Elder Dragons, small monsters) with the easiest first and
+  difficulty stars (an editorial 1-10 ranking shown as 1-5 stars), or listed from Beginner to Hardest.
+  Items are grouped in 15 families following the game's icon shapes. A side list filters by group;
+  moving the selection no longer redraws the grid.
+* **English / French.** *Settings > Language / Langue* (French by default on a French computer). The
+  interface, the checks and the built-in guide are translated; item, monster and map names come from
+  the game's own French text (tools/build_fr_names.py). Search also accepts the English names.
+* **Monster sizes up to 2000 % (Monster pack, Developer mode).** The quest keeps the size in one byte
+  (255 % at most); the game adds a value from a size table chosen by Sizeparam, without an upper limit
+  (EU code at 0x5C0754). The pack moves that table and adds exact sizes +100 % to +1900 % (Sizeparam
+  64 to 82); the editor sets Size and Sizeparam for you. Checks: such a quest needs the pack installed.
+  Not tried in the game.
+* **Backups clean themselves up.** By default the 20 most recent full backups and the 5 most recent
+  copies of each quest are kept (Settings > Backups). Never deleted: the original files, the very first
+  full backup and the first copy of each quest (shown with a lock); the cleanup can only delete inside
+  backups/full and backups/quests.
+* **Copy to my library**: the separate, editable copy of a quest can be opened right away; the original
+  is never changed.
+* **macOS and Linux:** `Launch Quest Editor.command` and `launch_quest_editor.sh`; more emulator
+  folders are found (XDG data folder, Flatpak builds of Citra, Azahar and Lime3DS, macOS Application
+  Support); fonts fall back to each system's own. Untested on those systems.
+* A thin ornamental band under the header, in the spirit of MH3U's menus.
+
 ## 1.2.0
 
 * **Monster pack: every map.** The siege maps (Great Desert, Underwater Ruin, Tainted Sea) are open

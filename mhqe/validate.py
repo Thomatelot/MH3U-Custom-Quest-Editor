@@ -94,6 +94,21 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
             add("info" if pack_installed else "warning", text)
             for note in monsterpack.risk_notes(m["Type"], q.get("map")):
                 add("warning", f"{name}: {note}")
+        sp = m["Sizeparam"]
+        if sp >= 35:
+            big = (monster_pack or {}).get("big_sizes")
+            full = monsterpack.full_size(m["Size"], sp)
+            if not big:
+                add("error", f"{name}: size spread {sp} is past the end of the game's size table"
+                             + (f" (size {full} % needs the Monster pack with big sizes, built with "
+                                "this version of the editor, and installed)" if full != m["Size"] else "")
+                             + ": the game would read garbage and may crash. Choose a size of 255 % or less, "
+                               "or build and install the Monster pack.")
+            elif full != m["Size"]:
+                add("info" if pack_installed else "error",
+                    f"{name}: size {full} % uses the Monster pack's big sizes (untested in the game: a giant "
+                    "monster may clip through walls or be hard to reach)."
+                    + ("" if pack_installed else " The pack is not installed: install it first."))
         if status in ("native", "pack"):
             ar = startpos.areas(m["Type"], q.get("map"), monster_pack)
             if ar is not None and m["Starttype"] >= len(ar):

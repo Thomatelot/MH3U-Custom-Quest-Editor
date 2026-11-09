@@ -45,7 +45,13 @@ Ctrl+S saves. Ctrl+F searches the tab you are looking at (labels, values, list r
 
 Themes: Moga Parchment (light, default) and Tanzia Night (dark), in Settings.
 
+Language: English or French (Settings > Language / Langue). In French, item, monster and map names are the game's own French names. The quests themselves keep their texts in the game's five languages (Text tab).
+
 Developer mode shows internal numbers (ids, type codes, raw fields) and the Advanced tab. Keep it off for normal editing.
+
+### Choosing monsters and items
+
+The monster list is grouped by class (Bird Wyverns, Flying Wyverns, Brute Wyverns...) with the easiest monsters first; the stars under each name say how hard players usually find it (an editorial guide from 1 to 5 stars, not a game value: the quest's Health and Attack rows decide its real strength). 'By difficulty' lists them from Beginner to Hardest instead. The item list (rewards, supply boxes, deliveries) is grouped in families that follow the game's own icons: healing, food and bait, bombs and traps, tools, ammo, plants, bugs, ores, fish, monster parts, rare parts and gems, eggs, coins and tickets, jewels. Search looks through everything (in French, the English names work too).
 
 ### Pictures
 
@@ -177,11 +183,15 @@ Each large monster has a card, numbered #1, #2, #3 in the order they are read. C
 
 Start position number of the monster on the map. 0 = the game's usual start (3 large monsters out of 4 in the game). The game keeps, for every monster and map, a short list of start areas and this number picks one: Rathian on the Deserted Island has 4 (areas 10, 2, 5, 4), Zinogre on Misty Peaks 3. The 'Start positions' button shows the area of each number, read from the game's code. A number past the end of the list is flagged by the checks.
 
-The list shows the area numbers painted on the in-game map (the game's own numbering of the areas is different: e.g. Rathian's usual start on the Deserted Island is the area the map shows as 8). Map... opens the map of the zone next to the list. Copies of one species are spread over different start points automatically.
+The list shows the area numbers painted on the in-game map (the game's own numbering of the areas is different: e.g. Rathian's usual start on the Deserted Island is the area the map shows as 8). Copies of one species are spread over different start points automatically.
+
+The small map on the card shows where the monster starts, in yellow. Click it (or Map...) for the big map: the start area is lit in yellow and every other start area of this monster has a pin; click a pin or an area to start there. The area outlines come from the game's own map pictures.
 
 ### Size % and Size like
 
 Size in percent: 100 = normal size. The base game uses 100 everywhere except a few special quests; event quests use 121 to 125 for King Size monsters, and 20, 40, 88, 180 and 200 for tiny or giant ones.
+
+The quest file keeps the size in one byte, so 255 % is the most the game allows on its own. In Developer mode you can type up to 2000 %: above 255 the editor uses a size table that only the Monster pack (code patch) adds, so the pack must be installed, or the game reads past its own table. Giant monsters are untested in the game: they may clip through walls or be hard to hit.
 
 Sets the monster's size in one click. No hidden 'enraged' or 'charged' setting was found in the quest file: the game's 'Clashing Fists!' Brachydios (124 %) and 'Descent into Hades' Stygian Zinogre (125 %) are King Size, which the wiki describes as 'always King Size, with increased health and attack'. So King Size plus higher Health and Attack is the closest the quest can get; whether such a monster starts the fight enraged or charged is not something this editor can set.
 
@@ -223,7 +233,7 @@ Stamina: How fast the monster gets tired (stamina table). The game uses: Village
 
 Start type: the raw number behind 'Starts in'.
 
-Size spread: Size spread: which table decides how much smaller or bigger than 'Size %' the monster can be (this is what makes crowns possible). The game uses: Village 1, 10 or 13; Port Low Rank 1; Port High Rank 3 to 7; Port G Rank 18 to 28; Grudge Matches and Challenge quests 0 (fixed size).
+Size spread: Size spread: which table decides how much smaller or bigger than 'Size %' the monster can be (this is what makes crowns possible). The game uses: Village 1, 10 or 13; Port Low Rank 1; Port High Rank 3 to 7; Port G Rank 18 to 28; Grudge Matches and Challenge quests 0 (fixed size). The game's table ends at 34; with the Monster pack, 64 to 82 are exact sizes +100 % to +1900 % (set by 'Size %' above 255).
 
 Set type: 0 in every quest of the game (all 403 quests checked). Leave it at 0.
 
@@ -319,7 +329,11 @@ The siege maps follow the game's own example: on the Underwater Ruin a monster g
 
 ### What it changes (ROM hack)
 
-It is a mod, built on your PC from your own extracted game: 47 files romfs/arc/enemy/emNNN.arc, a 6 KB patch exefs/code.ips (only new start lists, written in unused space of the program and over the old lists it replaces, and one pointer per monster) and mhqe_monster_pack.json. Your ROM and your save are not modified; removing the mod (button 'Remove from Citra') brings the game back exactly. It can not be combined with another code.ips/code.bin mod.
+It is a mod, built on your PC from your own extracted game: 47 files romfs/arc/enemy/emNNN.arc, a 7 KB patch exefs/code.ips (only new start lists and the extended size table, written in unused space of the program and over the old lists it replaces, one pointer per monster and one for the size table) and mhqe_monster_pack.json. Your ROM and your save are not modified; removing the mod (button 'Remove from Citra') brings the game back exactly. It can not be combined with another code.ips/code.bin mod.
+
+### Big sizes
+
+A quest stores a monster's size in one byte, so 255 % is the most it can hold. The game then adds a value taken from a 'size spread' table (chosen by the quest), with no upper limit. The pack moves that table and adds 19 exact sizes, +100 % to +1900 %, so a quest can make a monster up to 2000 % ('Size %' in Developer mode). Such a quest needs the pack installed: without it the game reads past its own table. The table lookup was checked against the game's code, but giant monsters were not tried in the game: they may clip through walls, get stuck in area exits or be hard to reach.
 
 ### Left out
 
@@ -338,7 +352,7 @@ Only Zinogre on Sandy Plains was tested in the game. Every other combination fol
 
 ### Multiplayer
 
-Every player in a local game must have the same pack installed, or the others do not see the monster (or worse). Built from the same game version the pack is identical for everybody (the EU and US packs are even the same files): compare the fingerprint shown on the Monster pack page.
+Every player in a local game must have the same pack installed, or the others do not see the monster (or worse). Built from the same game version the pack is identical for everybody: compare the fingerprint shown on the Monster pack page.
 
 ## Files and backups
 
@@ -359,6 +373,8 @@ Before the first save, copy your save's extra data folder (the 'user' folder abo
 ### The editor's backups
 
 Every save first makes a full backup of quest1..quest4 (backups/full/) and keeps a separate copy of every quest it replaces, edits or clears (backups/quests/), so a single quest can be put back in its slot. backups/original/ keeps the very first version of each file and is never deleted. Restoring a backup backs up the current files first. Everything is listed in In-game quests > Backups.
+
+Old backups are cleaned up automatically to save space: by default the 20 most recent full backups and the 5 most recent copies of each quest are kept (Settings > Backups). Never deleted, whatever the settings: backups/original/, the very first full backup and the first copy of every quest (marked with a lock). The cleanup only ever deletes inside backups/full and backups/quests.
 
 ### Good habits
 
@@ -384,4 +400,4 @@ Versions: the European version was studied and tested. The North American versio
 
 ### Not tested yet
 
-The editor was tested on Windows with Citra only, with the European version. A real 3DS (the files are the same, but nobody has tried on hardware yet), the North American version in play, Linux and macOS are untested. In the Monster pack, only Zinogre on Sandy Plains was tried in the game. Please report what you find.
+The editor was tested on Windows with Citra only, with the European version. A real 3DS (the files are the same, but nobody has tried on hardware yet), the North American version in play, Linux and macOS are untested (start the editor with 'Launch Quest Editor.command' on macOS or launch_quest_editor.sh on Linux; Python 3.10 or newer with Tk is needed). In the Monster pack, only Zinogre on Sandy Plains was tried in the game. Please report what you find.

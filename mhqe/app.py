@@ -24,7 +24,7 @@ from . import autofill, guide, spawns, supp
 from . import gamedata as G
 from . import monsterpack
 from . import helptext as H
-from . import picker, theme
+from . import i18n, picker, theme
 from .editor import EditorPage, stars
 from .finder import Finder
 from .icons import ASSETS, Icons
@@ -37,7 +37,7 @@ from .quest import Quest, QuestFormatError
 from .supp import CustomBoxes
 from .validate import validate_quest
 from .widgets import (ScrollFrame, SearchBox, StatusDot, Tooltip, center_on, disable_wheel_value_changes,
-                      enable_tree_copy, info, install_selectable_labels, make_modal)
+                      TribalBand, enable_tree_copy, info, install_selectable_labels, make_modal)
 
 APP_TITLE = "MH3U Quest Editor"
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -197,7 +197,7 @@ class QuestList(ttk.Frame):
                     ("new", "New quest here...", a.new_quest, False),
                     ("put", "Put a quest here...", a.put_quest_here, False),
                     ("dup", "Duplicate...", a.duplicate, False),
-                    ("tolib", "To library", a.to_library, False),
+                    ("tolib", "Copy to my library", a.to_library, False),
                     ("export", "Export...", a.export_quest, False),
                     ("clear", "Clear slot", a.clear_slot, False)]
         elif self.kind == "library":
@@ -210,8 +210,8 @@ class QuestList(ttk.Frame):
                     ("delete", "Delete", a.delete_library, False)]
         else:
             spec = [("edit", "Edit", a.edit_selected, True),
-                    ("revert", "Undo my changes", a.revert_rom, False),
-                    ("tolib", "To library", a.to_library, False)]
+                    ("tolib", "Copy to my library", a.to_library, False),
+                    ("revert", "Undo my changes", a.revert_rom, False)]
         self.buttons = {}
         for key, text, cmd, accent in spec:
             b = ttk.Button(self.actions, text=text, command=cmd,
@@ -387,6 +387,9 @@ class MonsterPackPage(ttk.Frame):
             "Ceadeus and Jhen Mohran (and their variants) stay on their own maps.\n"
             "- Multiplayer: every player must install the same pack. Built from the same game version it is "
             "identical for everybody: compare the fingerprint below. A player without it does not see the monster.\n"
+            "- Big sizes: the pack also extends the game's size table, so a quest can make a monster up to "
+            "2000 % (Developer mode, 'Size %' above 255). Untested in the game: a giant may clip through "
+            "walls or be hard to reach.\n"
             "- Back up your save before trying (Backups button). The pack can not be combined with another "
             "code mod (code.ips / code.bin).")).pack(anchor="w", pady=(4, 0))
         self.status = status_card(outer)
@@ -435,7 +438,9 @@ class MonsterPackPage(ttk.Frame):
                   "not set (Settings > Choose the romfs folder; exefs/code.bin must be next to romfs)")).pack(anchor="w")
         ttk.Label(f, style="Card.TLabel" if built else "Card.Muted.TLabel", text=(
             f"Pack built: {len(built.get('added', []))} monster/map combinations added for "
-            f"{len(built.get('monsters', []))} monsters.  Fingerprint {built.get('fingerprint')}"
+            f"{len(built.get('monsters', []))} monsters"
+            + (", sizes up to 2000 %" if built.get("big_sizes") else ", without big sizes (rebuild it)")
+            + f".  Fingerprint {built.get('fingerprint')}"
             if built else "Pack not built yet.")).pack(anchor="w", pady=(4, 0))
         if inst:
             same = built and built.get("fingerprint") == inst.get("fingerprint")
@@ -488,8 +493,11 @@ class BackupsPanel(ttk.Frame):
         ttk.Label(self, style="Muted.TLabel", wraplength=1050, justify="left", text=(
             "Every save first copies the four quest files of your save (full backup) and keeps a "
             "separate copy of every quest it replaces, edits or clears. Restoring also backs up the "
-            "current files first, so nothing is lost. Backups are kept next to the program, in the "
-            "'backups' folder.")).pack(anchor="w", pady=(0, 8))
+            "current files first, so nothing is lost. Old backups are cleaned up automatically (Settings), "
+            "but these are never deleted: your original files, the very first full backup, and the first "
+            "copy of every quest (marked with a lock).")).pack(anchor="w", pady=(0, 4))
+        self.usage = ttk.Label(self, style="Muted.TLabel", text="")
+        self.usage.pack(anchor="w", pady=(0, 8))
         cols = ttk.Frame(self)
         cols.pack(fill="both", expand=True)
         cols.columnconfigure(0, weight=3)
@@ -525,10 +533,17 @@ class BackupsPanel(ttk.Frame):
         self._full, self._quests = [], []
 
     def fill(self):
+        b = self.app.backups
+        self.usage.configure(text=f"Space used by the backups: {b.size() / 1048576:.1f} MB. Kept: the "
+                                  f"{b.keep_full} most recent full backups and the {b.keep_per_quest} most recent "
+                                  "copies of each quest, plus the protected ones.")
         self.full.delete(*self.full.get_children())
-        self._full = self.app.backups.list_full()
+        self._full = b.list_full()
+        first = b.protected_full()
         for i, s in enumerate(self._full):
-            self.full.insert("", "end", iid=str(i), text=s["time"], values=(s["reason"],))
+            lock = "\U0001F512 " if s["kind"] == "original" or s["path"] == first else ""
+            self.full.insert("", "end", iid=str(i), text=lock + s["time"],
+                             values=(s["reason"] + ("  (first backup, never deleted)" if s["path"] == first else ""),))
         self.quests.delete(*self.quests.get_children())
         self._quests = self.app.backups.list_quests()
         for i, s in enumerate(self._quests):
@@ -537,7 +552,8 @@ class BackupsPanel(ttk.Frame):
             except (OSError, QuestFormatError):
                 img = self.app.icons.blank(27)
             where = f"{pack_label(s.get('pack', '?'))}, slot {s.get('slot', '?')}"
-            self.quests.insert("", "end", iid=str(i), text="  " + s.get("name", "?"), image=img,
+            lock = "  \U0001F512" if s.get("protected") else ""
+            self.quests.insert("", "end", iid=str(i), text="  " + s.get("name", "?") + lock, image=img,
                                values=(where, f"{s.get('time', '')}  ({s.get('reason', '')})"))
 
     def _restore_full(self):
@@ -659,12 +675,15 @@ class GuidePage(ttk.Frame):
 # ===================================================================== app
 class App(tk.Tk):
     def __init__(self):
+        i18n.install()
         super().__init__()
         self.withdraw()
+        self.settings = Settings()
+        i18n.set_language(self.settings.get("language") or i18n.system_language())
+        G.set_names_language(i18n.LANG)
         self.title(APP_TITLE)
         self.geometry("1280x840")
         self.minsize(1080, 680)
-        self.settings = Settings()
         self.dev_mode = tk.BooleanVar(value=bool(self.settings.get("dev_mode", False)))
         Tooltip.enabled = bool(self.settings.get("tooltips", True))
         theme.apply(self, self.settings.get("theme", theme.DEFAULT_THEME))
@@ -679,7 +698,7 @@ class App(tk.Tk):
             except tk.TclError:
                 pass
         G.set_region(self._initial_region())
-        self.backups = Backups()
+        self.backups = self._make_backups()
         self.boxes = CustomBoxes(APP_DIR / "custom_supply.json")
         self.sources: dict = {"packs": None, "library": None, "rom": None}
         self.page = "ingame"
@@ -720,6 +739,11 @@ class App(tk.Tk):
         self.settings.set("region", r)
         return r
 
+    def _make_backups(self):
+        from .backup import KEEP_FULL, KEEP_PER_QUEST
+        return Backups(keep_full=int(self.settings.get("keep_full", KEEP_FULL)),
+                       keep_per_quest=int(self.settings.get("keep_per_quest", KEEP_PER_QUEST)))
+
     def setting_key(self, name: str) -> str:
         """Paths are remembered per game version (the EU keys keep their 1.0 names)."""
         return name if G.REGION == "eu" else f"{name}_{G.REGION}"
@@ -739,7 +763,7 @@ class App(tk.Tk):
         G.set_region(region)
         self.settings.set("region", region)
         self.forget_monster_pack()
-        self.backups = Backups()
+        self.backups = self._make_backups()
         self.sources = {"packs": None, "library": None, "rom": None}
         self._base_cache = None
         self.load_sources()
@@ -804,6 +828,7 @@ class App(tk.Tk):
                 w.destroy()
         head = ttk.Frame(self, style="Header.TFrame", padding=(10, 6))
         head.pack(fill="x")
+        TribalBand(self).pack(fill="x")
         if self.icons.app_icon():
             ttk.Label(head, image=self.icons.app_icon(), style="Header.TLabel").pack(side="left")
         ttk.Label(head, text=APP_TITLE, style="Header.TLabel").pack(side="left", padx=(8, 22))
@@ -1172,9 +1197,17 @@ class App(tk.Tk):
         lib = self.sources["library"]
         if q is None or lib is None:
             return
-        lib.add(q)
+        key = lib.add(q)
         self.pages["library"].build_status()
-        self.set_status(f"'{q.get_text('name', 0)}' copied to your quest library.")
+        self.set_status(f"'{q.get_text('name', 0)}' copied to your quest library (a separate copy: the original "
+                        "is not changed).")
+        if messagebox.askyesno(APP_TITLE, f"'{q.get_text('name', 0)}' is now in your quest library, as a separate "
+                               "copy: changing it never touches the original.\n\nOpen the copy now?", parent=self):
+            self.show_page("library")
+            ql = self.pages["library"].list
+            ql.refresh(select=key)
+            self.edit_kind = "library"
+            self.open_editor("library", key)
 
     def export_quest(self):
         _ql, _src, _key, q = self._sel_quest()
@@ -1670,6 +1703,13 @@ class App(tk.Tk):
         ig.nb.select(ig.backups)
         ig.backups.fill()
 
+    def apply_language(self, code):
+        """Switch English / French: the window is rebuilt with the new texts."""
+        self.settings.set("language", code)
+        i18n.set_language(code)
+        G.set_names_language(code)
+        self.apply_theme(self.settings.get("theme", theme.DEFAULT_THEME))
+
     def apply_theme(self, key):
         self.settings.set("theme", key)
         theme.apply(self, key)
@@ -1815,6 +1855,13 @@ class SettingsDialog(Dialog):
         super().__init__(app, "Settings")
         f = ttk.Frame(self, padding=18)
         f.pack(fill="both", expand=True)
+        lrow = ttk.Frame(f)
+        lrow.pack(anchor="w", pady=(0, 12))
+        ttk.Label(lrow, text="Language / Langue", style="H3.TLabel").pack(side="left", padx=(0, 12))
+        self.lang = tk.StringVar(value=i18n.LANG)
+        for code, name in i18n.LANGUAGES.items():
+            ttk.Radiobutton(lrow, text=name, value=code, variable=self.lang,
+                            style="Seg.TRadiobutton").pack(side="left", padx=1)
         ttk.Label(f, text="Theme", style="H3.TLabel").pack(anchor="w")
         self.theme = tk.StringVar(value=app.settings.get("theme", theme.DEFAULT_THEME))
         theme_choice(f, self.theme).pack(anchor="w", pady=(4, 12))
@@ -1850,6 +1897,19 @@ class SettingsDialog(Dialog):
         ttk.Label(f, text="Monster, item and map pictures: " + art, style="Muted.TLabel").pack(anchor="w", pady=(8, 0))
         ttk.Button(f, text="Rebuild the pictures from my game...",
                    command=lambda: (self.destroy(), app.build_pictures())).pack(anchor="w", pady=2)
+        ttk.Label(f, text="Backups", style="H3.TLabel").pack(anchor="w", pady=(12, 2))
+        br = ttk.Frame(f)
+        br.pack(anchor="w")
+        from .backup import KEEP_FULL, KEEP_PER_QUEST
+        self.keep_full = tk.IntVar(value=int(app.settings.get("keep_full", KEEP_FULL)))
+        self.keep_q = tk.IntVar(value=int(app.settings.get("keep_per_quest", KEEP_PER_QUEST)))
+        ttk.Label(br, text="Full backups to keep").pack(side="left")
+        ttk.Spinbox(br, from_=3, to=200, width=5, textvariable=self.keep_full).pack(side="left", padx=(4, 14))
+        ttk.Label(br, text="Copies kept per quest").pack(side="left")
+        ttk.Spinbox(br, from_=2, to=100, width=5, textvariable=self.keep_q).pack(side="left", padx=4)
+        ttk.Label(f, style="Muted.TLabel", wraplength=640, justify="left", text=(
+            "Older backups are deleted automatically. Never deleted: your original files, the very first full "
+            "backup and the first copy of every quest.")).pack(anchor="w")
         ttk.Label(f, text=f"Library and backups are kept next to the program:\n{short_path(APP_DIR, 90)}",
                   style="Muted.TLabel").pack(anchor="w", pady=(10, 0))
         b = ttk.Frame(f)
@@ -1862,9 +1922,19 @@ class SettingsDialog(Dialog):
         app = self.app
         app.settings.set("tooltips", bool(self.tips.get()))
         Tooltip.enabled = bool(self.tips.get())
+        try:
+            app.settings.set("keep_full", max(3, int(self.keep_full.get())))
+            app.settings.set("keep_per_quest", max(2, int(self.keep_q.get())))
+        except (tk.TclError, ValueError):
+            pass
+        app.backups.keep_full = int(app.settings.get("keep_full", app.backups.keep_full))
+        app.backups.keep_per_quest = int(app.settings.get("keep_per_quest", app.backups.keep_per_quest))
         key = self.theme.get()
         region = self.region.get()
+        lang = self.lang.get()
         self.destroy()
+        if lang != i18n.LANG:
+            app.apply_language(lang)
         if key != app.settings.get("theme", theme.DEFAULT_THEME):
             app.apply_theme(key)
         if region != G.REGION:

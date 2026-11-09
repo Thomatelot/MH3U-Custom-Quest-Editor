@@ -56,10 +56,10 @@ class Backups(BackupManager):
     """backups/ next to the program for the EU version (as in 1.0), backups/us/ for the US one,
     so the save files of the two versions are never mixed."""
 
-    def __init__(self, root: Path | None = None):
+    def __init__(self, root: Path | None = None, **keep):
         if root is None:
             root = APP_DIR / "backups" if G.REGION == "eu" else APP_DIR / "backups" / G.REGION
-        super().__init__(Path(root))
+        super().__init__(Path(root), **keep)
 
 
 def write_atomic(path: Path, data: bytes) -> None:
@@ -70,16 +70,28 @@ def write_atomic(path: Path, data: bytes) -> None:
 
 # ----------------------------------------------------------- emulator lookup
 def _emulator_roots() -> list[Path]:
+    """User folders of Citra and its forks on Windows, macOS and Linux (incl. Flatpak installs)."""
     roots: list[Path] = []
     appdata = os.environ.get("APPDATA")
     home = Path.home()
+    names = ("Citra", "Azahar", "Lime3DS", "Mandarine", "PabloMK7-Citra")
     if appdata:
-        for name in ("Citra", "Azahar", "Lime3DS", "Mandarine", "PabloMK7-Citra"):
+        for name in names:
             roots.append(Path(appdata) / name)
-    for rel in (".local/share/citra-emu", ".local/share/azahar-emu",
-                ".local/share/lime3ds-emu", "Library/Application Support/Citra",
-                "Library/Application Support/Azahar"):
-        roots.append(home / rel)
+    xdg = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")
+    for name in ("citra-emu", "azahar-emu", "lime3ds-emu", "mandarine-emu"):
+        roots.append(xdg / name)
+    for app_id, sub in (("org.citra_emu.citra", "citra-emu"), ("org.azahar_emu.Azahar", "azahar-emu"),
+                        ("io.github.lime3ds.Lime3DS", "lime3ds-emu")):
+        roots.append(home / ".var" / "app" / app_id / "data" / sub)
+    for name in names:
+        roots.append(home / "Library" / "Application Support" / name)
+    seen, out = set(), []
+    for r in roots:
+        if r not in seen:
+            seen.add(r)
+            out.append(r)
+    roots = out
     return roots
 
 

@@ -16,6 +16,8 @@ from . import picker, theme
 from .quest import LANG_NAMES, LANGS, MON_SLOTS, NANDO_MAX, QuestFormatError
 from .validate import worst
 from .widgets import ScrollFrame, Section, StatusDot, Tooltip, center_on, info, make_modal, parse_int
+from .i18n import _
+from .zonemap import ZoneMap
 
 PATTERNS = {0: "One objective", 1: "Both objectives", 2: "Either objective"}
 # Stamina values used by the game's own quests (see helptext 'Stamina')
@@ -133,13 +135,12 @@ class StartDialog(tk.Toplevel):
                   wraplength=380, justify="left", style="Muted.TLabel").pack(anchor="w", pady=(10, 0))
         right = ttk.Frame(f)
         right.pack(side="left", padx=(18, 0), anchor="n")
-        self._img = app.icons.map(map_id, 160)
-        try:
-            self._img = self._img.zoom(2)
-        except tk.TclError:
-            pass
-        ttk.Label(right, image=self._img).pack()
-        ttk.Label(right, text="Area numbers of the zone", style="Muted.TLabel").pack()
+        self.zmap = ZoneMap(right, app, map_id, target=340, on_pick=self._pick_area, caption=self._hover)
+        self.zmap.pack()
+        self.map_note = ttk.Label(right, text="", style="Muted.TLabel")
+        self.map_note.pack(pady=(4, 0))
+        self._shown = ([startpos.area_number(map_id, a) for a in self.areas]
+                       if self.areas is not None and self.zmap.has_areas else None)
         b = ttk.Frame(self, padding=(14, 0, 14, 14))
         b.pack(fill="x")
         ttk.Button(b, text="OK", style="Accent.TButton", command=self._ok).pack(side="right")
@@ -150,14 +151,34 @@ class StartDialog(tk.Toplevel):
         self.deiconify()
         make_modal(self)
 
+    def _hover(self, k):
+        if k is None:
+            self.map_note.configure(text=("Yellow: where it starts. Click a pin or an area to choose."
+                                          if self._shown else "Area numbers of the zone"))
+        else:
+            self.map_note.configure(text=f"Click to start in area {k}" if int(k) else "Click to start at the entrance")
+
+    def _pick_area(self, k):
+        hits = [i for i, n in enumerate(self._shown or []) if n == k]
+        if hits and self.var.get() not in hits:
+            self.var.set(hits[0])
+            self._show()
+
     def _show(self):
+        if getattr(self, "_shown", None):
+            pos = self.var.get()
+            self.zmap.show(chosen=[self._shown[pos]] if 0 <= pos < len(self._shown) else [],
+                           possible=set(self._shown))
+            self._hover(None)
+        elif hasattr(self, "map_note"):
+            self._hover(None)
         text = startpos.describe(self.map_id, self.var.get())
         if self.areas is not None:
             pos = self.var.get()
-            text = (f"Starts in {startpos.area_label(self.map_id, self.areas[pos])} (number shown on the map). "
-                    if pos < len(self.areas) else
-                    "This position does not exist for this monster on this map: choose another one. ") + \
-                (text if startpos.usage(self.map_id, pos) else "")
+            text = _(f"Starts in {startpos.area_label(self.map_id, self.areas[pos])} (number shown on the map). "
+                     if pos < len(self.areas) else
+                     "This position does not exist for this monster on this map: choose another one. ") + \
+                (_(text) if startpos.usage(self.map_id, pos) else "")
         self.what.configure(text=text)
 
     def _ok(self):
@@ -311,6 +332,9 @@ class GeneralTab(Tab):
         self.map_btn = IconButton(g, self._pick_map, width=20)
         self.map_btn.grid(row=r, column=1, sticky="w", pady=3)
         info(g, H.tip("map"), "Card.").grid(row=r, column=2, sticky="w", padx=4)
+        self.hmap_box = ttk.Frame(g, style="Card.TFrame")
+        self.hmap_box.grid(row=r, column=4, rowspan=5, sticky="ne", padx=(10, 0))
+        self.hmap = None
         r += 1
         ttk.Label(g, text="Hunters start", style="Card.TLabel").grid(row=r, column=0, sticky="w", pady=3)
         self.hunt = ttk.Combobox(g, state="readonly", width=34)
@@ -447,6 +471,14 @@ class GeneralTab(Tab):
         warn = startpos.hunter_warning(m, v)
         self.hunt_lab.configure(text=warn or startpos.hunter_text(m, v),
                                 style="Card.Warn.TLabel" if warn else "Card.Muted.TLabel")
+        if self.hmap is not None and self.hmap.map_id != m:
+            self.hmap.destroy()
+            self.hmap = None
+        if self.hmap is None:
+            self.hmap = ZoneMap(self.hmap_box, self.app, m, target=90)
+            self.hmap.pack()
+            Tooltip(self.hmap, "Yellow: where the hunters start (several areas = one of them at random).")
+        self.hmap.show(chosen=startpos.hunter_areas(m, v))
 
     def _hunt_pick(self, _e=None):
         i = self.hunt.current()
@@ -738,7 +770,7 @@ class MonsterCard(ttk.Frame):
         self.spawn = ttk.Label(names, text="", style="Card.Muted.TLabel", wraplength=300)
         self.spawn.pack(anchor="w")
         btns = ttk.Frame(head, style="Card.TFrame")
-        btns.pack(side="right")
+        btns.pack(side="right", before=names)
         ttk.Button(btns, text="Change...", command=self._change).pack(fill="x")
         ttk.Button(btns, text="Copy from a quest...", command=self._copy).pack(fill="x", pady=2)
         ttk.Button(btns, text="Remove", command=self._remove).pack(fill="x")
@@ -746,11 +778,17 @@ class MonsterCard(ttk.Frame):
         order.pack(fill="x", pady=(2, 0))
         ttk.Button(order, text="◀", width=3, command=lambda: self._shift(-1)).pack(side="left", expand=True, fill="x")
         ttk.Button(order, text="▶", width=3, command=lambda: self._shift(1)).pack(side="left", expand=True, fill="x")
+        self.map_box = ttk.Frame(head, style="Card.TFrame")       # where it starts, on the area map
+        self.map_box.pack(side="right", before=names, padx=(6, 10))
+        self.zmap = None
+        self._map_areas = None
+        self._map_tip = ""
 
-        g = ttk.Frame(self, style="Card.TFrame")
+        left = self
+        g = ttk.Frame(left, style="Card.TFrame")
         g.pack(fill="x", pady=(8, 0))
         self.count_w = self._spin(g, 0, 0, "Count", "Num", 1, 99)
-        self._spin(g, 0, 3, "Size %", "Size", 0, 255)
+        self._spin(g, 0, 3, "Size %", "Size", 0, monsterpack.MAX_BIG_SIZE if tab.dev else 255)
         sz = ttk.Frame(g, style="Card.TFrame")
         sz.grid(row=1, column=0, columnspan=6, sticky="w", pady=(4, 0))
         ttk.Label(sz, text="Size like", style="Card.TLabel").pack(side="left")
@@ -767,7 +805,7 @@ class MonsterCard(ttk.Frame):
         ttk.Button(sp_row, text="Map...", width=6, command=self._start).pack(side="left")
         info(sp_row, H.tip("Starttype"), "Card.").pack(side="left", padx=4)
         self._start_values: list[int] = []
-        pre = ttk.Frame(self, style="Card.TFrame")
+        pre = ttk.Frame(left, style="Card.TFrame")
         pre.pack(fill="x", pady=(8, 2))
         ttk.Label(pre, text="Strength like", style="Card.TLabel").pack(side="left")
         self.preset = ttk.Combobox(pre, state="readonly", width=20,
@@ -777,7 +815,7 @@ class MonsterCard(ttk.Frame):
         info(pre, "Sets Health, Attack, Toughness (and the hidden stamina and size settings) to the typical "
                   "values of the game's own quests of that hub and star rank.", "Card.").pack(side="left")
         self.stats = {}
-        st = ttk.Frame(self, style="Card.TFrame")
+        st = ttk.Frame(left, style="Card.TFrame")
         st.pack(fill="x")
         st.columnconfigure(2, weight=1)
         for r, (field, label) in enumerate(self.STAT_ROWS):
@@ -872,7 +910,7 @@ class MonsterCard(ttk.Frame):
         else:
             self.spawn.configure(text=f"Appears on {where}", style="Card.Ok.TLabel")
         for f, var in self.vars.items():
-            var.set(m[f])
+            var.set(monsterpack.full_size(m["Size"], m["Sizeparam"]) if f == "Size" else m[f])
         if self.stamina is not None:
             self.stamina.configure(values=self._stamina_values())
             st = m["Stamina"]
@@ -881,9 +919,11 @@ class MonsterCard(ttk.Frame):
             else:
                 self.stamina.set(f"{st} (not used by the game)")
         self._fill_starts(m, pack)
+        self._fill_map(m, pack)
         self.preset.set("")
-        match = [p[0] for p in H.SIZE_PRESETS if p[1] == m["Size"]]
-        self.size_pre.set(match[0] if match else f"Custom ({m['Size']} %)")
+        full = monsterpack.full_size(m["Size"], m["Sizeparam"])
+        match = [p[0] for p in H.SIZE_PRESETS if p[1] == full and full <= 255]
+        self.size_pre.set(match[0] if match else f"Custom ({full} %)")
         self._describe(m)
         if self.start_btn is not None:
             ar = startpos.areas(em, self.q.get("map"), pack)
@@ -931,9 +971,24 @@ class MonsterCard(ttk.Frame):
             return
         try:
             v = int(self.vars[field].get())
-            if self.q.monsters[self.slot][field] == v:
-                return
-            self.q.set_monster(self.slot, **{field: v})
+            m = self.q.monsters[self.slot]
+            if field == "Size":
+                top = monsterpack.MAX_BIG_SIZE if self.tab.dev else 255
+                v = max(0, min(v, top))
+                if monsterpack.full_size(m["Size"], m["Sizeparam"]) == v:
+                    return
+                size, spread = monsterpack.split_size(v)
+                if spread is None and monsterpack.full_size(255, m["Sizeparam"]) != 255:
+                    spread = 0                     # back under 256 %: leave the pack's big-size table
+                self.q.set_monster(self.slot, Size=size, **({} if spread is None else {"Sizeparam": spread}))
+                if spread is not None:
+                    self.tab.do_load(self.q)
+                    self.tab.editor.changed()
+                    return
+            else:
+                if m[field] == v:
+                    return
+                self.q.set_monster(self.slot, **{field: v})
         except (ValueError, tk.TclError, QuestFormatError):
             return
         self._describe(self.q.monsters[self.slot])
@@ -949,6 +1004,32 @@ class MonsterCard(ttk.Frame):
         self._start_values = values
         self.start_box.configure(values=[startpos.choice_text(v, ar, mp) for v in values])
         self.start_box.current(values.index(m["Starttype"]))
+
+    def _fill_map(self, m, pack):
+        """Thumbnail of the area map with the start area of this monster in yellow
+        (click it for the big map, where the start can be chosen)."""
+        mp = self.q.get("map")
+        if self.zmap is not None and self.zmap.map_id != mp:
+            self.zmap.destroy()
+            self.zmap = None
+        if self.zmap is None:
+            self.zmap = ZoneMap(self.map_box, self.tab.app, mp, target=88, on_click=self._start)
+            self.zmap.pack()
+            Tooltip(self.zmap, lambda: self._map_tip)
+        ar = startpos.areas(m["Type"], mp, pack)
+        cur = m["Starttype"]
+        if ar is None or not self.zmap.has_areas:
+            self.zmap.show()
+            self._map_tip = ("Start area not known for this monster here." if ar is None else
+                             G.map_name(mp)) + "\nClick to open the map."
+            return
+        if 0 <= cur < len(ar):
+            self.zmap.show(chosen=[startpos.area_number(mp, ar[cur])])
+            self._map_tip = (f"Yellow: it starts in {startpos.area_label(mp, ar[cur])}.\n"
+                             "Click to open the big map and choose another start.")
+        else:
+            self.zmap.show()
+            self._map_tip = "This start does not exist for this monster here.\nClick to choose one on the map."
 
     def _start_pick(self, _e=None):
         i = self.start_box.current()

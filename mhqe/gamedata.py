@@ -69,7 +69,36 @@ def set_region(region: str) -> None:
 def region_name(region: str | None = None) -> str:
     return REGIONS.get(region or REGION, {}).get("name", "unknown version")
 
+
 _MON_KEYS = {re.sub(r"[^a-z0-9]", "", n.lower()): i for i, n in MONSTERS.items()}
+_EN = {"items": list(ITEMS), "monsters": dict(MONSTERS), "maps": None}
+
+
+def english_item(item_id: int) -> str:
+    items = _EN["items"]
+    return items[item_id] if 0 <= item_id < len(items) else ""
+
+
+def set_names_language(code: str) -> None:
+    """Item, monster and map names in English or in French (the game's own French names, from
+    data/lang/names_fr.json). The lists are changed in place, so every module sees the change."""
+    if _EN["maps"] is None:
+        _EN["maps"] = dict(MAP_NAMES)
+    items, mons, maps = _EN["items"], _EN["monsters"], _EN["maps"]
+    if code == "fr":
+        try:
+            fr = _load("lang/names_fr.json")
+            if len(fr.get("items", [])) == len(items):
+                items = fr["items"]
+            mons = {**mons, **{int(k): v for k, v in fr.get("monsters", {}).items()}}
+            maps = {**maps, **{int(k): v for k, v in fr.get("maps", {}).items()}}
+        except (OSError, ValueError):
+            pass
+    ITEMS[:] = items
+    MONSTERS.clear()
+    MONSTERS.update(mons)
+    MAP_NAMES.clear()
+    MAP_NAMES.update(maps)
 
 
 def mon_name(em_id: int) -> str:
@@ -194,8 +223,35 @@ def _count_name(n: int, name: str, item: bool = False) -> str:
     return f"{n} {_plural_item(name) if item else name}"
 
 
+FR_VERBS = {"Hunt": "Chasser", "Capture": "Capturer", "Slay": "Tuer", "Deliver": "Livrer", "Repel": "Repousser",
+            "Slay or repel": "Tuer ou repousser", "Complete": "Terminer"}
+
+
+def _objective_fr(q, which: int) -> str | None:
+    """The same sentence in French (numbers instead of articles: the game's names have genders)."""
+    typ, mode, tid, cnt = q.objective(which)
+    if typ == 0:
+        return None
+    if typ in OBJ_ITEM:
+        if _EN["items"][tid:tid + 1] == ["Paw Pass Ticket"]:
+            return "Survivre jusqu'à la fin du temps ou livrer un " + item_name(tid)
+        return f"Livrer {max(cnt, 1)} {item_name(tid)}"
+    if typ == 0x2000:
+        return f"Infliger {cnt} dégâts de siège"
+    verb = FR_VERBS.get(VERBS.get(typ, "Complete"), "Terminer")
+    target = mon_name(tid)
+    if typ in (0x0404, 0x2515, 0x4014):
+        return f"{verb} {target}"
+    if mode == 2 and cnt > 1:
+        return f"{verb} {cnt} {target} à la suite"
+    return f"{verb} {max(cnt, 1)} {target}"
+
+
 def objective_sentence(q, which: int) -> str | None:
-    """Plain English, close to how the game writes it."""
+    """Plain English, close to how the game writes it (French when the editor is in French)."""
+    from . import i18n
+    if i18n.LANG == "fr":
+        return _objective_fr(q, which)
     typ, mode, tid, cnt = q.objective(which)
     if typ == 0:
         return None
@@ -227,13 +283,20 @@ def objectives_sentence(q) -> str:
         counts: dict = {}
         for s in slots:
             counts[q.monsters[s]["Type"]] = counts.get(q.monsters[s]["Type"], 0) + max(1, q.monsters[s]["Num"])
+        from . import i18n
+        fr = i18n.LANG == "fr"
         verb = VERBS.get(typ, "Hunt")
+        if fr:
+            verb = FR_VERBS.get(verb, verb)
         names = [f"{c} {mon_name(em)}" for em, c in counts.items()]
-        return f"{verb} " + (", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else names[0])
+        return f"{verb} " + (", ".join(names[:-1]) + (" et " if fr else " and ") + names[-1]
+                             if len(names) > 1 else names[0])
     parts = list(dict.fromkeys(p for p in (objective_sentence(q, 1), objective_sentence(q, 2)) if p))
+    from . import i18n
+    fr = i18n.LANG == "fr"
     if not parts:
-        return "No objective set"
+        return "Aucun objectif défini" if fr else "No objective set"
     if len(parts) == 1:
         return parts[0]
-    joiner = {1: " and ", 2: " or "}.get(q.get("clr_pattern"), " / ")
+    joiner = ({1: " et ", 2: " ou "} if fr else {1: " and ", 2: " or "}).get(q.get("clr_pattern"), " / ")
     return parts[0] + joiner + parts[1][0].lower() + parts[1][1:]

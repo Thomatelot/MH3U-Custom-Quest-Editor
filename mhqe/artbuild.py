@@ -94,6 +94,108 @@ SHARED_ICON = {24: "the game shows '?' for Alatreon", 75: "the game shows '?' fo
                81: "boulder icon", 82: "boulder icon", 83: "boulder icon", 84: "boulder icon"}
 
 
+# ------------------------------------------------------------- map areas
+ZONE_FILL = (255, 204, 40, 115)        # chosen area: warm yellow wash...
+ZONE_EDGE = (255, 232, 92, 255)        # ...with a bright rim
+
+
+def _is_area_pixel(p) -> bool:
+    """Coloured area of the map picture (not the grey paths, the white numbers or the background)."""
+    r, g, b, a = p
+    if a < 160 or min(r, g, b) > 225:
+        return False
+    mx, mn = max(r, g, b), min(r, g, b)
+    v, s = mx / 255, (mx - mn) / mx if mx else 0
+    return (s >= 0.16 and v >= 0.28) or (v >= 0.75 and s >= 0.08)
+
+
+def zone_masks(img, seeds: dict) -> dict:
+    """Area number -> set of pixels of that area on the map picture. Each seed (an area's centre)
+    takes the coloured blob under it (or the nearest one); a blob holding several seeds is split
+    between them; a seed with no blob near it gets a small disc."""
+    w, h = img.size
+    px = img.load()
+    mask = [[_is_area_pixel(px[x, y]) for x in range(w)] for y in range(h)]
+    label = [[0] * w for _ in range(h)]
+    blobs = [None]
+    for y in range(h):
+        for x in range(w):
+            if mask[y][x] and not label[y][x]:
+                n = len(blobs)
+                stack, pts = [(x, y)], []
+                label[y][x] = n
+                while stack:
+                    cx, cy = stack.pop()
+                    pts.append((cx, cy))
+                    for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
+                        if 0 <= nx < w and 0 <= ny < h and mask[ny][nx] and not label[ny][nx]:
+                            label[ny][nx] = n
+                            stack.append((nx, ny))
+                blobs.append(pts)
+    owner: dict[int, list] = {}
+    for k, (sx, sy) in seeds.items():
+        ix, iy = int(round(sx)), int(round(sy))
+        best = None
+        for r in range(0, 7):
+            for yy in range(iy - r, iy + r + 1):
+                for xx in range(ix - r, ix + r + 1):
+                    if 0 <= xx < w and 0 <= yy < h and label[yy][xx] and len(blobs[label[yy][xx]]) >= 20:
+                        d = (xx - sx) ** 2 + (yy - sy) ** 2
+                        if best is None or d < best[0]:
+                            best = (d, label[yy][xx])
+            if best:
+                break
+        if best:
+            owner.setdefault(best[1], []).append(k)
+    out = {}
+    for n, keys in owner.items():
+        if len(keys) == 1:
+            out[keys[0]] = set(blobs[n])
+            continue
+        for k in keys:
+            out[k] = set()
+        for x, y in blobs[n]:
+            k = min(keys, key=lambda kk: (x - seeds[kk][0]) ** 2 + (y - seeds[kk][1]) ** 2)
+            out[k].add((x, y))
+    for k, (sx, sy) in seeds.items():
+        if k not in out:
+            out[k] = {(x, y) for x in range(int(sx) - 6, int(sx) + 7) for y in range(int(sy) - 6, int(sy) + 7)
+                      if (x - sx) ** 2 + (y - sy) ** 2 <= 36 and 0 <= x < w and 0 <= y < h}
+    return out
+
+
+def zone_sheet(img, bbox, seeds: dict, path) -> dict:
+    """One strip per map: the map (cropped to bbox, on a square) then one yellow overlay per area,
+    all the same size, so the editor can stack them on a canvas without Pillow."""
+    from PIL import Image
+    masks = zone_masks(img, seeds)
+    bw, bh = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    side = max(bw, bh)
+    ox, oy = (side - bw) // 2 - bbox[0], (side - bh) // 2 - bbox[1]
+    keys = sorted(masks, key=int)
+    sheet = Image.new("RGBA", (side * (len(keys) + 1), side))
+    sheet.paste(img.crop(bbox), (ox + bbox[0], oy + bbox[1]))
+    areas = {}
+    for cell, k in enumerate(keys, start=1):
+        pts = {(x + ox, y + oy) for x, y in masks[k] if 0 <= x + ox < side and 0 <= y + oy < side}
+        if not pts:
+            continue
+        sp = sheet.load()
+        base = cell * side
+        for x, y in pts:
+            sp[base + x, y] = ZONE_FILL
+        for x, y in pts:
+            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1),
+                           (x + 1, y + 1), (x - 1, y - 1), (x + 1, y - 1), (x - 1, y + 1)):
+                if (nx, ny) not in pts and 0 <= nx < side and 0 <= ny < side:
+                    sp[base + nx, ny] = ZONE_EDGE
+        cx = sum(p[0] for p in pts) / len(pts)
+        cy = sum(p[1] for p in pts) / len(pts)
+        areas[k] = [cell, round(cx), round(cy)]
+    sheet.save(path)
+    return {"size": side, "file": f"maps/zones/{path.name}", "areas": areas}
+
+
 def arc_entries(path):
     with open(path, "rb") as fh:
         raw = fh.read()
@@ -238,6 +340,15 @@ def build(romfs, out=ROOT, code=None, wiki=None, log=print) -> dict:
             if th == 0x241f5deb and leaf.startswith("td_map_") and leaf not in textures:
                 textures[leaf] = tex3ds.decode(zlib.decompress(raw[off:off + cs]))[0]
     maps = {}
+    zone_index = {}
+    try:
+        seeds_file = out / "data" / "map_zones.json"
+        if not seeds_file.is_file():
+            seeds_file = ROOT / "data" / "map_zones.json"
+        zone_seeds = json.loads(seeds_file.read_text(encoding="utf-8"))["maps"]
+    except (OSError, ValueError, KeyError):
+        zone_seeds = {}
+    (assets / "maps" / "zones").mkdir(parents=True, exist_ok=True)
     for qmap, leaf in MAP_TEXTURES.items():
         if leaf not in textures:
             continue
@@ -245,8 +356,14 @@ def build(romfs, out=ROOT, code=None, wiki=None, log=print) -> dict:
         bbox = img.split()[3].point(lambda v: 255 if v > 24 else 0).getbbox()
         if bbox:
             pad = 6
-            img = img.crop((max(0, bbox[0] - pad), max(0, bbox[1] - pad),
-                            min(img.size[0], bbox[2] + pad), min(img.size[1], bbox[3] + pad)))
+            bbox = (max(0, bbox[0] - pad), max(0, bbox[1] - pad),
+                    min(img.size[0], bbox[2] + pad), min(img.size[1], bbox[3] + pad))
+        else:
+            bbox = (0, 0) + img.size
+        if str(qmap) in zone_seeds:
+            zone_index[str(qmap)] = zone_sheet(img.convert("RGBA"), bbox, zone_seeds[str(qmap)],
+                                               assets / "maps" / "zones" / f"map{qmap:02d}.png")
+        img = img.crop(bbox)
         for size in (160, 64):
             canvas = Image.new("RGBA", (size, size))
             t = img.copy()
@@ -254,7 +371,7 @@ def build(romfs, out=ROOT, code=None, wiki=None, log=print) -> dict:
             canvas.paste(t, ((size - t.size[0]) // 2, (size - t.size[1]) // 2), t)
             canvas.save(assets / "maps" / f"map{qmap:02d}_{size}.png")
         maps[str(qmap)] = f"maps/map{qmap:02d}"
-    log(f"map pictures: {len(maps)}")
+    log(f"map pictures: {len(maps)}, with areas: {len(zone_index)}")
 
     index.update({
         "_about": "Index of the pictures built by mhqe/artbuild.py from the game's own files.",
@@ -263,6 +380,7 @@ def build(romfs, out=ROOT, code=None, wiki=None, log=print) -> dict:
         "monsters_shared": {str(em): why for em, why in SHARED_ICON.items()},
         "special": {k: slot_of_cell[c] for k, c in SPECIAL_CELLS.items()},
         "maps": maps,
+        "zones": zone_index,
     })
     index_path.write_text(json.dumps(index, separators=(",", ":")), encoding="utf-8")
     return {"items": n_items, "monsters": len(EM_CELL), "maps": len(maps)}

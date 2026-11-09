@@ -8,6 +8,7 @@ from tkinter import font as tkfont
 from tkinter import ttk
 
 from . import theme
+from .i18n import _
 
 WHEEL_SEQUENCES = ("<MouseWheel>", "<Shift-MouseWheel>", "<Button-4>", "<Button-5>")
 
@@ -293,7 +294,7 @@ class SelLabel(tk.Text):
         super().__init__(parent, height=1, width=1, wrap="none", borderwidth=0, highlightthickness=0,
                          padx=px, pady=py, cursor="arrow", takefocus=0, insertwidth=0, undo=False,
                          spacing1=0, spacing2=0, spacing3=0)
-        self._text = str(text)
+        self._text = _(str(text))
         self._style = style
         self._wrap = int(wraplength or 0)
         self._justify = justify
@@ -391,7 +392,7 @@ class SelLabel(tk.Text):
         redo = restyle = False
         for key in list(kw):
             if key == "text":
-                self._text = str(kw.pop(key))
+                self._text = _(str(kw.pop(key)))
                 redo = True
             elif key == "style":
                 self._style = kw.pop(key)
@@ -498,3 +499,32 @@ def copy_tree_selection(tree: ttk.Treeview) -> None:
 
 def enable_tree_copy(root) -> None:
     root.bind_class("Treeview", "<Control-c>", lambda e: copy_tree_selection(e.widget), add="+")
+
+
+class TribalBand(tk.Canvas):
+    """Thin ornamental band in the spirit of MH3U's menus: a gold zig-zag with small diamonds,
+    drawn once per width (no redraw while the window is idle)."""
+
+    def __init__(self, parent, height=9, bg_key="header"):
+        super().__init__(parent, height=height, highlightthickness=0, borderwidth=0,
+                         background=theme.color(bg_key))
+        self._drawn = 0
+        self.bind("<Configure>", self._draw)
+
+    def _draw(self, e=None):
+        w = e.width if e is not None else self.winfo_width()
+        if w == self._drawn:
+            return
+        self._drawn = w
+        self.delete("all")
+        h = int(self.cget("height"))
+        gold, accent = theme.color("gold"), theme.color("accent")
+        step = 18
+        pts = []
+        for i, x in enumerate(range(0, w + step, step // 2)):
+            pts += [x, 2 if i % 2 else h - 3]
+        if len(pts) >= 4:
+            self.create_line(*pts, fill=gold, width=1)
+        for x in range(step // 2, w, step * 2):
+            m = h // 2
+            self.create_polygon(x, m - 3, x + 3, m, x, m + 3, x - 3, m, fill=accent, outline="")

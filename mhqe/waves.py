@@ -225,8 +225,9 @@ def pattern_win(q, groups) -> str:
         return ", ".join(f"#{num[s]} {G.mon_name(mons[s]['Type'])}" for s in lst)
     if not opt:
         return "To win: slay all of them."
-    return (f"To win: slay {names(req)}.  {names(opt)} can stay alive: the quest ends without "
-            + ("it" if len(opt) == 1 else "them") + ".")
+    if len(opt) == 1:
+        return f"To win: slay {names(req)}.  {names(opt)} can stay alive: the quest ends without it."
+    return f"To win: slay {names(req)}.  {names(opt)} can stay alive: the quest ends without them."
 
 
 def covers_all(q) -> bool:

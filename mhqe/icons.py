@@ -129,6 +129,25 @@ class Icons:
             self._cache[key] = img or self.blank(size)
         return self._cache[key]
 
+    # ----------------------------------------------------------- map areas
+    def zones(self, quest_map: int) -> dict | None:
+        """{'size', 'file', 'areas': {map number: [cell, x, y]}} of the map's area pictures, or None."""
+        return self.index.get("zones", {}).get(str(quest_map))
+
+    def zone_layer(self, quest_map: int, cell: int, zoom: int = 1, sub: int = 1) -> tk.PhotoImage | None:
+        """Cell 0 = the map, cell n = the yellow overlay of one area (same size, transparent around)."""
+        z = self.zones(quest_map)
+        if not z:
+            return None
+        key = ("zone", quest_map, cell, zoom, sub)
+        if key not in self._cache:
+            s = z["size"]
+            img = self._slice(z["file"], cell * s, 0, s, s, zoom)
+            if sub > 1 and img is not None:
+                img = img.subsample(sub)
+            self._cache[key] = img
+        return self._cache[key]
+
     # ------------------------------------------------------------------ misc
     def app_icon(self) -> tk.PhotoImage | None:
         key = ("app",)

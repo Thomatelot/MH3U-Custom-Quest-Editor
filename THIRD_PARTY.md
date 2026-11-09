@@ -18,7 +18,12 @@
   the start area of each start position, per monster and map (`start_areas.json`, read from the
   placement table of the game's `code.bin`, identical in the EU and US versions); where the hunters
   start (`hunter_starts.json`, read from the 3DS `code.bin`); and the number painted on the in-game
-  map for each area (`area_labels.json`), collected in the game by mh3u-quest-studio (MIT, below).
+  map for each area (`area_labels.json`), collected in the game by mh3u-quest-studio (MIT, below);
+  the centre of each area on the map pictures (`map_zones.json`, mh3u-quest-studio's Wii U area
+  markers scaled to the 3DS pictures by `tools/build_map_zones.py`); and the game's own French names
+  of items, monsters and maps (`lang/names_fr.json`, read from the game's French text by
+  `tools/build_fr_names.py`, like the English names). `lang/fr.json` holds the French translation of
+  the editor's own texts, written for this project (MIT).
   They were computed from the author's own copy of the game with the scripts in `tools/`
   (`build_benchmarks.py`, `build_spawns.py`, `build_start_usage.py`). They contain numbers and names,
   not pictures, text blocks, maps, sounds or program code of the game.

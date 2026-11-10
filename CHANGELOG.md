@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.4.0
+
+* **Who can join** (General tab): minimum Hunter Rank (HR 2 to 9), maximum number of players (1 to 3)
+  and "no armor or talismans", the two rules the game enforces when a hunter starts or joins the
+  quest. The editor sets the matching line of the quest board (the game's own texts, in English or
+  French) and the checks warn when the board line and the rules disagree. Meaning from
+  mh3u-quest-studio (Wii U, confirmed in the game), checked against every 3DS quest.
+* **Day or night** (General tab): every quest of the game is one or the other (category bits
+  0x10000 / 0x20000); the checks warn about night on maps the game only uses by day.
+* **Challenge gear** (new tab on Challenge quests 61000-61009 and Grudge Matches 60000-60011): the
+  5 gear sets the hunters choose from (weapon, armor, talisman and skills, item and ammo pouches)
+  and the S / A rank times, with the game's own equipment names; copy the gear of another
+  Challenge quest. This is the only "weapon rule" MH3U has: elsewhere hunters keep their own gear.
+* **Monster pack: Great Desert area 2.** On the Great Desert the other monsters get their own start
+  list: start 0 = area 1, start 1 = area 2, so a monster can wait in area 2 where the sand ship
+  arrives instead of being left behind in area 1. Rebuild and reinstall the pack (the page says
+  when the built pack is from an older version). Untested in the game.
+* Fixes: the French interface's header no longer cuts the last buttons; "In the game" and the
+  monster pack status lines are translated; talisman skill points are read as the game stores them
+  (a signed byte); hunters-start list translated; smaller header buttons so everything fits at
+  1280 pixels.
+
 ## 1.3.0
 
 * **Start areas on the map.** Each monster card shows the area map with the monster's start area lit

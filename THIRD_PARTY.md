@@ -22,7 +22,8 @@
   the centre of each area on the map pictures (`map_zones.json`, mh3u-quest-studio's Wii U area
   markers scaled to the 3DS pictures by `tools/build_map_zones.py`); and the game's own French names
   of items, monsters and maps (`lang/names_fr.json`, read from the game's French text by
-  `tools/build_fr_names.py`, like the English names). `lang/fr.json` holds the French translation of
+  `tools/build_fr_names.py`, like the English names); the game's names of weapons, armor, talismans
+  and skills (`equipment.json`, `lang/equipment_fr.json`, `tools/build_equipment.py`). `lang/fr.json` holds the French translation of
   the editor's own texts, written for this project (MIT).
   They were computed from the author's own copy of the game with the scripts in `tools/`
   (`build_benchmarks.py`, `build_spawns.py`, `build_start_usage.py`). They contain numbers and names,

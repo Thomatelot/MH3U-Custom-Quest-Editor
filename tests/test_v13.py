@@ -125,3 +125,35 @@ class French(unittest.TestCase):
         self.assertEqual(i18n._("text that is not translated"), "text that is not translated")
         i18n.set_language("en")
         self.assertEqual(i18n._("Save"), "Save")
+
+
+class Requirements(unittest.TestCase):
+    def test_rules_and_board_lines(self):
+        from mhqe import rules
+        self.assertEqual(rules.rules_of(17, 0), rules.Req(3, 4, False))
+        self.assertEqual(rules.rules_of(17, 13), rules.Req(3, 1, False))
+        self.assertEqual(rules.rules_of(0, 12), rules.Req(None, 4, True))
+        self.assertEqual(rules.conds_for(rules.Req(6, 4, True)), (20, 12))
+        self.assertIsNone(rules.conds_for(rules.Req(6, 2, True)))
+        self.assertEqual(rules.flag_for(rules.Req(3, 1, False), 0), 9)     # 'HR 3 ... Max participants: 1'
+        self.assertEqual(rules.flag_for(rules.Req(5, 4, False), 0), 5)
+        self.assertEqual(rules.flag_for(rules.Req(4, 2, False), 0), 4)      # no exact line: the HR line
+        self.assertEqual(rules.problems(3, 17, 0), [])
+        self.assertTrue(rules.problems(0, 17, 0))
+
+    @unittest.skipUnless(os.environ.get("MHQE_PACK_DIR"), "MHQE_PACK_DIR not set")
+    def test_challenge_gear_round_trip(self):
+        from mhqe import arena
+        from mhqe.packs import EventPack
+        pk = EventPack(Path(os.environ["MHQE_PACK_DIR"]) / "quest4")
+        q = next(s.quest for s in pk.used_slots() if arena.uses_gear(s.quest.get("quest_no")))
+        before = bytes(q.data)
+        self.assertTrue(arena.has_gear(q))
+        p = arena.read_set(q, 0)
+        self.assertIn(p[0][0], arena.WEAPON_TYPES)
+        arena.write_set(q, 0, p)
+        self.assertEqual(bytes(q.data), before)
+        p[0] = [7, 1]
+        arena.write_set(q, 0, p)
+        self.assertEqual(arena.read_set(q, 0)[0], [7, 1])
+        self.assertEqual(len(q.data), len(before))

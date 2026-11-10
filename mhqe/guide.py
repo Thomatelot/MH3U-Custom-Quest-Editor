@@ -104,6 +104,9 @@ def _general():
         ("Hunters start", _(H.tip("supp_enemy_num")) + _("\n\nThe line under the list gives the odds for the quest's "
          "map, with the area numbers of the in-game map.")),
         ("Time limit", _(H.tip("time_min")) + _("\n\nThe 'Frozen clock' box sets 99 minutes, the lowest frozen value.")),
+        ("Who can join, day or night", (
+            _(H.REQ_TIP) + _("\n\nTime of day: ") + _(H.DAYNIGHT_TIP)
+        )),
         ("Fee, Reward, Penalty", (
             _("Fee: ") + _(H.tip("contract")) + _("\nReward: ") + _(H.tip("reward_money")) + _("\nPenalty: ") + _(H.tip("penalty"))
             + _("\n\nThe (i) next to each shows what the game's quests of the same star rank use.")
@@ -223,6 +226,13 @@ def _supply():
 
 def _rewards_text():
     return [
+        ("Challenge gear", (
+            _(H.GEAR_TIP) + _("\n\nThe Challenge gear tab appears on those quests (in Developer mode on every quest "
+            "that carries the gear sets). For each of the 5 sets: the weapon (type, then the weapon), the five armor "
+            "pieces, the talisman and its two skills (skill tree and points), the item pouch (24 items) and the ammo "
+            "pouch (8 items, for the bowguns). 'Copy the gear of a game quest...' takes the 5 sets and the rank "
+            "times of a Challenge quest or Grudge Match. Names are the game's own.")
+        )),
         ("Reward tables A and B", _(H.tip("rewards")) + _("\n\nAdd..., Edit..., Remove and ▲ ▼ edit a table (up to 32 lines). "
          "The total chance of a table is shown under it.")),
         ("Fill from the quest's monsters and rank", (
@@ -314,6 +324,13 @@ def _pack():
             "mhqe_monster_pack.json. Your ROM and your save are not modified; removing the mod (button "
             "'Remove from Citra') brings the game back exactly. It can not be combined with another code.ips/code.bin "
             "mod.")
+        )),
+        ("Great Desert: area 2", (
+            _("In the Jhen Mohran fight the sand ship moves from area 1 to area 2, so a monster that starts in area 1 "
+            "is left behind. Jhen Mohran's own start list has only area 1, but its spawn data (which the pack lends "
+            "to the other monsters) has both areas. The pack therefore gives the other monsters a start list of "
+            "their own on the Great Desert: start 0 = area 1, start 1 = area 2 (choose it in the card's 'Starts in' "
+            "list or on the map). Untested in the game.")
         )),
         ("Big sizes", (
             _("A quest stores a monster's size in one byte, so 255 % is the most it can hold. The game then adds a value "

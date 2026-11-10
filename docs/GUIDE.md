@@ -85,6 +85,12 @@ Tested in the game: up to 98 minutes the clock counts down normally (51 and 98 w
 
 The 'Frozen clock' box sets 99 minutes, the lowest frozen value.
 
+### Who can join, day or night
+
+Who can take the quest, and when it takes place. The game checks two rules when a hunter starts or joins the quest: a minimum Hunter Rank (HR 2 to 9), a maximum number of players (1 to 3) or 'no armor or talismans'; the editor picks the matching line for the quest board. A quest holds two rules at most. MH3U has no rule on the weapon type: only the Challenge quests (and Grudge Matches) give fixed equipment, see the Challenge gear tab of those quests. Source: mh3u-quest-studio (Wii U, confirmed in the game), checked against every 3DS quest.
+
+Time of day: Day or night: every quest of the game is one or the other (two category flags, 0x10000 and 0x20000). The night quests are the ones whose texts speak of the night ('Narg at Nite', 'Moonlit Tryst', 'Howl at the Moon'). The arenas, the Underwater Ruin, the Sacred Land and the Tainted Sea are always by day in the game. Changing it on a custom quest is untested in the game.
+
 ### Fee, Reward, Penalty
 
 Fee: Fee: zenny paid to accept the quest.  
@@ -140,22 +146,11 @@ Monster rank (prog_no): MONSTER RANK (the game calls it EnemyLv): 0 = low rank (
 
 Intro cutscene (enemy_lv): INTRO CUTSCENE (the game calls it DemoNo): 0 = none; the other values play the opening cutscene of a story quest. Values used by the game's 365 quests: 0 (338×), 17 (1×), 23 (1×), 24 (1×), 25 (1×), 27 (1×).
 
-Special flag: Special quest behaviour (arena fights, Harvest Tours, final battles...). Meaning of each value not confirmed: keep the value of the quest you copied.
+Special flag: Which requirement line the quest board shows (the game's quest message 42 + this value; 0 = 'None.'). It is only text: the rules the game enforces are the two join rules. The General tab chooses it for you. Values used by the game's 365 quests: 0 (166×), 6 (129×), 3 (45×), 8 (6×), 10 (2×), 13 (2×).
 
-Flag + condition pairs used by the game, with example quests:  
-21 + 0:  Save Moga Village!  
-22 + 0:  Masked Robbery  
-23 + 0:  Howl at the Moon  
-24 + 0:  Conqueror of Land and Sea  
-3 + 17:  Harvest Tour: Misty Peaks, Harvest Tour: Deserted Isle, Harvest Tour: Sandy Plains  
-6 + 20:  Harvest Tour: Misty Peaks, Harvest Tour: Deserted Isle, Harvest Tour: Sandy Plains  
-8 + 22:  Ring of the Golden Lune, Ring of the Silver Sol, Moonlit Tryst  
-2 + 16:  Double Trouble  
-5 + 19:  Throne of the Abyss
+Special condition: Join rule 1 (the game's SpecialCondition): 0 = none, 12 = no armor or talismans, 13-15 = at most 1-3 players, 16-23 = Hunter Rank 2-9 or higher, 1-11 = online players can not join. Set by 'Who can join' on the General tab.
 
-Special condition: Goes with the special flag above.
-
-Special condition 2: Second special condition. Values used by the game's 365 quests: 0 (357×), 13 (4×), 14 (4×).
+Special condition 2: Join rule 2, same values as rule 1. Values used by the game's 365 quests: 0 (357×), 13 (4×), 14 (4×).
 
 Unused (demo_no): Low byte of a field the game does not use (ItemSetNo): 0 in every quest. Leave it at 0.
 
@@ -271,6 +266,12 @@ Version 1.1 and older called these 'Delivery set', 'Time condition', 'Monster co
 
 ## Rewards and Text
 
+### Challenge gear
+
+The fixed equipment of a Challenge quest: the hunter picks one of these 5 sets (weapon, armor, talisman with two skills, item and ammo pouches) and cannot use their own. The game gives fixed gear only to the quests the Arena Clerk lists, by number: Challenge quests 61000-61009 (from the quest4 pack, In-game quests > Challenge quests) and Grudge Matches 60000-60011 (base game). In any other quest the hunters keep their own gear: MH3U has no rule that limits the weapon type. The S and A rank times are the clear times for those ranks, in seconds. Layout from mh3u-quest-studio, checked on the 3DS quests; editing them is untested in the game.
+
+The Challenge gear tab appears on those quests (in Developer mode on every quest that carries the gear sets). For each of the 5 sets: the weapon (type, then the weapon), the five armor pieces, the talisman and its two skills (skill tree and points), the item pouch (24 items) and the ammo pouch (8 items, for the bowguns). 'Copy the gear of a game quest...' takes the 5 sets and the rank times of a Challenge quest or Grudge Match. Names are the game's own.
+
 ### Reward tables A and B
 
 Each line: an item, how many, and its chance in percent. At the end of the quest the game draws several times from the table. Table A is the main reward; table B is drawn separately.
@@ -330,6 +331,10 @@ The siege maps follow the game's own example: on the Underwater Ruin a monster g
 ### What it changes (ROM hack)
 
 It is a mod, built on your PC from your own extracted game: 47 files romfs/arc/enemy/emNNN.arc, a 7 KB patch exefs/code.ips (only new start lists and the extended size table, written in unused space of the program and over the old lists it replaces, one pointer per monster and one for the size table) and mhqe_monster_pack.json. Your ROM and your save are not modified; removing the mod (button 'Remove from Citra') brings the game back exactly. It can not be combined with another code.ips/code.bin mod.
+
+### Great Desert: area 2
+
+In the Jhen Mohran fight the sand ship moves from area 1 to area 2, so a monster that starts in area 1 is left behind. Jhen Mohran's own start list has only area 1, but its spawn data (which the pack lends to the other monsters) has both areas. The pack therefore gives the other monsters a start list of their own on the Great Desert: start 0 = area 1, start 1 = area 2 (choose it in the card's 'Starts in' list or on the map). Untested in the game.
 
 ### Big sizes
 

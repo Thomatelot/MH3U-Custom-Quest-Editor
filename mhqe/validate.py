@@ -9,7 +9,7 @@ import math
 from collections import namedtuple
 
 from . import gamedata as G
-from . import monsterpack, startpos, waves
+from . import arena, monsterpack, rules, startpos, waves
 from .quest import LANGS, NANDO_FIELDS, NANDO_MAX, OBJ_MONSTER_TYPES, Quest
 
 Issue = namedtuple("Issue", "level text")
@@ -42,6 +42,17 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
 
     if not 0 <= q.get("star") <= 9:
         add("warning", "Star rank should be between 0 and 9.")
+    for text in rules.problems(q.get("special_flag"), q.get("special_cond"), q.get("special_cond2")):
+        add("warning", text)
+    for text in arena.problems(q):
+        add("warning", text)
+    if rules.time_warning(q):
+        add("warning", rules.time_warning(q))
+    cat = q.get("category")
+    if bool(cat & rules.DAY_BIT) == bool(cat & rules.NIGHT_BIT):
+        add("warning", "The quest is set to " + ("both day and night" if cat & rules.DAY_BIT else
+                                                 "neither day nor night")
+            + ": every quest of the game has exactly one of the two (General tab, Time of day).")
     if q.get("map") not in G.MAP_NAMES:
         add("warning", f"Unknown map id {q.get('map')}.")
     if q.get("time_min") == 0:

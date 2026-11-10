@@ -17,6 +17,8 @@ ROOT = Path(__file__).resolve().parent.parent
 # quest map id (this editor) -> internal stage of the studio's table
 QUEST_TO_STAGE = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 10: 9, 11: 10, 12: 11, 13: 12, 14: 13, 15: 14}
 EXTRA = {9: {"0": [55.0, 102.0], "1": [95.0, 68.0]}}
+# areas missing from the studio's table, read off the 3DS picture (painted number on the area)
+ADD = {6: {"2": [124.0, 26.0]}}
 
 layout = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["map_markers"]
 maps = {}
@@ -27,6 +29,8 @@ for q, st in QUEST_TO_STAGE.items():
                         sorted(pts.items(), key=lambda kv: int(kv[0]))}
 for q, pts in EXTRA.items():
     maps[str(q)] = pts
+for q, pts in ADD.items():
+    maps.setdefault(str(q), {}).update(pts)
 maps = dict(sorted(maps.items(), key=lambda kv: int(kv[0])))
 out = {"_about": "Centre of each area (number painted on the map, 0 = camp) on the 3DS map picture "
                  "td_map_* (256 x 256 pixels), per quest map id. From mh3u-quest-studio (Matt Wood, MIT "

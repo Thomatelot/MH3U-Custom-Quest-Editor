@@ -132,14 +132,14 @@ def apply(root: tk.Misc, key: str) -> None:
           foreground=[("disabled", c["muted"])], bordercolor=[("disabled", c["line"])])
     s.map("TButton", foreground=[("disabled", c["muted"])])
     s.configure("Header.TButton", background=c["header"], foreground=c["header_ink"],
-                bordercolor=c["header"], padding=(12, 6))
+                bordercolor=c["header"], padding=(9, 6))
     s.map("Header.TButton", background=[("pressed", c["header_hover"]), ("active", c["header_hover"])],
           bordercolor=[("active", c["gold"])])
     s.configure("Nav.TButton", background=c["header"], foreground=c["header_ink"],
-                bordercolor=c["header"], padding=(14, 6), font=f["bold"])
+                bordercolor=c["header"], padding=(11, 6), font=f["bold"])
     s.map("Nav.TButton", background=[("active", c["header_hover"])])
     s.configure("NavOn.TButton", background=c["bg"], foreground=c["ink"], bordercolor=c["bg"],
-                padding=(14, 6), font=f["bold"])
+                padding=(11, 6), font=f["bold"])
     s.map("NavOn.TButton", background=[("active", c["bg"])])
     s.configure("Link.TButton", background=c["card"], foreground=c["accent"], bordercolor=c["card"],
                 padding=(2, 0))

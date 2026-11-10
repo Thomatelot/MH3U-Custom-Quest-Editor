@@ -333,6 +333,31 @@ def free_regions(code: bytes, layout: dict) -> list[list[int]]:
     return out
 
 
+# ------------------------------------------------------------ Great Desert
+# Jhen Mohran's own start list on the Great Desert holds one record (area 1), but its spawn data
+# (copied to the other monsters by the pack) has areas 1 and 2. During the fight the sand ship moves
+# from area 1 to area 2, so a monster left in area 1 is out of reach. The pack gives the other
+# monsters a start list of their own there: record 0 = area 1 (as before), record 1 = area 2.
+DESERT = 6
+DESERT_SENTINEL = 0xDE5E0006
+DESERT_SENTINEL_BYTES = struct.pack("<II", DESERT, DESERT_SENTINEL)
+
+
+def desert_starts(code: bytes, place: dict) -> bytes | None:
+    """Start records for the Great Desert: Jhen Mohran's record for area 1, the same for area 2,
+    then the game's empty end record."""
+    ptr = dict(place.get(25, [])).get(DESERT)
+    if not ptr:
+        return None
+    o = ptr - BASE
+    rec, end = bytearray(code[o:o + 56]), code[o + 56:o + 112]
+    if rec[9] != 1 or struct.unpack_from("<I", end, 0)[0] != 0:
+        return None
+    rec2 = bytearray(rec)
+    rec2[9] = 2
+    return bytes(rec) + bytes(rec2) + bytes(end)
+
+
 # ----------------------------------------------------------------- big sizes
 # The quest stores a monster's size in one byte (Size, 0-255 %). At spawn the game adds a value
 # from the "size spread" table picked by Sizeparam: size % = Size + value - 100 (function at
@@ -392,6 +417,11 @@ def full_size(size: int, sizeparam: int) -> int:
     if BIG_SIZE_BASE <= sizeparam < BIG_SIZE_BASE + BIG_SIZE_COUNT:
         return size + BIG_SIZE_STEP * (sizeparam - BIG_SIZE_BASE + 1)
     return size
+
+
+def is_current(manifest: dict) -> bool:
+    """True when the pack was built with everything this version of the editor adds."""
+    return {"big_sizes", "desert_area2"} <= set(manifest.get("features", []))
 
 
 def ips(records) -> bytes:
@@ -537,12 +567,17 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print) -> dic
     for e2, lst in place.items():
         for st, ptr in lst:
             stage_arrays.setdefault(st, set()).add(ptr)
-    lists, blobs = {}, []
+    lists = {}
+    desert = desert_starts(code, place)          # Great Desert: a start in area 2 too
     for em, items in sorted(by_em.items()):
         lst = list(place[em])
         spawn = (final.get(em) or mons[em]).spawn.stages
         for p in sorted(items, key=lambda x: x["stage"]):
             st = p["stage"]
+            if st == DESERT and desert is not None:
+                lst.append((st, DESERT_SENTINEL))
+                p["start_areas"] = [1, 2]
+                continue
             ptr = dict(place[p["donor"]])[st]
             areas_ok = set(spawn.get(st, {}))
             if st not in ROUTELESS_STAGES and len(areas_ok) > 1:
@@ -573,6 +608,14 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print) -> dic
             merged.append([a_, b_])
     free = merged
     records = []
+    if desert is not None and any(DESERT_SENTINEL_BYTES in b for b in lists.values()):
+        slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= len(desert)), None)
+        if slot is None:
+            raise PackError("Not enough free space in code.bin for the Great Desert start list.")
+        pos = slot[0]
+        slot[0] += (len(desert) + 7) // 8 * 8
+        records.append((pos - BASE, desert))
+        lists = {em: b.replace(DESERT_SENTINEL_BYTES, struct.pack("<II", DESERT, pos)) for em, b in lists.items()}
     for em in sorted(lists, key=lambda e2: -len(lists[e2])):      # biggest first
         blob = lists[em]
         slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= len(blob)), None)
@@ -615,6 +658,7 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print) -> dic
         "added": [{k: p[k] for k in ("em", "stage", "donor", "start_areas")} for p in plan],
         "placement_table": f"0x{table_va:X}",
         "big_sizes": big,
+        "features": ["big_sizes"] * bool(big) + ["desert_area2"] * bool(desert),
     }
     (out_dir / MANIFEST).write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     log(f"Done: {len(plan)} monster/map pairs added for {len(by_em)} monsters, fingerprint {manifest['fingerprint']}.")

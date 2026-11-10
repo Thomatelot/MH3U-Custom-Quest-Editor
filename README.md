@@ -8,6 +8,10 @@ macOS and Linux), written in pure Python, in **English or French**. It includes 
 pack** (ROM hack) that lets large monsters appear on maps the game does not allow, like Zinogre on the
 Sandy Plains.
 
+New in 1.4: **who can join** (minimum Hunter Rank, number of players, no armor), **day or night**, the
+fixed **Challenge gear** of the Challenge quests, and monsters that can start in **area 2 of the Great
+Desert** with the Monster pack.
+
 New in 1.3: start areas lit up on the area map, a monster browser by type and difficulty and an item
 browser by family, an English / French interface with the game's own French names, monster sizes up to
 2000 % with the Monster pack (untested in the game), and backups that clean themselves up without ever
@@ -72,7 +76,12 @@ what it does, with the values the game's own quests use; the built-in **Guide** 
 ### Features
 
 * **General:** star rank, map, time limit, fee, reward and penalty, HR points, objectives (set for you
-  from the monsters, or by hand), stable or unstable environment, other gameplay settings.
+  from the monsters, or by hand), stable or unstable environment, **day or night**, **who can join**
+  (Hunter Rank minimum, at most 1-3 players, no armor or talismans, with the matching quest-board
+  line), other gameplay settings.
+* **Challenge gear:** the 5 fixed gear sets (weapon, armor, talisman and skills, pouches) and the S / A
+  rank times of the Challenge quests and Grudge Matches. MH3U has no weapon-type rule for other quests:
+  there the hunters always use their own gear.
 * **Monsters:** up to 5 large monsters, with *How the monsters arrive* (all at the start, one after
   another, in groups), **Size like** (tiny to giant, King Size), **Strength like** (health, attack and
   toughness taken from the game's quests by hub and star rank), and the small monsters of the zone.
@@ -109,7 +118,10 @@ what it does, with the values the game's own quests use; the built-in **Guide** 
 <img src="docs/images/start-map.png" width="400" alt="Where a monster starts: the start area in yellow, pins on the other start areas">
 <img src="docs/images/picker-monsters.png" width="400" alt="Monster browser: by type, easiest first, with difficulty stars">
 </p>
-<p align="center"><img src="docs/images/french.png" width="560" alt="The editor in French"></p>
+<p align="center">
+<img src="docs/images/french.png" width="400" alt="The editor in French">
+<img src="docs/images/challenge-gear.png" width="400" alt="Challenge gear: the fixed equipment of a Challenge quest">
+</p>
 
 
 ## Requirements
@@ -215,6 +227,9 @@ and picks the game's start list offering the most start areas.
 * **Tested:** only **Zinogre on Sandy Plains** (Citra). Everything else follows the same rules but is
   **untested**: a monster may get stuck or the game may crash. Water arenas, Sacred Land, Tower, the
   siege maps, and Alatreon / Dire Miralis away from their maps are the riskiest (marked `+!`).
+* **Great Desert, area 2:** in the Jhen Mohran fight the sand ship moves from area 1 to area 2, so a
+  monster left in area 1 is out of reach. The pack gives the other monsters a start in area 2 there
+  (start 1 in the card's *Starts in* list). Untested in the game.
 * **Big sizes:** a quest stores a monster's size in one byte (255 % at most). The game then adds a value
   from a size table chosen by the quest, with no upper limit; the pack extends that table with exact
   sizes from +100 % to +1900 %, so *Size %* accepts up to **2000 %** in Developer mode. Such a quest needs
@@ -264,6 +279,10 @@ rests on a test in the game and what rests on reading the game's files.
 | Which monsters wander into an *Unstable* zone | ❌ Cannot be chosen: the list is stored in the game, not in the quest |
 | An "enraged" / "charged" monster | ❌ No such setting was found in the quest file. King Size (+ health and attack) is the closest |
 | Start areas on the map (yellow areas, pins) | 🔎 Area outlines from the game's map pictures, placed with mh3u-quest-studio's area markers (they line up on every map); the start areas themselves come from the game's code |
+| Who can join (HR, players, no armor) and the quest-board line | 🔎 Rules table from mh3u-quest-studio (confirmed in the Wii U game); every 3DS quest pairs rules and board lines the same way. Not tried with a custom quest |
+| Day / night | 🔎 Every game quest sets exactly one of the two flags; night quests are the ones whose texts speak of the night. Not tried with a custom quest |
+| Challenge gear | 🔎 Layout from mh3u-quest-studio, checked on the 3DS Challenge quests (names and sets read back correctly). Editing not tried in the game |
+| Great Desert area 2 (Monster pack) | 🔎 Uses Jhen Mohran's own area-2 spawn data; not tried in the game |
 | Monster sizes above 255 % (Monster pack) | 🔎 The size code and table were read in the 3DS program and the patched table checked by the tests; **not tried in the game** |
 | French interface | 🔎 Interface, checks and guide translated; item, monster and map names from the game's French text. A few rare texts may still show in English |
 | **Real 3DS**, Japanese version, Linux, macOS | ❔ Not tested by the author: you may be the first to find out. Please report |
@@ -322,6 +341,7 @@ The editor needs nothing but the `.bat` / `python mh3u_quest_editor.py`. For dev
     python tools/build_monster_pack.py --romfs <romfs> --out <folder>       # build the Monster pack
     python tools/build_map_zones.py <mh3u-quest-studio>/data/art_layout.json # area centres of the maps
     python tools/build_fr_names.py <romfs>                                   # the game's French names
+    python tools/build_equipment.py <romfs>                                  # weapon / armor / skill names
 
 `tools/build_benchmarks.py`, `build_spawns.py` and `build_start_usage.py` rebuild the tables in
 `data/` from your extracted game. **The tests need your own game files** (nothing of the game is in

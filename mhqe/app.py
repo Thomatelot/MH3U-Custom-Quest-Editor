@@ -24,7 +24,8 @@ from . import autofill, guide, spawns, supp
 from . import gamedata as G
 from . import monsterpack
 from . import helptext as H
-from . import i18n, picker, theme
+from . import arena, i18n, picker, theme
+from .i18n import _
 from .editor import EditorPage, stars
 from .finder import Finder
 from .icons import ASSETS, Icons
@@ -436,17 +437,20 @@ class MonsterPackPage(ttk.Frame):
         romfs = app.romfs_dir()
         ttk.Label(f, style="Card.Muted.TLabel", text="Extracted game: " + (short_path(romfs, 110) if romfs else
                   "not set (Settings > Choose the romfs folder; exefs/code.bin must be next to romfs)")).pack(anchor="w")
-        ttk.Label(f, style="Card.TLabel" if built else "Card.Muted.TLabel", text=(
-            f"Pack built: {len(built.get('added', []))} monster/map combinations added for "
-            f"{len(built.get('monsters', []))} monsters"
-            + (", sizes up to 2000 %" if built.get("big_sizes") else ", without big sizes (rebuild it)")
-            + f".  Fingerprint {built.get('fingerprint')}"
-            if built else "Pack not built yet.")).pack(anchor="w", pady=(4, 0))
+        old_pack = built and not monsterpack.is_current(built)
+        ttk.Label(f, style="Card.Warn.TLabel" if old_pack else ("Card.TLabel" if built else "Card.Muted.TLabel"),
+                  text=(_(f"Pack built: {len(built.get('added', []))} monster/map combinations added for "
+                          f"{len(built.get('monsters', []))} monsters.")
+                        + "  " + _(f"Fingerprint {built.get('fingerprint')}.")
+                        + ("  " + _("Built by an older version of the editor (no big sizes or no Great Desert "
+                                    "area 2): build it again.") if old_pack else "")
+                        if built else _("Pack not built yet."))).pack(anchor="w", pady=(4, 0))
         if inst:
             same = built and built.get("fingerprint") == inst.get("fingerprint")
             ttk.Label(f, style="Card.Ok.TLabel" if same or not built else "Card.Warn.TLabel", text=(
-                f"Installed in {short_path(where, 90)}  (fingerprint {inst.get('fingerprint')}"
-                + (")" if same or not built else ", different from the pack you built: install again)"))).pack(anchor="w")
+                _(f"Installed in {short_path(where, 90)}.") + "  " + _(f"Fingerprint {inst.get('fingerprint')}.")
+                + ("" if same or not built else "  " + _("Different from the pack you built: install again.")))
+                      ).pack(anchor="w")
         else:
             ttk.Label(f, style="Card.Muted.TLabel", text="Not installed in Citra. On a real 3DS, copy the pack "
                       f"folder's content into luma/titles/{G.TITLE_ID}/ (game patching enabled in Luma)."
@@ -681,6 +685,7 @@ class App(tk.Tk):
         self.settings = Settings()
         i18n.set_language(self.settings.get("language") or i18n.system_language())
         G.set_names_language(i18n.LANG)
+        arena.set_language(i18n.LANG)
         self.title(APP_TITLE)
         self.geometry("1280x840")
         self.minsize(1080, 680)
@@ -831,7 +836,7 @@ class App(tk.Tk):
         TribalBand(self).pack(fill="x")
         if self.icons.app_icon():
             ttk.Label(head, image=self.icons.app_icon(), style="Header.TLabel").pack(side="left")
-        ttk.Label(head, text=APP_TITLE, style="Header.TLabel").pack(side="left", padx=(8, 22))
+        ttk.Label(head, text=APP_TITLE, style="Header.TLabel").pack(side="left", padx=(8, 14))
         self.nav = {}
         for page, text in (("ingame", "In-game quests"), ("library", "Quest library"),
                            ("rom", "Base game"), ("pack", "Monster pack"), ("guide", "Guide")):
@@ -841,7 +846,7 @@ class App(tk.Tk):
         ttk.Button(head, text="Settings", style="Header.TButton", width=0, command=self.open_settings).pack(side="right")
         ttk.Button(head, text="Backups", style="Header.TButton", width=0, command=self.open_backups).pack(side="right")
         ttk.Button(head, text="Supply boxes", style="Header.TButton", width=0, command=self.open_boxes).pack(side="right")
-        dm = ttk.Checkbutton(head, text="Developer mode", variable=self.dev_mode, style="Header.TCheckbutton",
+        dm = ttk.Checkbutton(head, text="Mode dév." if i18n.LANG == "fr" else "Developer mode", variable=self.dev_mode, style="Header.TCheckbutton",
                              command=self.toggle_dev)
         dm.pack(side="right", padx=10)
         Tooltip(dm, H.tip("dev_mode"))
@@ -1708,6 +1713,7 @@ class App(tk.Tk):
         self.settings.set("language", code)
         i18n.set_language(code)
         G.set_names_language(code)
+        arena.set_language(code)
         self.apply_theme(self.settings.get("theme", theme.DEFAULT_THEME))
 
     def apply_theme(self, key):

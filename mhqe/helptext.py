@@ -281,6 +281,26 @@ SIZE_TIP = ("Sets the monster's size in one click. No hidden 'enraged' or 'charg
             "(small), 180 and 200 (giant). Everything except Normal also sets 'Size spread' to 0, as those "
             "quests do, so the size is fixed.")
 
+REQ_TIP = ("Who can take the quest, and when it takes place. The game checks two rules when a hunter "
+           "starts or joins the quest: a minimum Hunter Rank (HR 2 to 9), a maximum number of players (1 "
+           "to 3) or 'no armor or talismans'; the editor picks the matching line for the quest board. A "
+           "quest holds two rules at most. MH3U has no rule on the weapon type: only the Challenge quests "
+           "(and Grudge Matches) give fixed equipment, see the Challenge gear tab of those quests. Source: "
+           "mh3u-quest-studio (Wii U, confirmed in the game), checked against every 3DS quest.")
+GEAR_TIP = ("The fixed equipment of a Challenge quest: the hunter picks one of these 5 sets (weapon, "
+            "armor, talisman with two skills, item and ammo pouches) and cannot use their own. The game "
+            "gives fixed gear only to the quests the Arena Clerk lists, by number: Challenge quests "
+            "61000-61009 (from the quest4 pack, In-game quests > Challenge quests) and Grudge Matches "
+            "60000-60011 (base game). In any other quest the hunters keep their own gear: MH3U has no rule "
+            "that limits the weapon type. The S and A rank times are the clear times for those ranks, in "
+            "seconds. Layout from mh3u-quest-studio, checked on the 3DS quests; editing them is untested in "
+            "the game.")
+DAYNIGHT_TIP = ("Day or night: every quest of the game is one or the other (two category flags, 0x10000 "
+                "and 0x20000). The night quests are the ones whose texts speak of the night ('Narg at "
+                "Nite', 'Moonlit Tryst', 'Howl at the Moon'). The arenas, the Underwater Ruin, the Sacred "
+                "Land and the Tainted Sea are always by day in the game. Changing it on a custom quest is "
+                "untested in the game.")
+
 ARRIVAL_TIP = ("When the large monsters of the quest arrive, and which of them you have to slay to win. The "
                "game's own quests with 2 to 4 large monsters use exactly these patterns; the monsters are "
                "taken in the order of their cards (use ◀ ▶ on a card to reorder them).\n\n"
@@ -436,11 +456,13 @@ TEXT = {
     "enemy_lv": "INTRO CUTSCENE (the game calls it DemoNo): 0 = none; the other values play the opening "
                 "cutscene of a story quest. " + common("enemy_lv"),
     "demo_no": "Low byte of a field the game does not use (ItemSetNo): 0 in every quest. Leave it at 0.",
-    "special_flag": "Special quest behaviour (arena fights, Harvest Tours, final battles...). "
-                    "Meaning of each value not confirmed: keep the value of the quest you "
-                    "copied.\n\n" + special_examples(),
-    "special_cond": "Goes with the special flag above.",
-    "special_cond2": "Second special condition. " + common("special_cond2"),
+    "special_flag": "Which requirement line the quest board shows (the game's quest message 42 + this "
+                    "value; 0 = 'None.'). It is only text: the rules the game enforces are the two join "
+                    "rules. The General tab chooses it for you. " + common("special_flag"),
+    "special_cond": "Join rule 1 (the game's SpecialCondition): 0 = none, 12 = no armor or talismans, "
+                    "13-15 = at most 1-3 players, 16-23 = Hunter Rank 2-9 or higher, 1-11 = online "
+                    "players can not join. Set by 'Who can join' on the General tab.",
+    "special_cond2": "Join rule 2, same values as rule 1. " + common("special_cond2"),
     "category": "Quest category bits. Bits 4 and 20 together cut monster HP to 55% (used by "
                 "Grudge Matches and challenge quests). Other bits are only known by which "
                 "quests use them.",

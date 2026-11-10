@@ -130,8 +130,12 @@ _installed = False
 
 
 def _fix(cnf):
-    if cnf and isinstance(cnf, dict) and isinstance(cnf.get("text"), str):
-        cnf["text"] = _(cnf["text"])
+    if cnf and isinstance(cnf, dict):
+        if isinstance(cnf.get("text"), str):
+            cnf["text"] = _(cnf["text"])
+        vals = cnf.get("values")
+        if isinstance(vals, (list, tuple)) and any(isinstance(v, str) for v in vals):
+            cnf["values"] = [_(v) if isinstance(v, str) else v for v in vals]
     return cnf
 
 
@@ -178,6 +182,12 @@ def install() -> None:
                 _fix(kw)
             return _orig(*a, **kw)
         setattr(cls, name, wrap)
+
+    cb_set = ttk.Combobox.set
+
+    def combo_set(self, value):
+        return cb_set(self, _(value) if LANG != "en" and isinstance(value, str) else value)
+    ttk.Combobox.set = combo_set
 
     title = tk.Wm.wm_title
 

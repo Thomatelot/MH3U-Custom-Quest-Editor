@@ -12,7 +12,7 @@ from . import autofill, spawns, startpos, strays, supp, waves
 from . import gamedata as G
 from . import monsterpack
 from . import helptext as H
-from . import picker, theme
+from . import arena, picker, rules, theme
 from .quest import LANG_NAMES, LANGS, MON_SLOTS, NANDO_MAX, QuestFormatError
 from .validate import worst
 from .widgets import ScrollFrame, Section, StatusDot, Tooltip, center_on, info, make_modal, parse_int
@@ -26,8 +26,8 @@ STAMINA = {0: "Village", 1: "Port Low / High Rank", 2: "Port G Rank", 3: "Grudge
 # record are given in quest.py. The labels below say what the fields do.
 OTHER_FIELDS = (("start_param", "Monster arrival pattern"), ("hagi_no", "Supply rank / story step"),
                 ("prog_no", "Monster rank"), ("enemy_lv", "Intro cutscene"),
-                ("special_flag", "Special flag"), ("special_cond", "Special condition"),
-                ("special_cond2", "Special condition 2"), ("ren_pattern", "Rannyu_limite (0)"))
+                ("special_flag", "Quest board requirement line"), ("special_cond", "Join rule 1"),
+                ("special_cond2", "Join rule 2"), ("ren_pattern", "Rannyu_limite (0)"))
 MODE_TYPES = (0x0001, 0x0081, 0x0101)        # objectives whose 'mode' means something
 UP, DOWN = "▲", "▼"
 
@@ -337,7 +337,7 @@ class GeneralTab(Tab):
         self.hmap = None
         r += 1
         ttk.Label(g, text="Hunters start", style="Card.TLabel").grid(row=r, column=0, sticky="w", pady=3)
-        self.hunt = ttk.Combobox(g, state="readonly", width=34)
+        self.hunt = ttk.Combobox(g, state="readonly", width=27)
         self.hunt.grid(row=r, column=1, sticky="w")
         self.hunt.bind("<<ComboboxSelected>>", self._hunt_pick)
         info(g, H.tip("supp_enemy_num"), "Card.").grid(row=r, column=2, sticky="w", padx=4)
@@ -360,8 +360,13 @@ class GeneralTab(Tab):
                  "freeze it too but is untested, and the highest value the game can take is unknown.",
              "Card.").pack(side="left", padx=4)
 
-        s2 = Section(body, "Zenny and HR points")
-        s2.grid(row=0, column=1, sticky="nsew", padx=(6, 0), pady=(0, 10))
+        col1 = ttk.Frame(body)
+        col1.grid(row=0, column=1, sticky="nsew", padx=(6, 0), pady=(0, 10))
+        s2 = Section(col1, "Zenny and HR points")
+        s2.pack(fill="x")
+        s5 = Section(col1, "Who can join, day or night", H.REQ_TIP)
+        s5.pack(fill="x", pady=(10, 0))
+        self._build_rules(s5.body)
         g = s2.body
         money = lambda f: (lambda: H.tip(f) + "\n\n" + H.money_hint(f, self.q.get("star") if self.q else 1))
         self.field(g, 0, "Fee", "contract", tip=money("contract"), suffix="z")
@@ -438,8 +443,70 @@ class GeneralTab(Tab):
             for i, (field, label) in enumerate(OTHER_FIELDS):
                 self.field(s4.body, i % half, label, field, tip=H.tip(field), col=i // half)
 
+    # ----- who can join (special_cond / special_cond2 / special_flag) and day or night
+    def _build_rules(self, g):
+        ttk.Label(g, text="Time of day", style="Card.TLabel").grid(row=0, column=0, sticky="w", pady=3)
+        self.daynight = ttk.Combobox(g, state="readonly", width=24, values=["Day", "Night"])
+        self.daynight.grid(row=0, column=1, sticky="w")
+        self.daynight.bind("<<ComboboxSelected>>", self._daynight_pick)
+        info(g, H.DAYNIGHT_TIP, "Card.").grid(row=0, column=2, sticky="w", padx=4)
+        ttk.Label(g, text="Hunter Rank", style="Card.TLabel").grid(row=1, column=0, sticky="w", pady=3)
+        self.req_hr = ttk.Combobox(g, state="readonly", width=24,
+                                   values=["Any"] + [f"HR {n} or higher" for n in rules.HR_CHOICES[1:]])
+        self.req_hr.grid(row=1, column=1, sticky="w")
+        self.req_hr.bind("<<ComboboxSelected>>", self._rules_pick)
+        ttk.Label(g, text="Players", style="Card.TLabel").grid(row=2, column=0, sticky="w", pady=3)
+        self.req_pl = ttk.Combobox(g, state="readonly", width=24,
+                                   values=["Up to 4 (normal)", "1 (solo)", "Up to 2", "Up to 3"])
+        self.req_pl.grid(row=2, column=1, sticky="w")
+        self.req_pl.bind("<<ComboboxSelected>>", self._rules_pick)
+        self.req_naked = tk.BooleanVar()
+        ttk.Checkbutton(g, text="No armor or talismans", variable=self.req_naked, style="Card.TCheckbutton",
+                        command=self._rules_pick).grid(row=3, column=0, columnspan=3, sticky="w", pady=(2, 0))
+        self.req_lab = ttk.Label(g, text="", style="Card.Muted.TLabel", wraplength=440, justify="left")
+        self.req_lab.grid(row=4, column=0, columnspan=4, sticky="w", pady=(4, 0))
+
+    def _rules_load(self, q):
+        self.daynight.current(1 if rules.is_night(q) else 0)
+        req = rules.rules_of(q.get("special_cond"), q.get("special_cond2"))
+        self.req_hr.current(rules.HR_CHOICES.index(req.hr) if req.hr in rules.HR_CHOICES else 0)
+        self.req_pl.current(rules.PLAYER_CHOICES.index(req.players) if req.players in rules.PLAYER_CHOICES else 0)
+        self.req_naked.set(req.naked)
+        text = _("Quest board: ") + rules.board_text(q.get("special_flag"))
+        warn = rules.problems(q.get("special_flag"), q.get("special_cond"), q.get("special_cond2"))
+        tw = rules.time_warning(q)
+        if tw:
+            warn.append(tw)
+        self.req_lab.configure(text=text + "".join("\n" + _(w) for w in warn),
+                               style="Card.Warn.TLabel" if warn else "Card.Muted.TLabel")
+
+    def _daynight_pick(self, _e=None):
+        if self.loading or self.q is None:
+            return
+        rules.set_night(self.q, self.daynight.current() == 1)
+        self._rules_load(self.q)
+        self.editor.changed()
+
+    def _rules_pick(self, _e=None):
+        if self.loading or self.q is None:
+            return
+        req = rules.Req(rules.HR_CHOICES[max(0, self.req_hr.current())],
+                        rules.PLAYER_CHOICES[max(0, self.req_pl.current())], bool(self.req_naked.get()))
+        conds = rules.conds_for(req)
+        if conds is None:
+            messagebox.showinfo(_("Who can join"), _("The game holds two rules at most: choose two of "
+                                "Hunter Rank, players and no armor."), parent=self)
+            self._rules_load(self.q)
+            return
+        self.q.set("special_cond", conds[0])
+        self.q.set("special_cond2", conds[1])
+        self.q.set("special_flag", rules.flag_for(req, self.q.get("special_flag")))
+        self._rules_load(self.q)
+        self.editor.changed()
+
     def load(self, q):
         self.load_bound(q)
+        self._rules_load(q)
         if self.no_lab is not None:
             self.no_lab.configure(text=str(q.get("quest_no")))
             self.no_btn.configure(state="normal" if self.app.source_can_create() else "disabled")
@@ -457,7 +524,7 @@ class GeneralTab(Tab):
 
     def refresh_summary(self):
         if self.q is not None:
-            self.summary.configure(text="In the game:  " + G.objectives_sentence(self.q))
+            self.summary.configure(text=_("In the game:  ") + G.objectives_sentence(self.q))
             self.win_lab.configure(text=waves.win_text(self.q))
 
     # ----- where the hunters start (the field the game calls StartParam)
@@ -465,7 +532,7 @@ class GeneralTab(Tab):
         v, m = q.get("supp_enemy_num"), q.get("map")
         values = sorted(set(startpos.HUNTER_CHOICES) | {v})
         self._hunt_values = values
-        self.hunt.configure(values=[f"{x}  {startpos.HUNTER_CHOICES.get(x, '(not used by the game)')}"
+        self.hunt.configure(values=[f"{x}  {_(startpos.HUNTER_CHOICES.get(x, '(not used by the game)'))}"
                                     for x in values])
         self.hunt.current(values.index(v))
         warn = startpos.hunter_warning(m, v)
@@ -1376,7 +1443,7 @@ class MonstersTab(Tab):
                                           "knows for this number of monsters (kept as it is).")
         else:
             self.arrive.set(q.get("start_param") if n > 1 else 0)
-            self.phase_lab.configure(text="In the game:  " + waves.wave_text(q, groups))
+            self.phase_lab.configure(text=_("In the game:  ") + _(waves.wave_text(q, groups)))
         self.win_lab.configure(text=waves.win_text(q))
         self.arrive_note.configure(text=H.ARRIVAL_NOTE if n > 1 else "")
 
@@ -2283,6 +2350,329 @@ class TextTab(Tab):
 
 
 # =================================================================== Advanced
+
+# ============================================================== Challenge gear
+class ItemPairsDialog(tk.Toplevel):
+    """Edit a short list of (item, count) pairs: an item pouch or an ammo pouch."""
+
+    def __init__(self, app, title, pairs, rows):
+        super().__init__(app)
+        self.withdraw()
+        self.title(title)
+        self.transient(app)
+        self.configure(background=theme.color("bg"))
+        self.app, self.rows, self.result = app, rows, None
+        self.pairs = [list(p) for p in pairs if p[0]]
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill="both", expand=True)
+        ttk.Label(f, text=title, style="H2.TLabel").pack(anchor="w")
+        ttk.Label(f, text=f"Up to {rows} items.", style="Muted.TLabel").pack(anchor="w", pady=(0, 6))
+        self.tree = ttk.Treeview(f, columns=("item", "qty"), show="headings", height=min(rows, 12))
+        self.tree.heading("item", text=_("Item"))
+        self.tree.heading("qty", text=_("Qty"))
+        self.tree.column("item", width=260)
+        self.tree.column("qty", width=60, anchor="e")
+        self.tree.pack(fill="both", expand=True)
+        b = ttk.Frame(f)
+        b.pack(fill="x", pady=(8, 0))
+        ttk.Button(b, text="Add...", command=self._add).pack(side="left")
+        ttk.Button(b, text="Edit...", command=self._edit).pack(side="left", padx=4)
+        ttk.Button(b, text="Remove", command=self._remove).pack(side="left")
+        ttk.Button(b, text="OK", style="Accent.TButton", command=self._ok).pack(side="right")
+        ttk.Button(b, text="Cancel", command=self.destroy).pack(side="right", padx=6)
+        self.bind("<Escape>", lambda _e: self.destroy())
+        self._fill()
+        center_on(self, app)
+        self.deiconify()
+        make_modal(self)
+
+    def _fill(self):
+        self.tree.delete(*self.tree.get_children())
+        for i, (iid, n) in enumerate(self.pairs):
+            self.tree.insert("", "end", iid=str(i), values=(G.item_name(iid), n))
+
+    def _qty(self, start):
+        v = simpledialog.askinteger(_("Quantity"), _("How many (1-99)?"), initialvalue=start,
+                                    minvalue=1, maxvalue=99, parent=self)
+        return v
+
+    def _add(self):
+        if len(self.pairs) >= self.rows:
+            messagebox.showinfo(self.title(), f"Up to {self.rows} items.", parent=self)
+            return
+        iid = picker.pick_item(self.app, title=_("Choose an item"))
+        if iid:
+            n = self._qty(1)
+            if n:
+                self.pairs.append([iid, n])
+                self._fill()
+
+    def _sel(self):
+        s = self.tree.selection()
+        return int(s[0]) if s else None
+
+    def _edit(self):
+        i = self._sel()
+        if i is None:
+            return
+        iid = picker.pick_item(self.app, self.pairs[i][0], title=_("Choose an item"))
+        if iid:
+            n = self._qty(self.pairs[i][1])
+            if n:
+                self.pairs[i] = [iid, n]
+                self._fill()
+
+    def _remove(self):
+        i = self._sel()
+        if i is not None:
+            del self.pairs[i]
+            self._fill()
+
+    def _ok(self):
+        self.result = self.pairs + [[0, 0]] * (self.rows - len(self.pairs))
+        self.destroy()
+
+
+class GearSetCard(Section):
+    """One of the 5 gear sets the hunter picks from in a Challenge quest."""
+
+    ARMOR = (("head", "Head"), ("chest", "Chest"), ("arms", "Arms"), ("waist", "Waist"), ("legs", "Legs"))
+
+    def __init__(self, parent, tab, index):
+        super().__init__(parent, f"{_('Gear set')} {index + 1}")
+        self.tab, self.index = tab, index
+        g = self.body
+        self.sum = ttk.Label(self.head, text="", style="Card.Accent.TLabel")
+        self.sum.pack(side="left", padx=10)
+        ttk.Label(g, text="Weapon", style="Card.TLabel").grid(row=0, column=0, sticky="w", pady=2)
+        wrow = ttk.Frame(g, style="Card.TFrame")
+        wrow.grid(row=0, column=1, sticky="w")
+        self.wtype = ttk.Combobox(wrow, state="readonly", width=18)
+        self.wtype.pack(side="left")
+        self.wtype.bind("<<ComboboxSelected>>", self._wtype)
+        self.weapon = ttk.Combobox(wrow, state="readonly", width=26, height=20)
+        self.weapon.pack(side="left", padx=4)
+        self.weapon.bind("<<ComboboxSelected>>", lambda _e: self._set_equip("weapon", self.weapon))
+        self.armor = {}
+        for r, (key, label) in enumerate(self.ARMOR, start=1):
+            ttk.Label(g, text=label, style="Card.TLabel").grid(row=r, column=0, sticky="w", pady=2)
+            cb = ttk.Combobox(g, state="readonly", width=46, height=20)
+            cb.grid(row=r, column=1, sticky="w")
+            cb.bind("<<ComboboxSelected>>", lambda _e, k=key, c=cb: self._set_equip(k, c))
+            self.armor[key] = cb
+        ttk.Label(g, text="Talisman", style="Card.TLabel").grid(row=6, column=0, sticky="w", pady=2)
+        self.talisman = ttk.Combobox(g, state="readonly", width=46)
+        self.talisman.grid(row=6, column=1, sticky="w")
+        self.talisman.bind("<<ComboboxSelected>>", lambda _e: self._set_equip("talisman", self.talisman))
+        self.skills = []
+        for k in range(2):
+            ttk.Label(g, text=f"{_('Skill')} {k + 1}", style="Card.TLabel").grid(row=7 + k, column=0, sticky="w", pady=2)
+            row = ttk.Frame(g, style="Card.TFrame")
+            row.grid(row=7 + k, column=1, sticky="w")
+            cb = ttk.Combobox(row, state="readonly", width=30, height=20)
+            cb.pack(side="left")
+            var = tk.IntVar()
+            sp = ttk.Spinbox(row, from_=-10, to=20, width=5, textvariable=var,
+                             command=lambda k=k: self._skill(k))
+            sp.pack(side="left", padx=4)
+            sp.bind("<KeyRelease>", lambda _e, k=k: self._skill(k))
+            ttk.Label(row, text="points", style="Card.Muted.TLabel").pack(side="left")
+            cb.bind("<<ComboboxSelected>>", lambda _e, k=k: self._skill(k))
+            self.skills.append((cb, var))
+        pr = ttk.Frame(g, style="Card.TFrame")
+        pr.grid(row=9, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        ttk.Button(pr, text="Item pouch...", command=lambda: self._pairs("pouch")).pack(side="left")
+        ttk.Button(pr, text="Ammo pouch...", command=lambda: self._pairs("ammo")).pack(side="left", padx=4)
+        self.pouch_lab = ttk.Label(g, text="", style="Card.Muted.TLabel", wraplength=470, justify="left")
+        self.pouch_lab.grid(row=10, column=0, columnspan=2, sticky="w", pady=(4, 0))
+
+    # ----------------------------------------------------------------- load
+    def load(self, q):
+        p = arena.read_set(q, self.index)
+        self.pairs = p
+        types = list(arena.WEAPON_TYPES)
+        self.wtype.configure(values=[arena.type_name(t) for t in types])
+        t, w = p[0]
+        if t in types:
+            self.wtype.current(types.index(t))
+        else:
+            self.wtype.set(arena.type_name(t) if t else "")
+        self._fill_weapons(t)
+        self.weapon.set(arena.equip_name(t, w) if t else "")
+        for key, cb in self.armor.items():
+            et = arena.SLOT_TYPES[key]
+            cb.configure(values=arena.names(et))
+            cb.set(arena.equip_name(et, p[arena.SLOT_INDEX[key]][1]))
+        self.talisman.configure(values=arena.names(6))
+        self.talisman.set(arena.equip_name(6, p[arena.SLOT_INDEX["talisman"]][1]))
+        sk = arena.skill_names()
+        for k, (cb, var) in enumerate(self.skills):
+            tree, pts = p[9 + k]
+            cb.configure(values=sk)
+            cb.set(sk[tree] if 0 <= tree < len(sk) else f"#{tree}")
+            pts &= 0xFF                                  # points: a signed byte
+            var.set(pts - 0x100 if pts >= 0x80 else pts)
+        self._summary()
+
+    def _fill_weapons(self, t):
+        self.weapon.configure(values=arena.names(t) if t else [])
+
+    def _summary(self):
+        p = self.pairs
+        self.sum.configure(text=_(arena.summary(p)) if not p[0][1] else
+                           f"{arena.type_name(p[0][0])}: {arena.equip_name(*p[0])}")
+        po = [f"{G.item_name(i)} ×{n}" for i, n in arena.pouch(p) if i]
+        am = [f"{G.item_name(i)} ×{n}" for i, n in arena.ammo(p) if i]
+        self.pouch_lab.configure(text=_("Item pouch: ") + (", ".join(po) or _("(empty)"))
+                                 + "\n" + _("Ammo pouch: ") + (", ".join(am) or _("(empty)")))
+
+    # ---------------------------------------------------------------- edits
+    def _write(self):
+        arena.write_set(self.tab.q, self.index, self.pairs)
+        self._summary()
+        self.tab.editor.changed()
+
+    def _wtype(self, _e=None):
+        if self.tab.loading:
+            return
+        t = arena.WEAPON_TYPES[self.wtype.current()]
+        self.pairs[0] = [t, 1 if len(arena.names(t)) > 1 else 0]
+        self._fill_weapons(t)
+        self.weapon.set(arena.equip_name(t, self.pairs[0][1]))
+        self._write()
+
+    def _set_equip(self, key, cb):
+        if self.tab.loading:
+            return
+        i = cb.current()
+        if i < 0:
+            return
+        slot = arena.SLOT_INDEX[key]
+        et = self.pairs[0][0] if key == "weapon" else (6 if key == "talisman" else arena.SLOT_TYPES[key])
+        self.pairs[slot] = [et if i else 0, i] if key != "weapon" else [et, i]
+        self._write()
+
+    def _skill(self, k):
+        if self.tab.loading:
+            return
+        cb, var = self.skills[k]
+        try:
+            pts = int(var.get())
+        except (tk.TclError, ValueError):
+            return
+        tree = max(0, cb.current())
+        self.pairs[9 + k] = [tree, pts & 0xFF if tree else 0]
+        self._write()
+
+    def _pairs(self, which):
+        rows = 24 if which == "pouch" else 8
+        start = 11 if which == "pouch" else 35
+        dlg = ItemPairsDialog(self.tab.app, _("Item pouch") if which == "pouch" else _("Ammo pouch"),
+                              self.pairs[start:start + rows], rows)
+        self.tab.wait_window(dlg)
+        if dlg.result is not None:
+            self.pairs[start:start + rows] = dlg.result
+            self._write()
+
+
+class GearTab(Tab):
+    """Challenge gear: the fixed equipment of the Challenge quests (and Grudge Matches)."""
+
+    def __init__(self, parent, editor):
+        super().__init__(parent, editor)
+        body = self.scroll_body()
+        top = Section(body, "Challenge gear", H.GEAR_TIP)
+        top.pack(fill="x", pady=(0, 10))
+        g = top.body
+        self.note = ttk.Label(g, text="", style="Card.Muted.TLabel", wraplength=900, justify="left")
+        self.note.grid(row=0, column=0, columnspan=8, sticky="w", pady=(0, 6))
+        self.times = {}
+        for c, (key, label) in enumerate((("s", "Rank S time"), ("a", "Rank A time"))):
+            ttk.Label(g, text=label, style="Card.TLabel").grid(row=1, column=c * 3, sticky="w")
+            var = tk.IntVar()
+            sp = ttk.Spinbox(g, from_=0, to=65535, width=7, textvariable=var, command=self._times)
+            sp.grid(row=1, column=c * 3 + 1, sticky="w", padx=4)
+            sp.bind("<KeyRelease>", lambda _e: self._times())
+            lab = ttk.Label(g, text="", style="Card.Muted.TLabel")
+            lab.grid(row=1, column=c * 3 + 2, sticky="w", padx=(0, 24))
+            self.times[key] = (var, lab)
+        bar = ttk.Frame(g, style="Card.TFrame")
+        bar.grid(row=2, column=0, columnspan=8, sticky="w", pady=(8, 0))
+        ttk.Button(bar, text="Copy the gear of a game quest...", command=self._copy).pack(side="left")
+        ttk.Button(bar, text="Clear all sets (hunters keep their own gear)", command=self._clear).pack(side="left", padx=6)
+        grid = ttk.Frame(body)
+        grid.pack(fill="both", expand=True)
+        grid.columnconfigure(0, weight=1, uniform="s")
+        grid.columnconfigure(1, weight=1, uniform="s")
+        self.cards = []
+        for i in range(arena.SETS):
+            c = GearSetCard(grid, self, i)
+            c.grid(row=i // 2, column=i % 2, sticky="nsew", padx=6, pady=6)
+            self.cards.append(c)
+
+    def load(self, q):
+        if not arena.has_gear(q):
+            return
+        used = arena.uses_gear(q.get("quest_no"))
+        self.note.configure(
+            text=_("The hunters choose one of these 5 sets and must hunt with it (this quest number is in the "
+                   "Arena Clerk's list).") if used else
+            _("This quest number is not in the Arena Clerk's list: the game ignores these sets and the "
+              "hunters keep their own equipment. Fixed gear works for Challenge quests 61000-61009 (pack 4) "
+              "and Grudge Matches 60000-60011."),
+            style="Card.Muted.TLabel" if used else "Card.Warn.TLabel")
+        s, a = arena.times(q)
+        for key, v in (("s", s), ("a", a)):
+            var, lab = self.times[key]
+            var.set(v)
+            lab.configure(text=f"{v // 60}:{v % 60:02d}")
+        for c in self.cards:
+            c.load(q)
+
+    def _times(self):
+        if self.loading or self.q is None:
+            return
+        try:
+            s, a = int(self.times["s"][0].get()), int(self.times["a"][0].get())
+        except (tk.TclError, ValueError):
+            return
+        arena.set_times(self.q, s, a)
+        for key, v in (("s", s), ("a", a)):
+            self.times[key][1].configure(text=f"{v // 60}:{v % 60:02d}")
+        self.editor.changed()
+
+    def _copy(self):
+        app = self.app
+        entries = []
+        for i, (label, q, cat) in enumerate(app.template_quests()):
+            if q is self.q or not arena.has_gear(q) or not arena.uses_gear(q.get("quest_no")):
+                continue
+            sets = [arena.summary(arena.read_set(q, k)) for k in range(arena.SETS)]
+            entries.append({"key": i, "name": label, "sub": " · ".join(sets[:3]), "cat": cat,
+                            "search": f"{label} " + " ".join(sets), "_q": q,
+                            "icon": (lambda q=q: app.icons.quest(q, 54))})
+        if not entries:
+            messagebox.showinfo(_("Challenge gear"), _("No quest with fixed gear was found."), parent=self)
+            return
+        res = picker._run(app, title=_("Copy the gear of a game quest"), entries=entries, tile=(460, 68),
+                          icon_size=54, columns=2)
+        if res is None:
+            return
+        src = next(e["_q"] for e in entries if e["key"] == res)
+        arena.put_raw_sets(self.q, arena.raw_sets(src))
+        s, a = arena.times(src)
+        arena.set_times(self.q, s, a)
+        self.do_load(self.q)
+        self.editor.changed()
+
+    def _clear(self):
+        if not messagebox.askyesno(_("Challenge gear"), _("Empty the 5 gear sets?"), parent=self):
+            return
+        arena.put_raw_sets(self.q, bytes(arena.SETS * arena.SET_SIZE))
+        self.do_load(self.q)
+        self.editor.changed()
+
+
 class AdvancedTab(Tab):
     """Developer mode only: category bits and every raw field."""
 
@@ -2422,7 +2812,7 @@ class EditorPage(ttk.Frame):
             t.destroy()
         self.tabs = []
         spec = [("General", GeneralTab), ("Monsters", MonstersTab), ("Supply Box", SupplyTab),
-                ("Rewards", RewardsTab), ("Text", TextTab)]
+                ("Rewards", RewardsTab), ("Text", TextTab), ("Challenge gear", GearTab)]
         if self.app.dev_mode.get():
             spec.append(("Advanced", AdvancedTab))
         for title, cls in spec:
@@ -2447,8 +2837,17 @@ class EditorPage(ttk.Frame):
         return True
 
     def reload_tabs(self):
+        q = self.quest
         for t in self.tabs:
-            t.do_load(self.quest)
+            if isinstance(t, GearTab):
+                show = q is not None and arena.has_gear(q) and (arena.uses_gear(q.get("quest_no")) or
+                                                                  self.app.dev_mode.get())
+                if not show and str(self.nb.select()) == str(t):
+                    self.nb.select(0)
+                self.nb.tab(t, state="normal" if show else "hidden")
+                if not show:
+                    continue
+            t.do_load(q)
 
     def refresh_card(self):
         q = self.quest

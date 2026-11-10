@@ -101,6 +101,21 @@ def run():
     app.after(1200, lambda: grab_toplevel("06_settings"))
     app.open_settings()
     settle(0.5)
+    from mhqe import arena, editor as E
+    ch = next((e.key for e in src.entries() if src.get(e.key) is not None
+               and arena.uses_gear(src.get(e.key).get("quest_no"))), None)
+    if ch is not None:
+        app.open_editor("packs", ch)
+        settle(0.6)
+        gear = next(t for t in app.editor.tabs if isinstance(t, E.GearTab))
+        app.editor.nb.select(gear)
+        settle(0.6)
+        shot("08_challenge_gear")
+        app.editor.nb.select(0)
+        settle(0.4)
+        shot("09_challenge_general")
+    else:
+        errors.append("ERROR no challenge quest found in pack 4")
     for page in ("library", "rom", "pack", "guide"):
         app.show_page(page)
         settle(0.5)

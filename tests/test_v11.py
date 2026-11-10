@@ -110,6 +110,8 @@ class Pack(unittest.TestCase):
     def test_siege_maps_follow_the_game(self):
         ruin = [a for a in self.man["added"] if a["stage"] == 7]
         self.assertTrue(ruin and all(a["donor"] == 69 and a["start_areas"] == [3] for a in ruin))  # Abyssal Lagiacrus
+        desert = [a for a in self.man["added"] if a["stage"] == P.DESERT]
+        self.assertTrue(desert and all(a["start_areas"] == [1, 2] for a in desert))     # area 2 too (1.4)
 
     def test_scope(self):
         ems = {a["em"] for a in self.man["added"]}
@@ -137,12 +139,14 @@ class Pack(unittest.TestCase):
             code[off:off + n] = p[i + 5:i + 5 + n]
             i += 5 + n
         before, after = P.read_placement(orig, table), P.read_placement(bytes(code), table)
-        added = {(a["em"], a["stage"]): a["donor"] for a in self.man["added"]}
         for em in range(86):
             for st, ptr in before[em]:
                 self.assertEqual(dict(after[em])[st], ptr)
             game_lists = lambda st: {q for e2 in before for s_, q in before[e2] if s_ == st}   # noqa: E731
             for st in set(dict(after[em])) - set(dict(before[em])):
+                if st == P.DESERT:                                       # 1.4: its own list, areas 1 and 2
+                    self.assertEqual(P.start_areas(bytes(code), dict(after[em])[st]), [1, 2])
+                    continue
                 self.assertIn(dict(after[em])[st], game_lists(st))      # one of the game's own start lists
         for a in self.man["added"]:
             self.assertEqual(P.start_areas(bytes(code), dict(after[a["em"]])[a["stage"]]), a["start_areas"])

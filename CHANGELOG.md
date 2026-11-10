@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.4.1
+
+* **Great Desert: the Dragonship fight.** Every Great Desert quest of the game is set up the same
+  way: objective A "Slay or repel" the Jhen Mohran, objective B the Dragonship's integrity (1000, or
+  1300 against Hallowed Jhen Mohran), the "Single objective" pattern and a Dragonship flag in the
+  category. A quest made from another template (a Ceadeus quest, for example) has no integrity, so
+  the Dragonship is destroyed and the quest fails as soon as it starts. New "Set up the Dragonship
+  fight" button on the General tab (also offered when the Great Desert map is chosen); it also
+  writes the game's failure text in the five languages. The checks now report this, and a Ceadeus
+  objective outside the Underwater Ruin. Objective type 0x2000 is now named "Dragonship integrity".
+* Fixes: the night warning no longer says the Great Desert has no night quest (Festival on the Sea of
+  Sand is one); the quest board line now says where it shows in the game (the quest's details on
+  the quest board).
+
 ## 1.4.0
 
 * **Who can join** (General tab): minimum Hunter Rank (HR 2 to 9), maximum number of players (1 to 3)

@@ -116,6 +116,27 @@ def run():
         shot("09_challenge_general")
     else:
         errors.append("ERROR no challenge quest found in pack 4")
+    ds = next((e.key for e in src.entries() if src.get(e.key) is not None
+               and src.get(e.key).get("map") == 6), None)
+    if ds is not None:
+        app.open_editor("packs", ds)
+        settle(0.6)
+        q = app.editor.quest
+        q.set_objective(2, 0, 0, 0, 0)                 # what a Ceadeus template leaves
+        q.set("category", q.get("category") & ~0x10000000)
+        app.editor.reload_tabs()
+        app.editor.nb.select(0)
+        settle(0.5)
+        shot("10_desert_broken")
+        gen = app.editor.tabs[0]
+        gen._ship_setup(ask=False)
+        settle(0.5)
+        shot("11_desert_fixed")
+        from mhqe import siege
+        if not siege.ship_ok(app.editor.quest):
+            errors.append("ERROR Dragonship setup did not restore the quest")
+    else:
+        errors.append("ERROR no Great Desert quest found in the packs")
     for page in ("library", "rom", "pack", "guide"):
         app.show_page(page)
         settle(0.5)

@@ -325,6 +325,14 @@ def _pack():
             "'Remove from Citra') brings the game back exactly. It can not be combined with another code.ips/code.bin "
             "mod.")
         )),
+        ("Great Desert: the Dragonship", (
+            _("Every Great Desert quest of the game is a Dragonship fight against a Jhen Mohran, and all of them are "
+            "set up the same way: objective A 'Slay or repel' the Jhen Mohran, objective B the Dragonship's integrity "
+            "(1000, or 1300 against Hallowed Jhen Mohran), the 'Single objective' pattern and a Dragonship flag in the "
+            "category. A quest without the integrity starts with a Dragonship at 0: it is destroyed and the quest "
+            "fails at once. The General tab's 'Set up the Dragonship fight' button (also offered when you choose the "
+            "Great Desert map) writes all of this, and the game's failure text in the five languages.")
+        )),
         ("Great Desert: area 2", (
             _("In the Jhen Mohran fight the sand ship moves from area 1 to area 2, so a monster that starts in area 1 "
             "is left behind. Jhen Mohran's own start list has only area 1, but its spawn data (which the pack lends "

@@ -12,7 +12,7 @@ from . import autofill, spawns, startpos, strays, supp, waves
 from . import gamedata as G
 from . import monsterpack
 from . import helptext as H
-from . import arena, picker, rules, theme
+from . import arena, picker, rules, siege, theme
 from .quest import LANG_NAMES, LANGS, MON_SLOTS, NANDO_MAX, QuestFormatError
 from .validate import worst
 from .widgets import ScrollFrame, Section, StatusDot, Tooltip, center_on, info, make_modal, parse_int
@@ -346,6 +346,13 @@ class GeneralTab(Tab):
         self.hunt_lab.grid(row=r, column=0, columnspan=4, sticky="w", pady=(0, 4))
         self._hunt_values: list[int] = []
         r += 1
+        self.ship_box = ttk.Frame(g, style="Card.TFrame")
+        self.ship_box.grid(row=r, column=0, columnspan=4, sticky="we", pady=(0, 4))
+        self.ship_lab = ttk.Label(self.ship_box, text="", style="Card.Muted.TLabel", wraplength=430, justify="left")
+        self.ship_lab.pack(side="top", anchor="w")
+        self.ship_btn = ttk.Button(self.ship_box, text="Set up the Dragonship fight", command=self._ship_setup)
+        self.ship_btn.pack(side="top", anchor="w", pady=(2, 0))
+        r += 1
         self.field(g, r, "Time limit", "time_min", tip=lambda: H.tip("time_min"), suffix="minutes")
         self.hooks["time_min"] = self._sync_frozen
         r += 1
@@ -472,7 +479,8 @@ class GeneralTab(Tab):
         self.req_hr.current(rules.HR_CHOICES.index(req.hr) if req.hr in rules.HR_CHOICES else 0)
         self.req_pl.current(rules.PLAYER_CHOICES.index(req.players) if req.players in rules.PLAYER_CHOICES else 0)
         self.req_naked.set(req.naked)
-        text = _("Quest board: ") + rules.board_text(q.get("special_flag"))
+        text = _("In the game, the quest's details on the quest board will show:") + "\n  " + \
+            rules.board_text(q.get("special_flag"))
         warn = rules.problems(q.get("special_flag"), q.get("special_cond"), q.get("special_cond2"))
         tw = rules.time_warning(q)
         if tw:
@@ -514,6 +522,7 @@ class GeneralTab(Tab):
         m = q.get("map")
         self.map_btn.show(self.app.icons.map(m, 64), G.map_name(m) + (f"  (map {m})" if self.dev else ""))
         self._hunt_load(q)
+        self._ship_load(q)
         self.auto_pen.set(q.get("penalty") == math.ceil(q.get("reward_money") / 3))
         self.pattern.set(q.get("clr_pattern") if q.get("clr_pattern") in PATTERNS else 0)
         for o in self.objs:
@@ -526,6 +535,43 @@ class GeneralTab(Tab):
         if self.q is not None:
             self.summary.configure(text=_("In the game:  ") + G.objectives_sentence(self.q))
             self.win_lab.configure(text=waves.win_text(self.q))
+
+    # ----- the Great Desert's Dragonship
+    def _ship_load(self, q):
+        if q.get("map") != siege.DESERT:
+            self.ship_box.grid_remove()
+            return
+        self.ship_box.grid()
+        if siege.jhen_of(q) is None:
+            text, warn = _("Great Desert: the game only uses this map for the Dragonship fight against a Jhen "
+                           "Mohran. Add one (Monsters tab) to set the fight up."), True
+        elif siege.ship_ok(q):
+            text, warn = _("Dragonship fight set up like the game's quests (integrity {}).").format(
+                q.objective(2)[3]), False
+        else:
+            text, warn = _("This Great Desert quest is not set up like the game's Dragonship fights: the "
+                           "Dragonship can be destroyed as soon as the quest starts."), True
+        self.ship_lab.configure(text=text, style="Card.Warn.TLabel" if warn else "Card.Muted.TLabel")
+        self.ship_btn.configure(state="normal" if siege.jhen_of(q) is not None and not siege.ship_ok(q)
+                                else "disabled")
+
+    def _ship_setup(self, ask=True):
+        q = self.q
+        if q is None or siege.jhen_of(q) is None:
+            return
+        if ask and not messagebox.askyesno(
+                _("Dragonship fight"),
+                _("Set this quest up like the game's Great Desert quests?\n\n"
+                  "- Objective A: slay or repel the Jhen Mohran\n"
+                  "- Objective B: the Dragonship's integrity ({})\n"
+                  "- Single objective, Dragonship flag on\n"
+                  "- Failure text: 'Reward or Dragonship Integrity hits 0, or time expires.' (5 languages)\n\n"
+                  "Other large monsters stay in the quest but are no longer objectives.").format(
+                    siege.JHEN[siege.jhen_of(q)]), parent=self):
+            return
+        siege.apply_ship(q)
+        self.editor.reload_tabs()
+        self.editor.changed()
 
     # ----- where the hunters start (the field the game calls StartParam)
     def _hunt_load(self, q):
@@ -602,6 +648,8 @@ class GeneralTab(Tab):
                     strays.apply(q, sref[0])
                 else:
                     strays.make_stable(q)
+        if m == siege.DESERT and siege.jhen_of(q) is not None and not siege.ship_ok(q):
+            self._ship_setup()
         self.editor.reload_tabs()
         self.editor.changed()
 

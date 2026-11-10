@@ -53,7 +53,7 @@ OBJ_TYPES = {
     0x0404: "Repel (siege)",
     0x2515: "Repel siege (Jhen Mohran)",
     0x4014: "Repel siege (Ceadeus)",
-    0x2000: "Siege damage",
+    0x2000: "Dragonship integrity (Great Desert)",
 }
 OBJ_MONSTER_TYPES = (0x0001, 0x0081, 0x0101, 0x8101, 0x0404, 0x2515, 0x4014)
 OBJ_ITEM_TYPES = (0x0002,)

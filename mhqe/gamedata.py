@@ -195,7 +195,7 @@ def maps_for_monster(em_id: int) -> list[int]:
 OBJ_NAMES = {0x0000: "No objective", 0x0001: "Hunt", 0x0081: "Capture", 0x0101: "Slay",
              0x8101: "Slay small monsters", 0x0002: "Deliver", 0x0404: "Repel",
              0x2515: "Slay or repel Jhen Mohran", 0x4014: "Slay or repel Ceadeus",
-             0x2000: "Repel by damage (siege)"}
+             0x2000: "Dragonship integrity (Great Desert)"}
 OBJ_ITEM = (0x0002,)
 OBJ_MONSTER = (0x0001, 0x0081, 0x0101, 0x8101, 0x0404, 0x2515, 0x4014)
 # "mode" (high 16 bits of the objective word) as used by the game's quests
@@ -237,7 +237,7 @@ def _objective_fr(q, which: int) -> str | None:
             return "Survivre jusqu'à la fin du temps ou livrer un " + item_name(tid)
         return f"Livrer {max(cnt, 1)} {item_name(tid)}"
     if typ == 0x2000:
-        return f"Infliger {cnt} dégâts de siège"
+        return f"Intégrité du drakkar : {cnt}"
     verb = FR_VERBS.get(VERBS.get(typ, "Complete"), "Terminer")
     target = mon_name(tid)
     if typ in (0x0404, 0x2515, 0x4014):
@@ -261,7 +261,7 @@ def objective_sentence(q, which: int) -> str | None:
             return "Survive until time expires or deliver a Paw Pass Ticket"
         return f"Deliver {_count_name(cnt, name, item=True)}"
     if typ == 0x2000:
-        return f"Deal {cnt} siege damage"
+        return f"Dragonship integrity: {cnt}"
     verb = VERBS.get(typ, OBJ_NAMES.get(typ, "Complete"))
     target = mon_name(tid)
     if typ in (0x0404, 0x2515, 0x4014):              # count is not a number of monsters
@@ -298,5 +298,7 @@ def objectives_sentence(q) -> str:
         return "Aucun objectif défini" if fr else "No objective set"
     if len(parts) == 1:
         return parts[0]
+    if q.objective(2)[0] == 0x2000:                      # the Dragonship's integrity, not a goal
+        return f"{parts[0]}  ({parts[1]})"
     joiner = ({1: " et ", 2: " ou "} if fr else {1: " and ", 2: " or "}).get(q.get("clr_pattern"), " / ")
     return parts[0] + joiner + parts[1][0].lower() + parts[1][1:]

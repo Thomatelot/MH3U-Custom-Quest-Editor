@@ -96,7 +96,7 @@ def flag_for(req: Req, current: int) -> int:
     if exact is not None:
         return exact
     if req.hr and 2 <= req.hr <= 8:
-        return 1 + req.hr - 1 + 0 if False else req.hr     # 'Must be HR n or higher' lines are flags 1-8
+        return req.hr                  # the 'Must be HR n or higher' lines are flags 1-8
     return 0
 
 
@@ -138,7 +138,7 @@ def set_night(q, night: bool) -> None:
 
 
 # maps whose game quests are all by day (night untested there)
-DAY_ONLY_MAPS = {6, 7, 8, 9, 10, 11, 12, 15}
+DAY_ONLY_MAPS = {7, 8, 9, 10, 11, 12, 15}      # the Great Desert has a night quest (Festival on the Sea of Sand)
 
 
 def time_warning(q) -> str | None:

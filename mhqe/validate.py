@@ -9,7 +9,7 @@ import math
 from collections import namedtuple
 
 from . import gamedata as G
-from . import arena, monsterpack, rules, startpos, waves
+from . import arena, monsterpack, rules, siege, startpos, waves
 from .quest import LANGS, NANDO_FIELDS, NANDO_MAX, OBJ_MONSTER_TYPES, Quest
 
 Issue = namedtuple("Issue", "level text")
@@ -46,6 +46,8 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
         add("warning", text)
     for text in arena.problems(q):
         add("warning", text)
+    for level, text in siege.problems(q):
+        add(level, text)
     if rules.time_warning(q):
         add("warning", rules.time_warning(q))
     cat = q.get("category")
@@ -150,7 +152,7 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
                            f"not one of this quest's large monsters.")
         if count <= 0 and typ:
             add("warning", f"Objective {which} has a count of {count}.")
-        if which == 2 and clr == 0:
+        if which == 2 and clr == 0 and typ != siege.SHIP_OBJ:
             add("info", "Objective B is filled but the pattern is 'Single objective'.")
 
     for table, rewards in ((1, q.reward1), (2, q.reward2)):

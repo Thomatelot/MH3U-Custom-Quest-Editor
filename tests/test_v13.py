@@ -157,3 +157,32 @@ class Requirements(unittest.TestCase):
         arena.write_set(q, 0, p)
         self.assertEqual(arena.read_set(q, 0)[0], [7, 1])
         self.assertEqual(len(q.data), len(before))
+
+
+@unittest.skipUnless(os.environ.get("MHQE_QUEST_DIR"), "MHQE_QUEST_DIR not set")
+class Dragonship(unittest.TestCase):
+    def load(self, n):
+        from mhqe.quest import Quest
+        return Quest((Path(os.environ["MHQE_QUEST_DIR"]) / f"q_{n:05d}.quest").read_bytes())
+
+    def test_game_desert_quests_pass_and_setup_restores_them(self):
+        from mhqe import rules, siege
+        for n in (1712, 11823):
+            game = self.load(n)
+            self.assertTrue(siege.ship_ok(game))
+            self.assertEqual(siege.problems(game), [])
+            q = game.copy()
+            q.set("category", (q.get("category") & ~siege.SHIP_BIT))
+            q.set_objective(1, 0x4014, 70, 1, 0)          # a Ceadeus template's objectives
+            q.set_objective(2, 0, 58, 1, 0)
+            q.set("clr_pattern", 1)
+            self.assertIn("error", [lv for lv, _t in siege.problems(q)])
+            self.assertTrue(siege.apply_ship(q))
+            for f in ("category", "clr_pattern", "obj1_param", "obj1_id", "obj1_num",
+                      "obj2_param", "obj2_id", "obj2_num"):
+                self.assertEqual(q.get(f), game.get(f), f)
+            for lang in range(5):
+                self.assertEqual(q.get_text("failure", lang), game.get_text("failure", lang))
+        night = self.load(11823)
+        self.assertTrue(rules.is_night(night))
+        self.assertIsNone(rules.time_warning(night))       # the Great Desert has a night quest

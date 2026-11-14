@@ -50,12 +50,13 @@ More in [SECURITY.md](SECURITY.md) and [THIRD_PARTY.md](THIRD_PARTY.md).
 5. [What the editor changes and what to back up](#what-the-editor-changes-and-what-to-back-up)
 6. [Monster pack (ROM hack)](#monster-pack-rom-hack)
 7. [Real 3DS](#real-3ds)
-8. [What was tested, and what was not](#what-was-tested-and-what-was-not)
-9. [Advice](#advice)
-10. [Share your experience](#share-your-experience)
-11. [Troubleshooting](#troubleshooting)
-12. [Command line, tests and tools](#command-line-tests-and-tools)
-13. [Security, credits and licence](#security-credits-and-licence)
+8. [Phone notebook (Android)](#phone-notebook-android)
+9. [What was tested, and what was not](#what-was-tested-and-what-was-not)
+10. [Advice](#advice)
+11. [Share your experience](#share-your-experience)
+12. [Troubleshooting](#troubleshooting)
+13. [Command line, tests and tools](#command-line-tests-and-tools)
+14. [Security, credits and licence](#security-credits-and-licence)
 
 ## What it does
 
@@ -98,6 +99,9 @@ what it does, with the values the game's own quests use; the built-in **Guide** 
   monster parts, jewels...) following the game's icons. Search finds anything.
 * **Monster pack (ROM hack, optional):** 47 large monsters on all 14 maps (497 new combinations), and
   monster sizes above the game's 255 % limit, up to 2000 % (Developer mode; untested in the game).
+* **Phone notebook (Android app):** write quests on your phone when you have an idea, send them to the
+  PC (Google Drive, USB cable, share), and the editor turns them into real quests. See
+  [Phone notebook](#phone-notebook-android).
 * **Game versions:** European (EU) and North American (US); choose yours in *Settings*.
 * **English or French** (*Settings > Language / Langue*): the interface, the guide and the checks, with
   the game's own French names for items, monsters and maps.
@@ -258,6 +262,29 @@ The author has **not** tried this on real hardware yet (this is a first version)
 as Citra's, but please tell how it went. Everyone who plays a quest together needs the same quest and
 the same mod files.
 
+## Phone notebook (Android)
+
+**MH3U Quest Notebook** is a small Android app (5.0 or newer) for writing quests away from the PC:
+name and texts, Village or Port, stars, map, monsters (size, strength, how they arrive), objective, money,
+who can join, day or night, rewards. It works offline, needs no permission, and keeps the quests on the
+phone.
+
+1. Copy [`android/MH3U-Quest-Notebook.apk`](android/MH3U-Quest-Notebook.apk) to the phone and open it
+   (Android asks once to allow installing apps from Files, Drive or your browser).
+2. Write a quest. The **Send** tab checks it, then saves it as a `.mh3ud` file (Google Drive, Downloads
+   for a USB cable...) or shares it (Drive, e-mail, Quick Share...).
+3. On the PC: **Library** page, **From phone...**, pick the file(s). The editor copies the game quest of
+   the same map that fits best (set the game's files in *Settings*), applies the draft, fills in the supply
+   box (and the rewards if you left them automatic) from the game's quests, and lists what it did.
+   Open the quest to check it, then send it to the game as usual.
+
+<p align="center">
+<img src="docs/images/phone-notebook.png" width="800" alt="The phone notebook: quest settings, monsters, sending to the PC">
+</p>
+
+The texts are written in one language and copied into the game's five. Details and how the app is
+built (no Android SDK needed): [android/README.md](android/README.md).
+
 ## What was tested, and what was not
 
 The author could test on **Citra (European version, Windows)** only; this table says honestly what
@@ -284,6 +311,7 @@ rests on a test in the game and what rests on reading the game's files.
 | Challenge gear | 🔎 Layout from mh3u-quest-studio, checked on the 3DS Challenge quests (names and sets read back correctly). Editing not tried in the game |
 | Great Desert area 2 (Monster pack) | 🔎 Uses Jhen Mohran's own area-2 spawn data; not tried in the game |
 | Monster sizes above 255 % (Monster pack) | 🔎 The size code and table were read in the 3DS program and the patched table checked by the tests; **not tried in the game** |
+| Phone notebook (Android app) | 🔎 The page was tested in a phone-sized browser, the APK checked (signatures, contents) and the import tested on the PC. **Not yet tried on a real phone**: please report |
 | French interface | 🔎 Interface, checks and guide translated; item, monster and map names from the game's French text. A few rare texts may still show in English |
 | **Real 3DS**, Japanese version, Linux, macOS | ❔ Not tested by the author: you may be the first to find out. Please report |
 
@@ -342,6 +370,7 @@ The editor needs nothing but the `.bat` / `python mh3u_quest_editor.py`. For dev
     python tools/build_map_zones.py <mh3u-quest-studio>/data/art_layout.json # area centres of the maps
     python tools/build_fr_names.py <romfs>                                   # the game's French names
     python tools/build_equipment.py <romfs>                                  # weapon / armor / skill names
+    python tools/build_phone_data.py                                         # lists of the phone notebook (android/web/data.js)
 
 `tools/build_benchmarks.py`, `build_spawns.py` and `build_start_usage.py` rebuild the tables in
 `data/` from your extracted game. **The tests need your own game files** (nothing of the game is in

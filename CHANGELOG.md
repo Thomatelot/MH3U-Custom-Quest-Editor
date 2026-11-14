@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.0
+
+* **Phone notebook (Android app).** `android/MH3U-Quest-Notebook.apk`: write quests on the phone (texts,
+  stars, map, monsters with size and strength, objective, money, who can join, day or night, rewards),
+  offline, in English or French, then save them as `.mh3ud` files to Google Drive or Downloads, or share
+  them. Library page, **From phone...**: each draft becomes a library quest, made from the game quest of
+  the same map that fits best, with the supply box (and automatic rewards) from the game's quests and a
+  report of what was filled in. Not yet tried on a real phone.
+
 ## 1.5.0
 
 Ideas and research from testers, checked against the game's code (EU and US).

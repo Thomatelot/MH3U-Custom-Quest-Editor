@@ -24,7 +24,7 @@ from . import autofill, guide, spawns, supp
 from . import gamedata as G
 from . import monsterpack
 from . import helptext as H
-from . import arena, i18n, picker, progress, strays, theme
+from . import arena, i18n, phone, picker, progress, strays, theme
 from .i18n import _
 from .editor import EditorPage, stars
 from .finder import Finder
@@ -208,6 +208,7 @@ class QuestList(ttk.Frame):
                     ("dup", "Duplicate", a.duplicate_library, False),
                     ("togame", "To game...", a.send_to_game, False),
                     ("import", "Import...", a.import_to_library, False),
+                    ("phone", "From phone...", a.import_phone, False),
                     ("export", "Export...", a.export_quest, False),
                     ("delete", "Delete", a.delete_library, False)]
         else:
@@ -232,7 +233,7 @@ class QuestList(ttk.Frame):
                  "new": src is not None and (self.kind == "library" or free or bool(self.app.free_slots(self.packs))),
                  "put": key is not None, "dup": q is not None, "tolib": q is not None,
                  "export": q is not None, "clear": q is not None, "togame": q is not None,
-                 "delete": q is not None, "import": src is not None,
+                 "delete": q is not None, "import": src is not None, "phone": src is not None,
                  "revert": q is not None and self.kind == "rom" and key is not None and int(key) in src.modified}
         if self.kind == "rom":
             rules["new"] = src is not None
@@ -1261,6 +1262,59 @@ class App(tk.Tk):
             self.pages["library"].build_status()
             self.pages["library"].list.refresh()
             self.set_status(f"{added} quest(s) imported into your library.")
+
+    def import_phone(self):
+        """Quests written on a phone with the MH3U Quest Notebook (.mh3ud): each one becomes a
+        library quest, made from the best game quest of the same map (see phone.py)."""
+        lib = self.sources["library"]
+        if lib is None:
+            return
+        paths = filedialog.askopenfilenames(parent=self, title=_("Quests written on the phone"),
+                                            filetypes=phone.FILE_TYPES)
+        if not paths:
+            return
+        drafts = []
+        for p in paths:
+            try:
+                drafts += phone.read_file(p)
+            except phone.DraftError as exc:
+                messagebox.showwarning(APP_TITLE, f"{Path(p).name}\n\n{_(str(exc))}", parent=self)
+        if not drafts:
+            return
+        candidates = self.template_quests()
+        packs = self.sources.get("packs")
+        donors = [e.quest for e in packs.entries() if e.quest is not None] if packs else []
+        pack, _inst = self.monster_pack()
+        keys, lines = [], []
+        for d in drafts:
+            title = d["name"] or _("(untitled quest)")
+            hit = phone.best_template(d, candidates)
+            if hit is None:
+                lines.append("✖ " + title + "\n    " + _(
+                    "No quest on {} to start from. Choose the game's files in Settings (the editor copies one "
+                    "of the game's quests of the same map), or put a quest of this map in your library.")
+                    .format(G.map_name(d["map"])))
+                continue
+            label, tpl, cat = hit
+            q = tpl.copy()
+            try:
+                notes = phone.apply(q, d, pack=pack, donors=donors,
+                                    source_no=tpl.get("quest_no") if cat == "Game quests" else None)
+            except (phone.DraftError, QuestFormatError, ValueError) as exc:
+                lines.append("✖ " + title + "\n    " + _(str(exc)))
+                continue
+            keys.append(lib.add(q, d["name"]))
+            lines.append("✔ " + title + "\n    " + _("Made from: {}").format(label) +
+                         "".join("\n    • " + n for n in notes))
+        self.pages["library"].build_status()
+        self.pages["library"].list.refresh(select=keys[-1] if keys else None)
+        if keys:
+            self.set_status(_("{} quest(s) from the phone added to your library.").format(len(keys)))
+        messagebox.showinfo(_("Quests from the phone"), "\n\n".join(lines) + (
+            "\n\n" + _("Open each quest to check it: the Checks line of the editor says what is left to fix.") if keys else ""),
+            parent=self)
+        if len(keys) == 1:
+            self.open_editor("library", keys[0])
 
     def new_library_quest(self):
         lib = self.sources["library"]

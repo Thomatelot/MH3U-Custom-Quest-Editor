@@ -43,3 +43,8 @@ venv/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# ---- Android signing keys: NEVER commit these ----
+*.p12
+*.jks
+*.keystore

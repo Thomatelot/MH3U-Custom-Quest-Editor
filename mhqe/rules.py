@@ -87,11 +87,22 @@ def conds_for(req: Req) -> tuple[int, int] | None:
     return out[0], out[1]
 
 
-def flag_for(req: Req, current: int) -> int:
+ARENA_BIT, GATHER_BIT = 0x08000000, 0x20000000
+# 'Max participants: 4' lines, which the game's arena quests show instead of the plain HR line
+ARENA_LINES = {None: 27, 3: 15, 6: 16, 8: 17}
+
+
+def is_arena(q) -> bool:
+    return bool(q.get("category") & ARENA_BIT) or 60000 <= q.get("quest_no") < 62000
+
+
+def flag_for(req: Req, current: int, arena: bool = False) -> int:
     """The board line for these rules: the current one if it already says exactly that, else the
     first line that does, else the closest one that claims nothing false (HR line, or 'None.')."""
     if 0 <= current < len(CLAIMS) and CLAIMS[current] == req:
         return current
+    if arena and req.players == 4 and not req.naked and req.hr in ARENA_LINES:
+        return ARENA_LINES[req.hr]
     exact = next((f for f, r in enumerate(CLAIMS) if r == req and f not in _NO_AUTO), None)
     if exact is not None:
         return exact
@@ -146,3 +157,29 @@ def time_warning(q) -> str | None:
         return (f"No quest of the game takes place at night on {G.map_name(q.get('map'))}: "
                 "untested, the map may have no night version.")
     return None
+
+
+# ------------------------------------------------------------------ arena carves
+# Every Grudge Match and Challenge quest has both category bits 0x08000000 and 0x20000000 (the
+# first one is set in those 22 quests only, the second one also in the gathering quests), and in
+# those quests carving a monster gives items (Mega Potions...) instead of monster materials. A
+# tester got ordinary carves back by clearing category bits of an arena quest; which of the two
+# bits decides has not been established, so the editor sets or clears both.
+CARVE_BITS = ARENA_BIT | GATHER_BIT
+
+
+def carves(q) -> str:
+    """'arena', 'normal' or 'mixed' (only one of the two bits)."""
+    v = q.get("category") & CARVE_BITS
+    return "arena" if v == CARVE_BITS else "normal" if v == 0 else "mixed"
+
+
+def set_carves(q, arena: bool) -> None:
+    c = q.get("category")
+    q.set("category", (c | CARVE_BITS) if arena else (c & ~CARVE_BITS))
+
+
+# ------------------------------------------------------------------ monster rank
+# The quest field the game calls EnemyLv (prog_no here). Every quest of the game follows its place:
+MONSTER_RANKS = {0: "Low rank (Village)", 1: "Low rank (Port)", 2: "High rank (Village)",
+                 3: "High rank (Port)", 4: "G rank"}

@@ -1,0 +1,1 @@
+{"_about":"Byte 11 of the game's start records: the 'form' a monster is given when it appears (monster -> internal stage -> one value per start position). Only non-zero lists.","forms":{"41":{"1":[0,0,0,0,2],"4":[0,0,0,2],"5":[0,3],"8":[0,0,0,0,2,3],"12":[0,0,2]},"72":{"1":[0,0,0,0,2],"4":[0,0,0,2],"5":[0,3],"8":[0,0,0,0,2,3],"12":[0,0,2]},"74":{"5":[0,1]}}}

@@ -502,3 +502,21 @@ def describe_stats(em: int, hp: int, at: int, df: int, category: int = 0) -> dic
         "hp_t": stat_tier("hp", hp), "atk_t": stat_tier("at", at), "dmg_t": stat_tier("etc", df),
         "hp_mult": s.hp_mult, "atk_mult": s.atk_mult, "dmg_mult": s.dmg_mult,
     }
+
+RANK_TIP = ("Which rank the large monsters fight at (the game's EnemyLv): low rank, high rank or G rank, "
+            "Village or Port. Every quest of the game sets the one of its own rank; G rank monsters use "
+            "their G rank moves and behaviour. It does not change their health or attack (the Monsters "
+            "tab sets those). Which setting decides G rank rewards is not established: the game's supply-box "
+            "code reads the rank from the quest number (11600-11999 = G rank Port quests, event quests 20300 "
+            "and up), so the rewards may follow the number too. Untested in the game.")
+CARVE_TIP = ("The Grudge Match and Challenge quests make carving give items (Mega Potions, Max Potions...) "
+             "instead of monster materials. They are the only quests with both category flags 0x08000000 "
+             "and 0x20000000. A tester got ordinary carves back on an arena quest by clearing category "
+             "flags; this box sets or clears both. Which of the two does it alone is not established yet. "
+             "Untick it to give players real monster materials in an arena quest.")
+PROGRESS_TIP = ("How the Village and Port open their quests. The game lists every quest file of "
+                "quest00.arc by its number and star rank, then hides those that wait for other quests. "
+                "A key quest counts towards the urgent quest of its rank: the urgent quest opens once all "
+                "its key quests are cleared. A quest of your own counts only when the game knows its number: "
+                "the Monster pack registers the new quests in the game's quest list (build and install it "
+                "again after adding one).")

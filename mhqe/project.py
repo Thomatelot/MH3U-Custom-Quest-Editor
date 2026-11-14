@@ -343,7 +343,7 @@ class RomSource:
 
     kind = "rom"
     title = "Base-game quests (ROM mod)"
-    can_create = False
+    can_create = True                # new Village / Port quests are added to quest00.arc
 
     def __init__(self, romfs: str | Path, workspace: Path | None = None,
                  load_edits: bool = True):
@@ -357,6 +357,7 @@ class RomSource:
         self.quests: dict[int, Quest] = {}
         self.originals: dict[int, bytes] = {}
         self.modified: set[int] = set()       # differs from the original game file
+        self.added: set[int] = set()          # quests of your own (not in the game's archive)
         self.unsaved: set[int] = set()        # changed since the last Save
         self._arc: arcmod.Arc | None = None
         self.reload()
@@ -384,6 +385,28 @@ class RomSource:
                 self.quests[no] = Quest(data)
             except QuestFormatError:
                 continue
+        self.added = set()
+        if self.load_edits and self.workspace.is_dir():
+            for f in sorted(self.workspace.glob("q_*.quest")):
+                try:
+                    no = int(f.name[2:7])
+                    if no not in self.originals:
+                        self.quests[no] = Quest(f.read_bytes())
+                        self.added.add(no)
+                        self.modified.add(no)
+                except (ValueError, OSError, QuestFormatError):
+                    continue
+
+    def create(self, quest_no: int, template: Quest) -> Quest:
+        """A quest of your own with this number, copied from a template."""
+        if quest_no in self.quests:
+            raise PackError(f"Quest number {quest_no} is already used.")
+        q = template.copy()
+        q.set("quest_no", quest_no)
+        self.quests[quest_no] = q
+        self.added.add(quest_no)
+        self.mark_dirty(str(quest_no))
+        return q
 
     def entries(self) -> list[Entry]:
         out = []
@@ -417,6 +440,13 @@ class RomSource:
     def revert(self, key: str) -> None:
         no = int(key)
         (self.workspace / file_name_for(no)).unlink(missing_ok=True)
+        if no in self.added:                   # a quest of your own: undoing it removes it
+            self.added.discard(no)
+            self.quests.pop(no, None)
+            self.modified.discard(no)
+            self.unsaved.discard(no)
+            self.removed = True
+            return
         self.quests[no] = Quest(self.originals[no])
         self.modified.discard(no)
         self.unsaved.discard(no)
@@ -425,10 +455,11 @@ class RomSource:
         return None
 
     def dirty(self) -> bool:
-        return bool(self.unsaved)
+        return bool(self.unsaved) or getattr(self, "removed", False)
 
     def save(self) -> list[Path]:
         """Store the edits in the workspace (nothing is exported yet)."""
+        self.removed = False
         self.workspace.mkdir(parents=True, exist_ok=True)
         written = []
         for no in sorted(self.modified):
@@ -451,6 +482,9 @@ class RomSource:
                         shutil.rmtree(d)
         loose = out / "quest" / self.region_dir
         loose.mkdir(parents=True, exist_ok=True)
+        for old in loose.glob("q_*.quest"):        # quests removed since the last export
+            if old.name[2:7].isdigit() and int(old.name[2:7]) not in self.modified:
+                old.unlink()
         for no in sorted(self.modified):
             p = loose / file_name_for(no)
             write_atomic(p, self.quests[no].to_bytes())
@@ -464,6 +498,11 @@ class RomSource:
                     no = int(e.leaf[2:])
                     if no in self.modified:
                         e.data = self.quests[no].to_bytes()
+            model = next(e for e in self._arc.entries if e.leaf.startswith("q_"))
+            folder = model.path[:len(model.path) - len(model.leaf)]
+            for no in sorted(self.added):          # the game lists every quest file of the archive
+                arc.entries.append(arcmod.ArcEntry(f"{folder}q_{no:05d}", model.type_hash, model.flags,
+                                                   self.quests[no].to_bytes()))
             target = out / "arc" / "quest" / self.region_dir / "quest00.arc"
             target.parent.mkdir(parents=True, exist_ok=True)
             write_atomic(target, arcmod.build(arc))

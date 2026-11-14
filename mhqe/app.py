@@ -24,7 +24,7 @@ from . import autofill, guide, spawns, supp
 from . import gamedata as G
 from . import monsterpack
 from . import helptext as H
-from . import arena, i18n, picker, theme
+from . import arena, i18n, picker, progress, strays, theme
 from .i18n import _
 from .editor import EditorPage, stars
 from .finder import Finder
@@ -46,6 +46,7 @@ ROM_OUTPUT = APP_DIR / "output" / "MH3U_Quest_Mod" / "romfs"
 PACK_OUTPUT = APP_DIR / "output"                     # + MH3U_Monster_Pack_<EU|US>
 SUPPLY_OUTPUT = APP_DIR / "output" / "MH3U_Supply_Mod" / "romfs"
 LIBRARY_DIR = APP_DIR / "library"
+ROAMING_FILE = APP_DIR / "workspace" / "roaming_lists.json"      # roaming-monster lists of your own
 QUEST_TYPES = [("MH3U quest", "*.mh3uq *.quest"), ("All files", "*.*")]
 EVENT_PACKS = ("quest1", "quest2", "quest3")
 CHALLENGE_PACKS = ("quest4",)
@@ -211,6 +212,7 @@ class QuestList(ttk.Frame):
                     ("delete", "Delete", a.delete_library, False)]
         else:
             spec = [("edit", "Edit", a.edit_selected, True),
+                    ("new", "New quest...", a.new_rom_quest, False),
                     ("tolib", "Copy to my library", a.to_library, False),
                     ("revert", "Undo my changes", a.revert_rom, False)]
         self.buttons = {}
@@ -232,6 +234,8 @@ class QuestList(ttk.Frame):
                  "export": q is not None, "clear": q is not None, "togame": q is not None,
                  "delete": q is not None, "import": src is not None,
                  "revert": q is not None and self.kind == "rom" and key is not None and int(key) in src.modified}
+        if self.kind == "rom":
+            rules["new"] = src is not None
         for k, b in self.buttons.items():
             b.state(["!disabled"] if rules.get(k, True) else ["disabled"])
 
@@ -385,7 +389,10 @@ class MonsterPackPage(ttk.Frame):
             "loads. Test a quest in Citra before playing it seriously.\n"
             "- Water arenas, Sacred Land, Tower, the siege maps (Great Desert, Underwater Ruin, Tainted Sea) and "
             "the bosses Alatreon and Dire Miralis away from their own maps are the most likely to go wrong. "
-            "Ceadeus and Jhen Mohran (and their variants) stay on their own maps.\n"
+            "Ceadeus and Jhen Mohran (and their variants) can now go anywhere too, but they are built for one "
+            "scripted fight and borrow another monster's routes elsewhere: the riskiest of all.\n"
+            "- The pack also registers your new base-game quests in the game's quest list (so they count as "
+            "cleared) and writes your own roaming-monster lists: build it again after changing them.\n"
             "- Multiplayer: every player must install the same pack. Built from the same game version it is "
             "identical for everybody: compare the fingerprint below. A player without it does not see the monster.\n"
             "- Big sizes: the pack also extends the game's size table, so a quest can make a monster up to "
@@ -445,6 +452,10 @@ class MonsterPackPage(ttk.Frame):
                         + ("  " + _("Built by an older version of the editor (no big sizes or no Great Desert "
                                     "area 2): build it again.") if old_pack else "")
                         if built else _("Pack not built yet."))).pack(anchor="w", pady=(4, 0))
+        if built and not monsterpack.extras_match(built, app.pack_extras()):
+            ttk.Label(f, style="Card.Warn.TLabel", text=_(
+                "Your new base-game quests or roaming-monster lists changed since the pack was built: build it "
+                "again, then install it.")).pack(anchor="w")
         if inst:
             same = built and built.get("fingerprint") == inst.get("fingerprint")
             ttk.Label(f, style="Card.Ok.TLabel" if same or not built else "Card.Warn.TLabel", text=(
@@ -683,6 +694,7 @@ class App(tk.Tk):
         super().__init__()
         self.withdraw()
         self.settings = Settings()
+        strays.load_custom(ROAMING_FILE)
         i18n.set_language(self.settings.get("language") or i18n.system_language())
         G.set_names_language(i18n.LANG)
         arena.set_language(i18n.LANG)
@@ -982,7 +994,8 @@ class App(tk.Tk):
             return []
         pack, installed = self.monster_pack()
         found = validate_quest(quest, src.numbers_except(key), in_pack=src.kind == "packs",
-                               fit_problem=src.fit_problem(key), monster_pack=pack, pack_installed=installed)
+                               fit_problem=src.fit_problem(key), monster_pack=pack, pack_installed=installed,
+                               all_quests=src.quests if src.kind == "rom" else None)
         no = quest.get("item_set_no")
         if self.boxes.is_custom(no):
             from .validate import Issue
@@ -1326,9 +1339,63 @@ class App(tk.Tk):
     def revert_rom(self):
         src = self.sources["rom"]
         key = self.pages["rom"].list.selected()
-        if src and key and messagebox.askyesno(APP_TITLE, "Undo your changes to this quest?", parent=self):
+        if not (src and key):
+            return
+        mine = int(key) in src.added
+        if messagebox.askyesno(APP_TITLE, "Remove this quest of yours from the base-game mod?" if mine else
+                               "Undo your changes to this quest?", parent=self):
             src.revert(key)
-            self.pages["rom"].list.refresh(select=key)
+            self.pages["rom"].list.refresh(select=None if mine else key)
+            if mine:
+                self.mark_unsaved()
+
+    def new_rom_quest(self):
+        """A new Village or Port quest, added to quest00.arc (base-game mod)."""
+        src = self.sources.get("rom")
+        if src is None:
+            return
+        where = picker._run(self, title="New base-game quest: where", tile=(420, 54), icon_size=0, columns=1,
+                            entries=[{"key": "village", "name": "Moga Village", "sub": "quests 1000-10999"},
+                                     {"key": "port", "name": "Port Tanzia", "sub": "quests 11000-12899"}])
+        if where is None:
+            return
+        tpl = self.pick_template("New base-game quest: choose a quest to copy")
+        if tpl is None:
+            return
+        star = max(1, min(9 if where == "village" else 8, tpl.get("star")))
+        suggested = progress.suggest_number(src.quests, where, star)
+        no = simpledialog.askinteger(
+            APP_TITLE, f"Number of the new quest. The game lists a quest in the star rank its number belongs to "
+                       f"(e.g. {11000 + 100 * star} to {11000 + 100 * star + 99} = Port {star} stars).",
+            initialvalue=suggested, minvalue=1000, maxvalue=12899, parent=self)
+        if no is None:
+            return
+        try:
+            q = src.create(no, tpl)
+        except (PackError, ValueError) as exc:
+            messagebox.showerror(APP_TITLE, str(exc), parent=self)
+            return
+        q.set("star", star)
+        progress.write(q, 0, 0, 0)                 # listed from the start; choose its key quest later
+        name = simpledialog.askstring(APP_TITLE, "Name of the new quest (all languages):",
+                                      initialvalue="My Custom Quest", parent=self)
+        if name:
+            q.set_text("name", name)
+        self.pages["rom"].list.refresh(select=str(no))
+        self.open_editor("rom", str(no))
+        self.mark_unsaved()
+        messagebox.showinfo(APP_TITLE, "The quest is added to quest00.arc when you save (base-game mod).\n\n"
+                            "For the game to record it as cleared (and to make it a key quest), build and install "
+                            "the Monster pack again: it registers the new quest numbers in the game.", parent=self)
+
+    def save_roaming_lists(self):
+        strays.save_custom(ROAMING_FILE)
+        self.forget_monster_pack()
+
+    def pack_extras(self) -> dict:
+        """What the Monster pack must add besides the monsters: new base-game quests, roaming lists."""
+        src = self.sources.get("rom")
+        return {"quests": sorted(src.added) if src else [], "roaming": dict(strays.CUSTOM)}
 
     def backup_now(self):
         src = self.sources["packs"]
@@ -1624,10 +1691,12 @@ class App(tk.Tk):
         self.configure(cursor="watch")
         result = {}
         msgs = []
+        extras = self.pack_extras()
 
         def work():
             try:
-                result["man"] = monsterpack.build(romfs, self.monster_pack_dir(), log=msgs.append)
+                result["man"] = monsterpack.build(romfs, self.monster_pack_dir(), log=msgs.append,
+                                                  extras=extras)
             except (monsterpack.PackError, OSError, ValueError, struct.error, KeyError) as exc:
                 result["err"] = exc
 

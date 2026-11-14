@@ -32,6 +32,7 @@ import struct
 import zlib
 from pathlib import Path
 
+from . import gamecode as GC
 from . import gamedata as G
 
 PACK_FORMAT = 1
@@ -42,7 +43,9 @@ ALIGN = 0x8000                                    # data alignment of the game's
 # Internal stage ids (not quest map ids): see gamedata.MAP_TO_INTERNAL.
 SIEGE_STAGES = {6, 7, 14}                          # Great Desert, Underwater Ruin, Tainted Sea
 TARGET_STAGES = tuple(range(1, 15))                # every map
-EXCLUDED_MONSTERS = {20, 70, 25, 85}               # Ceadeus, Goldbeard Ceadeus, Jhen Mohran, Hallowed Jhen Mohran
+EXCLUDED_MONSTERS: set = set()                     # none any more (1.5): every large monster on every map
+SIEGE_BOSSES = {20, 70, 25, 85}                    # Ceadeus, Goldbeard Ceadeus, Jhen Mohran, Hallowed Jhen Mohran:
+#   their fights are scripted around one map (ship, ruin) and they have no walking routes of their own
                                                    # (never moved; they can still lend their data)
 # Maps whose residents have no route tables. Underwater Ruin: Abyssal Lagiacrus starts there in the
 # game with no spawn or route table for it at all (only its start record); Great Desert: Jhen Mohran
@@ -419,9 +422,18 @@ def full_size(size: int, sizeparam: int) -> int:
     return size
 
 
+def extras_match(manifest: dict | None, extras: dict | None) -> bool:
+    """True if the pack was built with these new quests and roaming-monster lists."""
+    extras = extras or {}
+    man = manifest or {}
+    want_q = {str(int(n)) for n in extras.get("quests") or []}
+    want_r = {str(int(k)): [list(map(int, e)) for e in v] for k, v in (extras.get("roaming") or {}).items() if v}
+    return want_q <= set(man.get("quests", {})) and want_r == man.get("roaming", {})
+
+
 def is_current(manifest: dict) -> bool:
     """True when the pack was built with everything this version of the editor adds."""
-    return {"big_sizes", "desert_area2"} <= set(manifest.get("features", []))
+    return {"big_sizes", "desert_area2", "siege_bosses"} <= set(manifest.get("features", []))
 
 
 def ips(records) -> bytes:
@@ -505,14 +517,17 @@ def plan_pack(mons, place, monsters, stages) -> list[dict]:
             cands = [d for d in sorted(mons) if _donor_ok(mons, place, em, d, st, need_tables)]
             if not cands:
                 continue
-            donor = max(cands, key=lambda d: (d not in EXCLUDED_MONSTERS, _score(mons, em, d, st), -d))
+            donor = max(cands, key=lambda d: (d not in SIEGE_BOSSES, _score(mons, em, d, st), -d))
             out.append({"em": em, "stage": st, "donor": donor, "tables": need_tables})
     return out
 
 
 # =================================================================== building
-def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print) -> dict:
-    """Write <out_dir>/romfs/arc/enemy/*.arc, <out_dir>/exefs/code.ips and the manifest."""
+def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extras=None) -> dict:
+    """Write <out_dir>/romfs/arc/enemy/*.arc, <out_dir>/exefs/code.ips and the manifest.
+    extras = {"quests": [numbers of new base-game quests to register in the game's quest list],
+              "roaming": {list number: entries} roaming-monster lists of the user's own}."""
+    extras = extras or {}
     game = GameFiles(romfs)
     code = game.code
     table_va = find_placement_table(code, game.layout)
@@ -608,6 +623,27 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print) -> dic
             merged.append([a_, b_])
     free = merged
     records = []
+    big = None
+    found = find_size_table(code, game.layout)
+    if found:
+        size_va, lit_off = found
+        need = 4 * (BIG_SIZE_BASE + BIG_SIZE_COUNT) + 8 * BIG_SIZE_COUNT
+        slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= need), None)
+        if slot is not None:
+            pos = slot[0]
+            slot[0] += (need + 7) // 8 * 8
+            records.append((pos - BASE, big_size_blobs(code, size_va, pos)))
+            records.append((lit_off, struct.pack("<I", pos)))
+            # the game's own pointer table is free now: the literal redirected above is the only word
+            # of code.bin that points to it (checked on EU and US), nothing points inside it
+            free.append([size_va, size_va + 4 * 35])
+            big = {"base": BIG_SIZE_BASE, "step": BIG_SIZE_STEP, "count": BIG_SIZE_COUNT,
+                   "table": f"0x{pos:X}", "game_table": f"0x{size_va:X}"}
+            log(f"Big sizes: monster sizes up to {255 + BIG_SIZE_STEP * BIG_SIZE_COUNT} % enabled.")
+        else:
+            log("Big sizes skipped: not enough free space in code.bin.")
+    else:
+        log("Big sizes skipped: the size table was not found in this code.bin.")
     if desert is not None and any(DESERT_SENTINEL_BYTES in b for b in lists.values()):
         slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= len(desert)), None)
         if slot is None:
@@ -626,24 +662,33 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print) -> dic
         records.append((pos - BASE, blob))
         records.append((table_va - BASE + 4 * em, struct.pack("<I", pos)))
     # big sizes: the size spread table, moved and extended
-    big = None
-    found = find_size_table(code, game.layout)
-    if found:
-        size_va, lit_off = found
-        need = 4 * (BIG_SIZE_BASE + BIG_SIZE_COUNT) + 8 * BIG_SIZE_COUNT
-        slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= need), None)
-        if slot is not None:
+    roaming = {}
+    wanted = {int(k): v for k, v in (extras.get("roaming") or {}).items() if v}
+    if wanted:
+        ptr_off, ptrs = GC.find_roaming(code)
+        for idx in sorted(wanted):
+            if not 0 < idx < len(ptrs) or ptrs[idx]:
+                raise PackError(f"Roaming-monster list {idx} is not an empty number of the game.")
+            blob = GC.roaming_blob(wanted[idx])
+            slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= len(blob)), None)
+            if slot is None:
+                raise PackError("Not enough free space in code.bin for your roaming-monster lists: "
+                                "remove a list or shorten one.")
             pos = slot[0]
-            slot[0] += (need + 7) // 8 * 8
-            records.append((pos - BASE, big_size_blobs(code, size_va, pos)))
-            records.append((lit_off, struct.pack("<I", pos)))
-            big = {"base": BIG_SIZE_BASE, "step": BIG_SIZE_STEP, "count": BIG_SIZE_COUNT,
-                   "table": f"0x{pos:X}", "game_table": f"0x{size_va:X}"}
-            log(f"Big sizes: monster sizes up to {255 + BIG_SIZE_STEP * BIG_SIZE_COUNT} % enabled.")
-        else:
-            log("Big sizes skipped: not enough free space in code.bin.")
-    else:
-        log("Big sizes skipped: the size table was not found in this code.bin.")
+            slot[0] += (len(blob) + 7) // 8 * 8
+            records.append((pos - BASE, blob))
+            records.append((ptr_off + 4 * idx, struct.pack("<I", pos)))
+            roaming[str(idx)] = [list(map(int, e)) for e in wanted[idx]]
+        log(f"Roaming-monster lists of your own: {len(roaming)}.")
+    quests = {}
+    if extras.get("quests"):
+        try:
+            recs, placed = GC.register_quests(code, extras["quests"])
+        except GC.CodeError as exc:
+            raise PackError(str(exc)) from exc
+        records += recs
+        quests = {str(no): slot for no, slot in sorted(placed.items())}
+        log(f"New quests registered in the game's quest list: {len(recs)}.")
     left = sum(b_ - a_ for a_, b_ in free)
     log(f"Free space left in code.bin: {left} bytes.")
     records.sort()
@@ -658,7 +703,8 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print) -> dic
         "added": [{k: p[k] for k in ("em", "stage", "donor", "start_areas")} for p in plan],
         "placement_table": f"0x{table_va:X}",
         "big_sizes": big,
-        "features": ["big_sizes"] * bool(big) + ["desert_area2"] * bool(desert),
+        "features": ["big_sizes"] * bool(big) + ["desert_area2"] * bool(desert) + ["siege_bosses"],
+        "quests": quests, "roaming": roaming,
     }
     (out_dir / MANIFEST).write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     log(f"Done: {len(plan)} monster/map pairs added for {len(by_em)} monsters, fingerprint {manifest['fingerprint']}.")
@@ -742,6 +788,10 @@ def risk_notes(em: int, quest_map: int) -> list[str]:
     notes = []
     if em in SPECIAL_BOSSES:
         notes.append(f"{G.mon_name(em)} is a scripted boss: away from its own map it may misbehave or crash.")
+    if em in SIEGE_BOSSES:
+        notes.append(f"{G.mon_name(em)} is built for one scripted fight and has no walking routes of its "
+                     "own: on another map it borrows another monster's routes. It may not move, sink into "
+                     "the ground or crash the game. Untested.")
     if internal in WATER_STAGES:
         notes.append("This is a water arena: a monster that can not swim may float, freeze or crash the game.")
     if internal in (10, 13):

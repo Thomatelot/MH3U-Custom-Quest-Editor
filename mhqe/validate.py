@@ -9,7 +9,7 @@ import math
 from collections import namedtuple
 
 from . import gamedata as G
-from . import arena, monsterpack, rules, siege, startpos, waves
+from . import arena, monsterpack, progress, rules, siege, startpos, strays, waves
 from .quest import LANGS, NANDO_FIELDS, NANDO_MAX, OBJ_MONSTER_TYPES, Quest
 
 Issue = namedtuple("Issue", "level text")
@@ -19,7 +19,7 @@ EVENT_RANGES = ((20000, 29999), (61000, 61999))
 
 def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
                    fit_problem: str | None = None, monster_pack: dict | None = None,
-                   pack_installed: bool = True) -> list[Issue]:
+                   pack_installed: bool = True, all_quests: dict | None = None) -> list[Issue]:
     out: list[Issue] = []
     add = lambda level, text: out.append(Issue(level, text))     # noqa: E731
 
@@ -48,6 +48,15 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
         add("warning", text)
     for level, text in siege.problems(q):
         add(level, text)
+    for text in strays.problems(q, monster_pack):
+        add("warning", text)
+    if q.get("prog_no") not in rules.MONSTER_RANKS:
+        add("warning", f"Monster rank {q.get('prog_no')} is not one the game uses (0 to 4).")
+    if rules.carves(q) == "mixed":
+        add("info", "Only one of the two arena-carve flags is set: untested (General tab, Arena carves).")
+    if all_quests and no in all_quests:
+        for level, text in progress.problems(all_quests, no, monster_pack):
+            add(level, text)
     if rules.time_warning(q):
         add("warning", rules.time_warning(q))
     cat = q.get("category")

@@ -9,9 +9,10 @@ into the map besides the targets. In the game's quest list the environment is wr
     nora_set_per    chance in percent that roaming monsters show up (0 = stable)
     nora_per_type   a second percentage: 10 / 20 / 30 / 50 / 80 / 100 in the game's quests
     nora_set_max    most roaming monsters at the same time (1 or 2)
-    nora_set_table  number of the roaming-monster list of that map. The lists are stored in the
-                    game, not in the quest: only numbers that a game quest on the same map
-                    uses are known to be safe, so they can only be copied from a game quest.
+    nora_set_table  number of the roaming-monster list. The lists are stored in the game's program
+                    (see gamecode.py); data/roaming_tables.json holds what each one contains, so
+                    the editor can show the species and let any list be chosen. The Monster pack
+                    can add lists of your own in the unused numbers.
     nora_pekko      1 in a few quests that always have a visitor (chance 100 / 100)
 """
 from __future__ import annotations
@@ -79,3 +80,119 @@ def describe(q) -> str:
         return "Stable: no large monsters besides the ones listed in the Monsters tab."
     mx = q.get("nora_set_max")
     return (f"Unstable: {q.get('nora_set_per')} % chance of roaming monsters, up to {mx} at the same time.")
+
+
+def problems(q, pack: dict | None = None) -> list[str]:
+    """Why the roaming monsters of this quest may not show up."""
+    if not is_unstable(q):
+        return []
+    idx = q.get("nora_set_table")
+    t = table(idx)
+    if not t:
+        return [f"Roaming-monster list {idx} is empty in the game: no monster will roam."]
+    out = []
+    if is_custom(idx) and idx not in {int(k) for k in (pack or {}).get("roaming", {})}:
+        out.append(f"Roaming-monster list {idx} is one of yours: build and install the Monster pack again, "
+                   "otherwise the game finds no list there.")
+    from . import monsterpack
+    bad = [G.mon_name(em) for em in dict.fromkeys(e[EM] for e in t)
+           if G.stage_ok(em, q.get("map")) is False and monsterpack.pair_status(em, q.get("map"), pack)[0] != "pack"]
+    if bad:
+        out.append("Roaming monsters that the game can not place on " + G.map_name(q.get("map")) + ": "
+                   + ", ".join(bad) + " (they will not appear; the Monster pack can add them).")
+    return out
+
+
+# ------------------------------------------------------------- the lists themselves
+CUSTOM: dict[int, list[list[int]]] = {}        # lists of the user's own (Monster pack), slot -> entries
+EM, HP, AT, DF, SIZE, CHANCE, ZENNY, POINTS, LEVEL = 0, 1, 2, 3, 4, 10, 12, 13, 14
+
+
+@lru_cache(maxsize=1)
+def _game() -> dict:
+    try:
+        d = json.loads((G.DATA_DIR / "roaming_tables.json").read_text(encoding="utf-8"))
+        return {"tables": {int(k): v for k, v in d.get("tables", {}).items()}, "free": d.get("free_slots", [])}
+    except (OSError, ValueError):
+        return {"tables": {}, "free": []}
+
+
+def game_tables() -> dict[int, list[list[int]]]:
+    return _game()["tables"]
+
+
+def free_slots() -> list[int]:
+    """List numbers the game leaves empty (room for lists of your own)."""
+    return list(_game()["free"])
+
+
+def table(idx: int):
+    """Entries of a list, the user's own first; None when the number holds no list."""
+    return CUSTOM.get(idx) or game_tables().get(idx)
+
+
+def is_custom(idx: int) -> bool:
+    return idx in CUSTOM
+
+
+def table_text(idx: int) -> str:
+    """'Great Jaggi 60 % · Rathian 40 %'"""
+    t = table(idx)
+    if not t:
+        return ""
+    return "  ·  ".join(f"{G.mon_name(e[EM])} {e[CHANCE]} %" for e in t)
+
+
+def table_species(idx: int) -> list[int]:
+    return [e[EM] for e in table(idx) or []]
+
+
+def set_table(q, idx: int) -> None:
+    """Make the quest use this list; the chance settings are kept, or copied from a game quest that
+    uses the list, or set to an even chance when the quest was stable."""
+    if not is_unstable(q):
+        ref = next((s for s in _sets() if s["table"] == idx and s["per"] > 0), None)
+        if ref:
+            apply(q, ref)
+        else:
+            for f, v in (("nora_set_type", 1), ("nora_set_per", 50), ("nora_per_type", 50),
+                         ("nora_set_max", 1), ("nora_pekko", 0)):
+                q.set(f, v)
+    q.set("nora_set_type", 1)
+    q.set("nora_set_table", idx)
+
+
+def make_entry(em: int, chance: int, like: list[int]) -> list[int]:
+    """A list entry for this species, as strong as the entry 'like' (health, attack, defence and
+    level rows); the money and points come from the game's entry of that species closest to it."""
+    e = list(like)
+    e[EM], e[CHANCE] = em, chance
+    same = [x for t in game_tables().values() for x in t if x[EM] == em]
+    if same:
+        best = min(same, key=lambda x: abs(x[HP] - like[HP]))
+        e[ZENNY], e[POINTS] = best[ZENNY], best[POINTS]
+    return e
+
+
+def table_problems(entries) -> list[str]:
+    out = []
+    if not entries:
+        out.append("The list is empty.")
+    if sum(e[CHANCE] for e in entries) != 100:
+        out.append("The chances of a list must add up to 100 %.")
+    return out
+
+
+def load_custom(path) -> None:
+    CUSTOM.clear()
+    try:
+        d = json.loads(path.read_text(encoding="utf-8"))
+        CUSTOM.update({int(k): [list(map(int, e)) for e in v] for k, v in d.get("lists", {}).items()})
+    except (OSError, ValueError, TypeError):
+        pass
+
+
+def save_custom(path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"lists": {str(k): v for k, v in sorted(CUSTOM.items())}}, indent=1),
+                    encoding="utf-8")

@@ -108,7 +108,7 @@ class Pack(unittest.TestCase):
         cls.tmp.cleanup()
 
     def test_siege_maps_follow_the_game(self):
-        ruin = [a for a in self.man["added"] if a["stage"] == 7]
+        ruin = [a for a in self.man["added"] if a["stage"] == 7 and a["em"] not in P.SIEGE_BOSSES]
         self.assertTrue(ruin and all(a["donor"] == 69 and a["start_areas"] == [3] for a in ruin))  # Abyssal Lagiacrus
         desert = [a for a in self.man["added"] if a["stage"] == P.DESERT]
         self.assertTrue(desert and all(a["start_areas"] == [1, 2] for a in desert))     # area 2 too (1.4)
@@ -130,12 +130,13 @@ class Pack(unittest.TestCase):
         i = 5
         table = P.find_placement_table(orig, self.game.layout)
         regions = P.free_regions(orig, self.game.layout)
-        size_lit = P.find_size_table(orig, self.game.layout)[1]     # the big-size table pointer (1.3)
+        size_va, size_lit = P.find_size_table(orig, self.game.layout)  # the big-size table pointer (1.3)
         while i < len(p) - 3:
             off, n = int.from_bytes(p[i:i + 3], "big"), int.from_bytes(p[i + 3:i + 5], "big")
             va = off + P.BASE
             self.assertTrue(any(a <= va and va + n <= b for a, b in regions) or table - 0x700 <= va < table + 4 * 86
-                            or (off == size_lit and n == 4))
+                            or (off == size_lit and n == 4)
+                            or size_va <= va and va + n <= size_va + 4 * 35)     # the old size table, freed (1.5)
             code[off:off + n] = p[i + 5:i + 5 + n]
             i += 5 + n
         before, after = P.read_placement(orig, table), P.read_placement(bytes(code), table)

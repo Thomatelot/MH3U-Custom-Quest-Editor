@@ -137,6 +137,29 @@ def run():
             errors.append("ERROR Dragonship setup did not restore the quest")
     else:
         errors.append("ERROR no Great Desert quest found in the packs")
+    rom = app.sources.get("rom")
+    if rom is not None and rom.get("11105") is not None:
+        app.open_editor("rom", "11105")
+        settle(0.6)
+        app.editor.nb.select(0)
+        settle(0.5)
+        shot("12_rom_progress")
+        gen = app.editor.tabs[0]
+        app.after(1500, lambda: grab_toplevel("13_roaming_picker"))
+        gen._env_table()
+        settle(0.4)
+        app.after(1500, lambda: grab_toplevel("14_my_roaming_lists"))
+        gen._env_custom()
+        settle(0.4)
+    else:
+        errors.append("ERROR no base-game source")
+    gm = rom.get("60002") if rom is not None else None
+    if gm is not None:
+        app.open_editor("rom", "60002")
+        settle(0.6)
+        app.editor.nb.select(0)
+        settle(0.4)
+        shot("15_grudge_general")
     for page in ("library", "rom", "pack", "guide"):
         app.show_page(page)
         settle(0.5)

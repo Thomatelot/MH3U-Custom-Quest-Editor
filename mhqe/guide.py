@@ -107,6 +107,12 @@ def _general():
         ("Who can join, day or night", (
             _(H.REQ_TIP) + _("\n\nTime of day: ") + _(H.DAYNIGHT_TIP)
         )),
+        ("Monster rank", _(H.RANK_TIP)),
+        ("Arena carves", _(H.CARVE_TIP)),
+        ("Progress (Village and Port)", _(H.PROGRESS_TIP) + _("\n\n'New quest...' on the Base game page adds a "
+            "Village or Port quest to quest00.arc, numbered for the star rank you want (the game sorts quests by "
+            "their number). On its General tab, 'Key quest of' makes it count towards an urgent quest: the urgent "
+            "quest then waits for it too.")),
         ("Fee, Reward, Penalty", (
             _("Fee: ") + _(H.tip("contract")) + _("\nReward: ") + _(H.tip("reward_money")) + _("\nPenalty: ") + _(H.tip("penalty"))
             + _("\n\nThe (i) next to each shows what the game's quests of the same star rank use.")
@@ -117,6 +123,14 @@ def _general():
             _(H.tip("objective")) + _("\n\nTarget: ") + _(H.tip("species")) + _("\n\nCount: ") + _(H.tip("obj_count"))
             + _("\n\n'Set the objectives from the monsters' writes objectives A and B the way the game's multi-monster "
             "quests do. The Monsters tab does it for you whenever you add, remove, replace or reorder a monster.")
+        )),
+        ("Environment: the roaming monsters", (
+            _("'Choose the roaming monsters...' lists every roaming-monster list of the game with the chance of each "
+            "monster; any of them can be used on any map (a monster the game can not place on the map does not "
+            "appear unless the Monster pack adds it there). 'My roaming lists...' makes lists of your own in the "
+            "numbers the game leaves empty; the Monster pack writes them into the game. The list numbers and their "
+            "content were read from the game's program and checked on the event quest 'An Ominous Cry' (Savage "
+            "Deviljho 100 %).")
         )),
         ("Environment: Stable or Unstable", (
             _(H.ENV_TIP) + _("\n\nChance of roaming monsters: ") + _(H.tip("nora_set_per"))
@@ -348,9 +362,17 @@ def _pack():
             "The table lookup was checked against the game's code, but giant monsters were not tried in the game: "
             "they may clip through walls, get stuck in area exits or be hard to reach.")
         )),
-        ("Left out", (
-            _("Ceadeus, Goldbeard Ceadeus, Jhen Mohran and Hallowed Jhen Mohran stay on their own maps (they still lend "
-            "their map data to the others). Small monsters are not concerned.")
+        ("Ceadeus and Jhen Mohran everywhere", (
+            _("Since 1.5 Ceadeus, Goldbeard Ceadeus, Jhen Mohran and Hallowed Jhen Mohran can be put on every map too. "
+            "They are built for one scripted fight (the Underwater Ruin, the Dragonship) and have no walking routes of "
+            "their own, so elsewhere they borrow another monster's. They are the riskiest combinations: they may not "
+            "move, sink into the ground or crash the game. Untested. Small monsters are not concerned.")
+        )),
+        ("New quests and roaming lists", (
+            _("The pack also writes into the game's program: the numbers of your new base-game quests (so the game "
+            "records them as cleared and they can be key quests) and your own roaming-monster lists. Build and "
+            "install it again after adding a quest or changing a list: the Monster pack page says when the built "
+            "pack is out of date.")
         )),
         ("How to use it", (
             _("1. Settings: set your game version and choose the extracted romfs folder (exefs/code.bin must be next to "

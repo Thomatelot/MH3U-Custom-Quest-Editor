@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.5.0
+
+Ideas and research from testers, checked against the game's code (EU and US).
+
+* **Roaming monsters you can see and choose.** The Environment section shows which monsters roam and their
+  chance. "Choose the roaming monsters..." lists the 188 lists of the game, for any map. "My roaming
+  lists..." makes lists of your own in the numbers the game leaves empty; the Monster pack writes them
+  into the game.
+* **New Village and Port quests that count.** Base game page, "New quest...": the quest is added to
+  quest00.arc. The Monster pack registers its number in the game's quest list, so the game records it as
+  cleared. "Key quest of" (General tab, Progress) makes a quest a key quest of an urgent quest; the urgent
+  quest then waits for it too. The tab says what opens each quest and which urgent quest it counts for.
+* **Special forms** (Starts in list): the starts that give Brachydios, Zinogre and Stygian Zinogre their
+  special form (as in "Clashing Fists!" and "Descent into Hades") are marked.
+* **Arena carves** box (General tab): items instead of monster materials, as in the arena quests, or the
+  other way round.
+* **Monster rank** (General tab): low, high or G rank, Village or Port (the game's EnemyLv).
+* **Arena quests for 4**: with 4 players and an HR rule, the board line is the arena's "Max
+  participants: 4" line.
+* **Monster pack: Ceadeus and Jhen Mohran everywhere** (and their variants). The riskiest combinations:
+  untested. The pack frees the game's old size table, so big sizes still fit.
+* docs/RESEARCH.md: what was found in the game's code, and what a monster is made of (model,
+  animations, behaviour) for a later comparison with MHP3rd.
+
 ## 1.4.1
 
 * **Great Desert: the Dragonship fight.** Every Great Desert quest of the game is set up the same

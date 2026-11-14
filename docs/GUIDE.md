@@ -91,6 +91,20 @@ Who can take the quest, and when it takes place. The game checks two rules when 
 
 Time of day: Day or night: every quest of the game is one or the other (two category flags, 0x10000 and 0x20000). The night quests are the ones whose texts speak of the night ('Narg at Nite', 'Moonlit Tryst', 'Howl at the Moon'). The arenas, the Underwater Ruin, the Sacred Land and the Tainted Sea are always by day in the game. Changing it on a custom quest is untested in the game.
 
+### Monster rank
+
+Which rank the large monsters fight at (the game's EnemyLv): low rank, high rank or G rank, Village or Port. Every quest of the game sets the one of its own rank; G rank monsters use their G rank moves and behaviour. It does not change their health or attack (the Monsters tab sets those). Which setting decides G rank rewards is not established: the game's supply-box code reads the rank from the quest number (11600-11999 = G rank Port quests, event quests 20300 and up), so the rewards may follow the number too. Untested in the game.
+
+### Arena carves
+
+The Grudge Match and Challenge quests make carving give items (Mega Potions, Max Potions...) instead of monster materials. They are the only quests with both category flags 0x08000000 and 0x20000000. A tester got ordinary carves back on an arena quest by clearing category flags; this box sets or clears both. Which of the two does it alone is not established yet. Untick it to give players real monster materials in an arena quest.
+
+### Progress (Village and Port)
+
+How the Village and Port open their quests. The game lists every quest file of quest00.arc by its number and star rank, then hides those that wait for other quests. A key quest counts towards the urgent quest of its rank: the urgent quest opens once all its key quests are cleared. A quest of your own counts only when the game knows its number: the Monster pack registers the new quests in the game's quest list (build and install it again after adding one).
+
+'New quest...' on the Base game page adds a Village or Port quest to quest00.arc, numbered for the star rank you want (the game sorts quests by their number). On its General tab, 'Key quest of' makes it count towards an urgent quest: the urgent quest then waits for it too.
+
 ### Fee, Reward, Penalty
 
 Fee: Fee: zenny paid to accept the quest.  
@@ -125,6 +139,10 @@ Target: The monster. Pick one the game allows on the quest's map (or install the
 Count: How many. The game's own quests write it like this: 'Hunt 2 Arzuros' (Double Jeopardy), 'Slay 12 Altaroth' (Bug Hunt), 'Deliver 3 Unique Mushrooms' (Tutorial 1).
 
 'Set the objectives from the monsters' writes objectives A and B the way the game's multi-monster quests do. The Monsters tab does it for you whenever you add, remove, replace or reorder a monster.
+
+### Environment: the roaming monsters
+
+'Choose the roaming monsters...' lists every roaming-monster list of the game with the chance of each monster; any of them can be used on any map (a monster the game can not place on the map does not appear unless the Monster pack adds it there). 'My roaming lists...' makes lists of your own in the numbers the game leaves empty; the Monster pack writes them into the game. The list numbers and their content were read from the game's program and checked on the event quest 'An Ominous Cry' (Savage Deviljho 100 %).
 
 ### Environment: Stable or Unstable
 
@@ -332,6 +350,10 @@ The siege maps follow the game's own example: on the Underwater Ruin a monster g
 
 It is a mod, built on your PC from your own extracted game: 47 files romfs/arc/enemy/emNNN.arc, a 7 KB patch exefs/code.ips (only new start lists and the extended size table, written in unused space of the program and over the old lists it replaces, one pointer per monster and one for the size table) and mhqe_monster_pack.json. Your ROM and your save are not modified; removing the mod (button 'Remove from Citra') brings the game back exactly. It can not be combined with another code.ips/code.bin mod.
 
+### Great Desert: the Dragonship
+
+Every Great Desert quest of the game is a Dragonship fight against a Jhen Mohran, and all of them are set up the same way: objective A 'Slay or repel' the Jhen Mohran, objective B the Dragonship's integrity (1000, or 1300 against Hallowed Jhen Mohran), the 'Single objective' pattern and a Dragonship flag in the category. A quest without the integrity starts with a Dragonship at 0: it is destroyed and the quest fails at once. The General tab's 'Set up the Dragonship fight' button (also offered when you choose the Great Desert map) writes all of this, and the game's failure text in the five languages.
+
 ### Great Desert: area 2
 
 In the Jhen Mohran fight the sand ship moves from area 1 to area 2, so a monster that starts in area 1 is left behind. Jhen Mohran's own start list has only area 1, but its spawn data (which the pack lends to the other monsters) has both areas. The pack therefore gives the other monsters a start list of their own on the Great Desert: start 0 = area 1, start 1 = area 2 (choose it in the card's 'Starts in' list or on the map). Untested in the game.
@@ -340,9 +362,13 @@ In the Jhen Mohran fight the sand ship moves from area 1 to area 2, so a monster
 
 A quest stores a monster's size in one byte, so 255 % is the most it can hold. The game then adds a value taken from a 'size spread' table (chosen by the quest), with no upper limit. The pack moves that table and adds 19 exact sizes, +100 % to +1900 %, so a quest can make a monster up to 2000 % ('Size %' in Developer mode). Such a quest needs the pack installed: without it the game reads past its own table. The table lookup was checked against the game's code, but giant monsters were not tried in the game: they may clip through walls, get stuck in area exits or be hard to reach.
 
-### Left out
+### Ceadeus and Jhen Mohran everywhere
 
-Ceadeus, Goldbeard Ceadeus, Jhen Mohran and Hallowed Jhen Mohran stay on their own maps (they still lend their map data to the others). Small monsters are not concerned.
+Since 1.5 Ceadeus, Goldbeard Ceadeus, Jhen Mohran and Hallowed Jhen Mohran can be put on every map too. They are built for one scripted fight (the Underwater Ruin, the Dragonship) and have no walking routes of their own, so elsewhere they borrow another monster's. They are the riskiest combinations: they may not move, sink into the ground or crash the game. Untested. Small monsters are not concerned.
+
+### New quests and roaming lists
+
+The pack also writes into the game's program: the numbers of your new base-game quests (so the game records them as cleared and they can be key quests) and your own roaming-monster lists. Build and install it again after adding a quest or changing a list: the Monster pack page says when the built pack is out of date.
 
 ### How to use it
 

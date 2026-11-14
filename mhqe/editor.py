@@ -12,7 +12,7 @@ from . import autofill, spawns, startpos, strays, supp, waves
 from . import gamedata as G
 from . import monsterpack
 from . import helptext as H
-from . import arena, picker, rules, siege, theme
+from . import arena, picker, progress, rules, siege, theme
 from .quest import LANG_NAMES, LANGS, MON_SLOTS, NANDO_MAX, QuestFormatError
 from .validate import worst
 from .widgets import ScrollFrame, Section, StatusDot, Tooltip, center_on, info, make_modal, parse_int
@@ -121,7 +121,7 @@ class StartDialog(tk.Toplevel):
             row = ttk.Frame(left)
             row.pack(anchor="w", fill="x", pady=1)
             if self.areas is not None:
-                text = startpos.choice_text(pos, self.areas, map_id)
+                text = startpos.choice_text(pos, self.areas, map_id, em)
             else:
                 text = startpos.label(pos) + (f"   ({u['n']} in the game)" if u else "   (not used on this map)")
             ttk.Radiobutton(row, text=text, value=pos, variable=self.var, command=self._show).pack(side="left")
@@ -328,6 +328,12 @@ class GeneralTab(Tab):
         self.star.bind("<<ComboboxSelected>>", self._star)
         info(g, H.tip("star"), "Card.").grid(row=r, column=2, sticky="w", padx=4)
         r += 1
+        ttk.Label(g, text="Monster rank", style="Card.TLabel").grid(row=r, column=0, sticky="w", pady=3)
+        self.rank = ttk.Combobox(g, state="readonly", width=24, values=list(rules.MONSTER_RANKS.values()))
+        self.rank.grid(row=r, column=1, sticky="w")
+        self.rank.bind("<<ComboboxSelected>>", self._rank_pick)
+        info(g, H.RANK_TIP, "Card.").grid(row=r, column=2, sticky="w", padx=4)
+        r += 1
         ttk.Label(g, text="Map", style="Card.TLabel").grid(row=r, column=0, sticky="nw", pady=6)
         self.map_btn = IconButton(g, self._pick_map, width=20)
         self.map_btn.grid(row=r, column=1, sticky="w", pady=3)
@@ -374,6 +380,18 @@ class GeneralTab(Tab):
         s5 = Section(col1, "Who can join, day or night", H.REQ_TIP)
         s5.pack(fill="x", pady=(10, 0))
         self._build_rules(s5.body)
+        self.s_prog = Section(col1, "Progress (Village and Port)", H.PROGRESS_TIP)
+        self.s_prog.pack(fill="x", pady=(10, 0))
+        g = self.s_prog.body
+        self.prog_lab = ttk.Label(g, text="", style="Card.TLabel", wraplength=440, justify="left")
+        self.prog_lab.grid(row=0, column=0, columnspan=3, sticky="w")
+        ttk.Label(g, text="Key quest of", style="Card.TLabel").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        self.key_box = ttk.Combobox(g, state="readonly", width=34)
+        self.key_box.grid(row=1, column=1, sticky="w", pady=(6, 0))
+        self.key_box.bind("<<ComboboxSelected>>", self._key_pick)
+        self.prog_warn = ttk.Label(g, text="", style="Card.Warn.TLabel", wraplength=440, justify="left")
+        self.prog_warn.grid(row=2, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        self._urgents: list = []
         g = s2.body
         money = lambda f: (lambda: H.tip(f) + "\n\n" + H.money_hint(f, self.q.get("star") if self.q else 1))
         self.field(g, 0, "Fee", "contract", tip=money("contract"), suffix="z")
@@ -431,7 +449,9 @@ class GeneralTab(Tab):
         self.hooks["nora_set_per"] = self._env_refresh
         self.env_list = ttk.Frame(self.env_opts, style="Card.TFrame")
         self.env_list.grid(row=2, column=0, columnspan=4, sticky="w", pady=(6, 0))
-        ttk.Button(self.env_list, text="Roaming monsters like another game quest...", command=self._env_pick).pack(side="left")
+        ttk.Button(self.env_list, text="Choose the roaming monsters...", command=self._env_table).pack(side="left")
+        ttk.Button(self.env_list, text="My roaming lists...", command=self._env_custom).pack(side="left", padx=6)
+        ttk.Button(self.env_list, text="Like another game quest...", command=self._env_pick).pack(side="left")
         self.env_ref = ttk.Label(g, text="", style="Card.Accent.TLabel", wraplength=470, justify="left")
         self.env_ref.grid(row=3, column=0, columnspan=4, sticky="w", pady=(6, 0))
         if self.dev:
@@ -472,6 +492,12 @@ class GeneralTab(Tab):
                         command=self._rules_pick).grid(row=3, column=0, columnspan=3, sticky="w", pady=(2, 0))
         self.req_lab = ttk.Label(g, text="", style="Card.Muted.TLabel", wraplength=440, justify="left")
         self.req_lab.grid(row=4, column=0, columnspan=4, sticky="w", pady=(4, 0))
+        self.carve = tk.BooleanVar()
+        cf = ttk.Frame(g, style="Card.TFrame")
+        cf.grid(row=5, column=0, columnspan=4, sticky="w", pady=(6, 0))
+        ttk.Checkbutton(cf, text="Arena carves (items such as Mega Potions instead of monster parts)",
+                        variable=self.carve, style="Card.TCheckbutton", command=self._carve_pick).pack(side="left")
+        info(cf, H.CARVE_TIP, "Card.").pack(side="left", padx=4)
 
     def _rules_load(self, q):
         self.daynight.current(1 if rules.is_night(q) else 0)
@@ -479,6 +505,7 @@ class GeneralTab(Tab):
         self.req_hr.current(rules.HR_CHOICES.index(req.hr) if req.hr in rules.HR_CHOICES else 0)
         self.req_pl.current(rules.PLAYER_CHOICES.index(req.players) if req.players in rules.PLAYER_CHOICES else 0)
         self.req_naked.set(req.naked)
+        self.carve.set(rules.carves(q) == "arena")
         text = _("In the game, the quest's details on the quest board will show:") + "\n  " + \
             rules.board_text(q.get("special_flag"))
         warn = rules.problems(q.get("special_flag"), q.get("special_cond"), q.get("special_cond2"))
@@ -487,6 +514,56 @@ class GeneralTab(Tab):
             warn.append(tw)
         self.req_lab.configure(text=text + "".join("\n" + _(w) for w in warn),
                                style="Card.Warn.TLabel" if warn else "Card.Muted.TLabel")
+
+    # ----- base-game progression (OpenFlag block, see progress.py)
+    def _rom_quests(self):
+        src = self.app.sources.get("rom")
+        if self.app.edit_kind != "rom" or src is None:
+            return None
+        return src.quests
+
+    def _prog_load(self, q):
+        quests = self._rom_quests()
+        no = q.get("quest_no")
+        h = progress.hub(no)
+        if quests is None or h is None or no not in quests:
+            self.s_prog.pack_forget()
+            return
+        if not self.s_prog.winfo_ismapped():
+            self.s_prog.pack(fill="x", pady=(10, 0))
+        self.prog_lab.configure(text="\n".join(_(t) for t in progress.describe(quests, no)))
+        self._urgents = [u for u in progress.urgents(quests, h) if u != no]
+        cur = progress.key_for(quests, no)
+        self.key_box.configure(values=[_("(none)")] + [f"{u}  {quests[u].get_text('name')}" for u in self._urgents],
+                               state="disabled" if progress.is_urgent(no) else "readonly")
+        self.key_box.current(self._urgents.index(cur[0]) + 1 if cur and cur[0] in self._urgents else 0)
+        pack, _inst = self.app.monster_pack()
+        warn = [t for _lv, t in progress.problems(quests, no, pack)]
+        self.prog_warn.configure(text="\n".join(_(t) for t in warn))
+
+    def _key_pick(self, _e=None):
+        quests = self._rom_quests()
+        if self.loading or quests is None or self.q is None:
+            return
+        i = self.key_box.current()
+        target = self._urgents[i - 1] if i > 0 else None
+        src = self.app.sources["rom"]
+        for no in progress.set_key(quests, self.q.get("quest_no"), target):
+            src.mark_dirty(str(no))
+        self.editor.changed()
+        self._prog_load(self.q)
+
+    def _rank_pick(self, _e=None):
+        if self.loading or self.q is None or self.rank.current() not in rules.MONSTER_RANKS:
+            return
+        self.q.set("prog_no", self.rank.current())
+        self.editor.changed()
+
+    def _carve_pick(self):
+        if self.loading or self.q is None:
+            return
+        rules.set_carves(self.q, bool(self.carve.get()))
+        self.editor.changed()
 
     def _daynight_pick(self, _e=None):
         if self.loading or self.q is None:
@@ -508,7 +585,7 @@ class GeneralTab(Tab):
             return
         self.q.set("special_cond", conds[0])
         self.q.set("special_cond2", conds[1])
-        self.q.set("special_flag", rules.flag_for(req, self.q.get("special_flag")))
+        self.q.set("special_flag", rules.flag_for(req, self.q.get("special_flag"), rules.is_arena(self.q)))
         self._rules_load(self.q)
         self.editor.changed()
 
@@ -519,6 +596,10 @@ class GeneralTab(Tab):
             self.no_lab.configure(text=str(q.get("quest_no")))
             self.no_btn.configure(state="normal" if self.app.source_can_create() else "disabled")
         self.star.current(max(0, min(10, q.get("star"))))
+        pr = q.get("prog_no")
+        self.rank.configure(values=list(rules.MONSTER_RANKS.values()) + ([f"{pr}  (not used by the game)"]
+                                                                          if pr not in rules.MONSTER_RANKS else []))
+        self.rank.current(pr if pr in rules.MONSTER_RANKS else len(rules.MONSTER_RANKS))
         m = q.get("map")
         self.map_btn.show(self.app.icons.map(m, 64), G.map_name(m) + (f"  (map {m})" if self.dev else ""))
         self._hunt_load(q)
@@ -530,6 +611,7 @@ class GeneralTab(Tab):
         self.refresh_summary()
         self._env_refresh()
         self._sync_frozen()
+        self._prog_load(q)
 
     def refresh_summary(self):
         if self.q is not None:
@@ -677,18 +759,14 @@ class GeneralTab(Tab):
         self.env.set(1 if unstable else 0)
         if unstable:
             self.env_opts.grid()
-            ref = strays.reference_of(q)
-            self.env_text.configure(text=strays.describe(q))
-            if ref:
-                self.env_ref.configure(text=f"Roaming monsters: the same list as the game's quest '{ref['name']}'. "
-                                            "Which species roam is stored in the game, not in the quest file, so "
-                                            "it cannot be shown or chosen here.")
-            else:
-                self.env_ref.configure(text="Roaming-monster list number " + str(q.get("nora_set_table"))
-                                            + ": no game quest on this zone uses it, so it may not exist.",
-                                       style="Card.Danger.TLabel")
-                return
-            self.env_ref.configure(style="Card.Accent.TLabel")
+            idx = q.get("nora_set_table")
+            self.env_text.configure(text=_(strays.describe(q)))
+            pack, _inst = self.app.monster_pack()
+            warn = strays.problems(q, pack)
+            text = (_("Roaming monsters (list {}{}): ").format(idx, _(", one of yours") if strays.is_custom(idx) else "")
+                    + (strays.table_text(idx) or _("none")))
+            self.env_ref.configure(text=text + "".join("\n" + _(w) for w in warn),
+                                   style="Card.Warn.TLabel" if warn else "Card.Accent.TLabel")
         else:
             self.env_opts.grid_remove()
             self.env_text.configure(text=strays.describe(q))
@@ -711,6 +789,51 @@ class GeneralTab(Tab):
             strays.apply(q, refs[0])
         self.editor.reload_tabs()
         self.editor.changed()
+
+    def _roam_entry(self, idx, sub=""):
+        t = strays.table(idx) or []
+        em = t[0][strays.EM] if t else 0
+        return {"key": idx, "name": strays.table_text(idx) or _("(empty)"),
+                "sub": (_("list {}").format(idx) + ("  ·  " + _("yours") if strays.is_custom(idx) else "")
+                        + ("  ·  " + sub if sub else "")),
+                "cat": "Yours" if strays.is_custom(idx) else "Game",
+                "search": " ".join(G.mon_name(e[strays.EM]) for e in t) + f" {idx}",
+                "icon": (lambda em=em: self.app.icons.monster(em, 54))}
+
+    def _env_table(self):
+        """Any roaming-monster list of the game (or of yours)."""
+        q = self.q
+        if q is None:
+            return
+        used = {}
+        for s in strays._sets():
+            used.setdefault(s["table"], s["name"])
+        idxs = sorted(set(strays.game_tables()) | set(strays.CUSTOM))
+        entries = [self._roam_entry(i, _("used by '{}'").format(used[i]) if i in used else "") for i in idxs]
+        i = picker._run(self.app, title=_("Choose the roaming monsters"), entries=entries, tile=(560, 66),
+                        icon_size=54, columns=1, categories=["Yours", "Game"] if strays.CUSTOM else None,
+                        initial=q.get("nora_set_table"),
+                        note=_("Every roaming-monster list of the game, with the chance of each monster. A list "
+                               "keeps its own strength (health, attack): the game stores it with the list. A "
+                               "monster the game can not place on this map does not appear unless the Monster "
+                               "pack adds it there."))
+        if i is None:
+            return
+        strays.set_table(q, i)
+        self.editor.reload_tabs()
+        self.editor.changed()
+
+    def _env_custom(self):
+        if self.q is None:
+            return
+        dlg = RoamingListsDialog(self, self.app, self.q)
+        self.wait_window(dlg)
+        if dlg.use is not None:
+            strays.set_table(self.q, dlg.use)
+            self.editor.reload_tabs()
+            self.editor.changed()
+        else:
+            self._env_refresh()
 
     def _env_pick(self):
         q = self.q
@@ -1117,7 +1240,7 @@ class MonsterCard(ttk.Frame):
         if m["Starttype"] not in values:
             values.append(m["Starttype"])
         self._start_values = values
-        self.start_box.configure(values=[startpos.choice_text(v, ar, mp) for v in values])
+        self.start_box.configure(values=[startpos.choice_text(v, ar, mp, m['Type']) for v in values])
         self.start_box.current(values.index(m["Starttype"]))
 
     def _fill_map(self, m, pack):
@@ -2993,3 +3116,137 @@ class EditorPage(ttk.Frame):
         win.bind("<Escape>", lambda _e: win.destroy())
         center_on(win, self.app)
         win.deiconify()
+
+
+# ====================================================== roaming-monster lists of your own
+class RoamingListsDialog(tk.Toplevel):
+    """Make roaming-monster lists in the numbers the game leaves empty (installed by the Monster pack)."""
+
+    def __init__(self, parent, app, q):
+        super().__init__(app)
+        self.app, self.q, self.use = app, q, None
+        self.title(_("My roaming-monster lists"))
+        self.transient(app)
+        self.configure(background=theme.color("bg"))
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill="both", expand=True)
+        ttk.Label(f, text=_("My roaming-monster lists"), style="H2.TLabel").pack(anchor="w")
+        ttk.Label(f, style="Muted.TLabel", wraplength=560, justify="left", text=_(
+            "Lists of your own take a number the game leaves empty. They are written into the game by the "
+            "Monster pack: build and install it again after a change. Each monster keeps the strength "
+            "(health, attack, defence) of the list the quest used when you added it.")).pack(anchor="w", pady=(4, 8))
+        top = ttk.Frame(f)
+        top.pack(anchor="w", fill="x")
+        ttk.Label(top, text=_("List")).pack(side="left")
+        self.box = ttk.Combobox(top, state="readonly", width=40)
+        self.box.pack(side="left", padx=6)
+        self.box.bind("<<ComboboxSelected>>", lambda _e: self._select())
+        self.rows = ttk.Frame(f)
+        self.rows.pack(anchor="w", fill="x", pady=(10, 0))
+        self.msg = ttk.Label(f, text="", style="Warn.TLabel")
+        self.msg.pack(anchor="w", pady=(6, 0))
+        bar = ttk.Frame(f)
+        bar.pack(anchor="w", pady=(10, 0))
+        ttk.Button(bar, text=_("Add a monster"), command=self._add).pack(side="left")
+        ttk.Button(bar, text=_("Delete this list"), command=self._delete).pack(side="left", padx=6)
+        self.use_btn = ttk.Button(bar, text=_("Save and use in this quest"), style="Accent.TButton",
+                                  command=lambda: self._save(True))
+        self.use_btn.pack(side="left")
+        self.save_btn = ttk.Button(bar, text=_("Save"), command=lambda: self._save(False))
+        self.save_btn.pack(side="left", padx=6)
+        ttk.Button(bar, text=_("Close"), command=self.destroy).pack(side="left")
+        cur = q.get("nora_set_table")
+        like = strays.table(cur) if strays.is_unstable(q) else None
+        if not like:
+            refs = strays.references(q.get("map"), q.get("star"))
+            like = strays.table(refs[0]["table"]) if refs else strays.game_tables().get(2)
+        self.like = list(like[0])
+        self._fill_box(cur if strays.is_custom(cur) else None)
+        center_on(self, app)
+        make_modal(self)
+
+    def _fill_box(self, select=None):
+        self.slots = sorted(set(strays.CUSTOM) | set(strays.free_slots()))
+        self.box.configure(values=[(_("{}: ").format(i) + (strays.table_text(i) if strays.is_custom(i) else _("(new list)")))
+                                   for i in self.slots])
+        if not self.slots:
+            self.msg.configure(text=_("The game has no empty list number left."))
+            return
+        self.box.current(self.slots.index(select) if select in self.slots else 0)
+        self._select()
+
+    def _select(self):
+        idx = self.slots[self.box.current()]
+        self.entries = [list(e) for e in strays.CUSTOM.get(idx, [])]
+        self._draw()
+
+    def _draw(self):
+        for w in self.rows.winfo_children():
+            w.destroy()
+        self.chances = []
+        for i, e in enumerate(self.entries):
+            ttk.Button(self.rows, text=G.mon_name(e[strays.EM]), width=24,
+                       command=lambda i=i: self._change(i)).grid(row=i, column=0, sticky="w", pady=1)
+            v = tk.StringVar(value=str(e[strays.CHANCE]))
+            v.trace_add("write", lambda *_a: self._check())
+            ttk.Spinbox(self.rows, from_=1, to=100, width=5, textvariable=v).grid(row=i, column=1, padx=6)
+            ttk.Label(self.rows, text="%").grid(row=i, column=2, sticky="w")
+            ttk.Button(self.rows, text="\u00d7", width=3, command=lambda i=i: self._remove(i)).grid(row=i, column=3, padx=6)
+            self.chances.append(v)
+        self._check()
+
+    def _read(self):
+        for e, v in zip(self.entries, self.chances):
+            try:
+                e[strays.CHANCE] = max(0, min(100, parse_int(v.get())))
+            except ValueError:
+                e[strays.CHANCE] = 0
+
+    def _check(self):
+        self._read()
+        bad = strays.table_problems(self.entries)
+        self.msg.configure(text="  ".join(_(b) for b in bad))
+        st = ["disabled"] if bad else ["!disabled"]
+        self.use_btn.state(st)
+        self.save_btn.state(st)
+
+    def _add(self):
+        if len(self.entries) >= 8:
+            return
+        em = picker.pick_monster(self.app, title=_("Roaming monster"))
+        if em:
+            self._read()
+            left = max(1, 100 - sum(e[strays.CHANCE] for e in self.entries))
+            self.entries.append(strays.make_entry(em, left, self.like))
+            self._draw()
+
+    def _change(self, i):
+        em = picker.pick_monster(self.app, initial=self.entries[i][strays.EM], title=_("Roaming monster"))
+        if em:
+            self._read()
+            self.entries[i] = strays.make_entry(em, self.entries[i][strays.CHANCE], self.entries[i])
+            self._draw()
+
+    def _remove(self, i):
+        self._read()
+        del self.entries[i]
+        self._draw()
+
+    def _delete(self):
+        idx = self.slots[self.box.current()]
+        strays.CUSTOM.pop(idx, None)
+        self.app.save_roaming_lists()
+        self._fill_box()
+
+    def _save(self, use):
+        self._read()
+        if strays.table_problems(self.entries):
+            return
+        idx = self.slots[self.box.current()]
+        strays.CUSTOM[idx] = [list(e) for e in self.entries]
+        self.app.save_roaming_lists()
+        if use:
+            self.use = idx
+            self.destroy()
+        else:
+            self._fill_box(idx)

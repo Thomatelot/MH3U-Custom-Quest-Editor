@@ -23,7 +23,31 @@ try:
 except (OSError, ValueError):
     _A = {}
 
+try:
+    _F = json.loads((G.DATA_DIR / "start_forms.json").read_text(encoding="utf-8")).get("forms", {})
+except (OSError, ValueError):
+    _F = {}
+
 MAX_POSITION = 6
+# Quests of the game that use a start with a special form (shown as examples).
+FORM_EXAMPLES = {(74, 1): "Clashing Fists!", (72, 3): "Descent into Hades", (72, 2): "Infernal Overlord",
+                 (41, 2): "Lurkers in the Woods"}
+
+
+def form(em: int, map_id: int, pos: int) -> int:
+    """The 'form' number of a start position (0 = the ordinary monster). The game has special forms
+    for Brachydios (1), Zinogre and Stygian Zinogre (2, 3) only: a start record tells the monster
+    which one it is (see gamecode.py)."""
+    lst = _F.get(str(em), {}).get(str(G.MAP_TO_INTERNAL.get(map_id)), [])
+    return lst[pos] if 0 <= pos < len(lst) else 0
+
+
+def form_text(em: int, map_id: int, pos: int) -> str:
+    f = form(em, map_id, pos)
+    if not f:
+        return ""
+    ex = FORM_EXAMPLES.get((em, f))
+    return _("special form {}").format(f) + (_(" (as in '{}')").format(ex) if ex else "")
 
 
 def areas(em: int, map_id: int, pack: dict | None = None) -> list[int] | None:
@@ -91,8 +115,11 @@ def area_label(map_id: int, internal: int, monster: bool = True) -> str:
     return f"area {n}" if n is not None else f"area ? (game number {internal})"
 
 
-def choice_text(pos: int, areas: list[int] | None, map_id: int) -> str:
+def choice_text(pos: int, areas: list[int] | None, map_id: int, em: int | None = None) -> str:
     """Text of one entry of the 'Starts in' list."""
+    ft = form_text(em, map_id, pos) if em else ""
+    if ft:
+        return choice_text(pos, areas, map_id) + "  ·  " + ft
     if areas is None:
         return f"{pos}  -  " + (label(pos) if pos else "game default")
     if 0 <= pos < len(areas):

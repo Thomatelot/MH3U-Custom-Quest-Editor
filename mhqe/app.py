@@ -33,7 +33,7 @@ from .library import LibrarySource
 from .packs import PackError
 from .project import (APP_DIR, Backups, PackSource, RomSource, Settings, find_emulator_mod_dirs,
                       find_emulator_title_dirs, pack_dir_region, regions_with_saves,
-                      find_emulator_pack_dirs, find_pack_dir, read_base_numbers)
+                      find_emulator_pack_dirs, find_pack_dir, find_romfs, read_base_numbers, romfs_region)
 from .quest import Quest, QuestFormatError
 from .supp import CustomBoxes
 from .validate import validate_quest
@@ -1544,11 +1544,20 @@ class App(tk.Tk):
         self.reload_lists()
 
     def choose_romfs(self):
-        folder = filedialog.askdirectory(parent=self, title="Choose the extracted 'romfs' folder of MH3U")
-        if not folder:
+        picked = filedialog.askdirectory(parent=self, title="Choose the extracted 'romfs' folder of MH3U")
+        if not picked:
             return
-        from .monsterpack import detect_region
-        found = detect_region(folder)
+        game = find_romfs(picked, prefer=G.REGION)
+        if game is None:
+            messagebox.showerror(APP_TITLE, _(
+                "No MH3U game files were found in this folder, in its subfolders or just above it:\n{}\n\n"
+                "Choose the game's extracted 'romfs' folder. It holds the folders arc, quest, sound... and "
+                "arc/quest/eu (European version) or arc/quest/us (North American version) with quest00.arc "
+                "inside. Citra and Azahar make it with a right-click on the game > Dump RomFS.").format(picked),
+                parent=self)
+            return
+        folder = str(game)
+        found = romfs_region(game)
         if found and found != G.REGION:
             if not messagebox.askyesno(
                     APP_TITLE, f"This extracted game is the {G.region_name(found)} version, but the editor is set "
@@ -1567,6 +1576,8 @@ class App(tk.Tk):
         if self.sources["packs"]:
             self.sources["packs"].reserved = set(self.sources["rom"].originals)
         self.reload_lists()
+        if Path(folder) != Path(picked):
+            self.set_status(_("Game files found in: {}").format(folder))
         if not self.icons.has_art and messagebox.askyesno(
                 APP_TITLE, "The monster, item and map pictures are missing. Build them from this game now?\n\n"
                 "The editor reads them from your own copy of the game, on your computer (a few seconds, "

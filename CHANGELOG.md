@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.2
+
+* **Choosing the extracted game is easier (bug reported by a US player).** *Choose the romfs folder* only
+  accepted the `romfs` folder itself; picking the folder of a dump (Citra or Azahar's `dump`, the
+  extraction's main folder, `ExtractedRomFS`...) gave "This does not look like the game's romfs folder"
+  and, misleadingly, spoke of `romfs/quest/eu` to US players. The editor now finds the game's files in the
+  folder picked, in its subfolders or just above it, for both versions (with both inside, the version the
+  editor is set to), and otherwise says what to choose.
+
 ## 1.6.1
 
 * **New base-game quests now appear in the game.** The game only loads the quests named in its

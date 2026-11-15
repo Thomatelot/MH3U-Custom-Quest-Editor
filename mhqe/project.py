@@ -376,7 +376,7 @@ class RomSource:
             for f in sorted(self.loose_dir.glob("q_*.quest")):
                 self.originals[int(f.name[2:7])] = f.read_bytes()
         else:
-            raise PackError(f"Could not find quest00.arc or romfs/quest/{self.region_dir} in {self.romfs}")
+            raise PackError(f"Could not find arc/quest/eu or us/quest00.arc, or quest/eu or us, in {self.romfs}")
         for no, data in self.originals.items():
             edit = self.workspace / file_name_for(no)
             if self.load_edits and edit.is_file():
@@ -541,6 +541,57 @@ class RomSource:
             write_atomic(target, arcmod.build(arc))
             written.append(target)
         return written
+
+
+def romfs_region(folder: str | Path) -> str | None:
+    """'eu' or 'us' if this folder is the game's romfs (it holds the quests), else None."""
+    d = Path(folder)
+    for r in ("eu", "us"):
+        try:
+            if (d / "arc" / "quest" / r / "quest00.arc").is_file():
+                return r
+            q = d / "quest" / r
+            if q.is_dir() and next(q.glob("q_*.quest"), None) is not None:
+                return r
+        except OSError:
+            continue
+    return None
+
+
+def find_romfs(folder: str | Path, prefer: str | None = None, depth: int = 4,
+               max_dirs: int = 5000) -> Path | None:
+    """The game's romfs folder for a folder the user picked: the folder itself, one inside it (the
+    extraction's main folder, a 'dump' folder of Citra or Azahar, ExtractedRomFS...) or one above
+    it (when 'arc' or 'quest' was picked). Several games inside: the one of version ``prefer``."""
+    start = Path(folder)
+    if romfs_region(start):
+        return start
+    found: list[Path] = []
+    level, seen = [start], 0
+    for _ in range(depth):
+        nxt = []
+        for d in level:
+            try:
+                subs = sorted(p for p in d.iterdir() if p.is_dir())
+            except OSError:
+                continue
+            for p in subs:
+                seen += 1
+                if seen > max_dirs:
+                    break
+                if romfs_region(p):
+                    found.append(p)                 # never look inside a game
+                else:
+                    nxt.append(p)
+        if found or seen > max_dirs:
+            break
+        level = nxt
+    if found:
+        return next((p for p in found if romfs_region(p) == prefer), found[0])
+    for p in list(start.parents)[:4]:
+        if romfs_region(p):
+            return p
+    return None
 
 
 def read_base_numbers(romfs: str | Path | None) -> set[int]:

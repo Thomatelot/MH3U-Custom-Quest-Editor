@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.1
+
+* **New base-game quests now appear in the game.** The game only loads the quests named in its
+  `quest.list` (loose in `romfs/quest/<eu|us>/` and inside `quest00.arc`), and the editor did not add the
+  new ones there. Found by a tester who added quest 1120 by hand; the editor now writes the same bytes, in
+  both places. A mod saved with an older version is written again when the editor starts: install it again.
+* **Update from the editor.** *Settings > Check for updates...*: shows what changed on GitHub and updates
+  in one click, replacing only the program files. Your library, boxes, roaming lists, base-game edits,
+  settings, backups and mods are kept, and a copy of them and of the old version is saved first in
+  `update_backups/` (*Go back to version ...* undoes the update). The editor only goes online from that
+  window.
+
 ## 1.6.0
 
 * **Phone notebook (Android app).** `android/MH3U-Quest-Notebook.apk`: write quests on the phone (texts,

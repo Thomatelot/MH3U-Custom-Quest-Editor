@@ -24,7 +24,7 @@ from . import autofill, guide, spawns, supp
 from . import gamedata as G
 from . import monsterpack
 from . import helptext as H
-from . import arena, i18n, phone, picker, progress, strays, theme
+from . import arena, i18n, phone, picker, progress, strays, theme, updater
 from .i18n import _
 from .editor import EditorPage, stars
 from .finder import Finder
@@ -812,6 +812,24 @@ class App(tk.Tk):
                 self.sources["rom"] = RomSource(romfs)
             except (PackError, OSError, ValueError):
                 self.sources["rom"] = None
+            self._fix_old_rom_mod()
+
+    def _fix_old_rom_mod(self):
+        """Before 1.6.1 the mod did not hold the game's quest.list, so new base-game quests never
+        appeared in the game. Write such a mod again, and say it must be installed again."""
+        rom = self.sources.get("rom")
+        if not rom or not rom.added or not ROM_OUTPUT.is_dir():
+            return
+        if (ROM_OUTPUT / "quest" / rom.region_dir / "quest.list").is_file():
+            return
+        try:
+            rom.export_mod(ROM_OUTPUT)
+        except (PackError, OSError, ValueError):
+            return
+        self.after(800, lambda: messagebox.showinfo(APP_TITLE, _(
+            "Your base-game mod was written again: it now holds the game's quest list with your new quests "
+            "(without it, the game does not show them).\n\nInstall it again: Base game page, 'Install the mod "
+            "into Citra' (or copy it to your 3DS)."), parent=self))
 
     def _set_packs(self, folder, base=None, quiet=False) -> bool:
         found = find_pack_dir(folder)
@@ -2041,6 +2059,12 @@ class SettingsDialog(Dialog):
             "backup and the first copy of every quest.")).pack(anchor="w")
         ttk.Label(f, text=f"Library and backups are kept next to the program:\n{short_path(APP_DIR, 90)}",
                   style="Muted.TLabel").pack(anchor="w", pady=(10, 0))
+        ttk.Label(f, text="Updates", style="H3.TLabel").pack(anchor="w", pady=(12, 2))
+        ur = ttk.Frame(f)
+        ur.pack(anchor="w")
+        ttk.Label(ur, text=_("Installed version: {}").format(__version__)).pack(side="left")
+        ttk.Button(ur, text="Check for updates...", command=lambda: (self.destroy(), UpdateDialog(app))).pack(
+            side="left", padx=10)
         b = ttk.Frame(f)
         b.pack(fill="x", pady=(14, 0))
         ttk.Button(b, text="OK", style="Accent.TButton", command=self._ok).pack(side="right")
@@ -2068,6 +2092,168 @@ class SettingsDialog(Dialog):
             app.apply_theme(key)
         if region != G.REGION:
             app.switch_region(region)
+
+
+class UpdateDialog(Dialog):
+    """Check GitHub for a newer version and install it, keeping the user's files (see updater.py).
+    The network is used only from here, when the user asks."""
+
+    def __init__(self, app):
+        super().__init__(app, _("Update the editor"))
+        self.found = None
+        self.busy = False
+        f = ttk.Frame(self, padding=18)
+        f.pack(fill="both", expand=True)
+        ttk.Label(f, text=_("Installed version: {}").format(__version__), style="H3.TLabel").pack(anchor="w")
+        ttk.Label(f, style="Muted.TLabel", wraplength=620, justify="left", text=(
+            "The editor looks for a newer version on GitHub only when you open this window "
+            f"({updater.PAGE}). An update replaces the program files only: your library, custom supply "
+            "boxes, roaming lists, base-game edits, settings, backups and mods are kept. A copy of them and "
+            "of the old program files is saved first in the 'update_backups' folder.")).pack(anchor="w", pady=(4, 8))
+        self.status = ttk.Label(f, text="", wraplength=620, justify="left")
+        self.status.pack(anchor="w")
+        self.notes = tk.Text(f, height=14, width=82, wrap="word")
+        theme.style_text(self.notes)
+        self.notes.pack(fill="both", expand=True, pady=(8, 0))
+        self.notes.configure(state="disabled")
+        b = ttk.Frame(f)
+        b.pack(fill="x", pady=(12, 0))
+        ttk.Button(b, text="Close", command=self._close).pack(side="right")
+        self.go = ttk.Button(b, text="Update", style="Accent.TButton", command=self._update)
+        self.check_btn = ttk.Button(b, text="Check again", command=self._check)
+        self.check_btn.pack(side="left")
+        last = updater.last_update(APP_DIR)
+        self.back = None
+        if last:
+            self.back = ttk.Button(b, text=_("Go back to version {}").format(last[1].get("from", "?")),
+                                   command=lambda: self._undo(last[0], last[1]))
+            self.back.pack(side="left", padx=6)
+        self.protocol("WM_DELETE_WINDOW", self._close)
+        self.finish()
+        why = updater.can_update(APP_DIR)
+        if why:
+            self.status.configure(text=_(why), style="Warn.TLabel")
+            self.check_btn.state(["disabled"])
+        else:
+            self._check()
+
+    def _close(self):
+        if not self.busy:
+            self.destroy()
+
+    def _show_notes(self, text):
+        self.notes.configure(state="normal")
+        self.notes.delete("1.0", "end")
+        self.notes.insert("1.0", text)
+        self.notes.configure(state="disabled")
+
+    def _run(self, work, done):
+        """work() in a thread (network, files), then done(result or exception) in the window."""
+        box = {}
+
+        def target():
+            try:
+                box["r"] = work()
+            except Exception as exc:          # shown to the user, never lost
+                box["r"] = exc
+
+        th = threading.Thread(target=target, daemon=True)
+        self.busy = True
+        th.start()
+
+        def poll():
+            if th.is_alive():
+                self.after(150, poll)
+                return
+            self.busy = False
+            if self.winfo_exists():
+                done(box.get("r"))
+        self.after(150, poll)
+
+    def _check(self):
+        self.go.pack_forget()
+        self.check_btn.state(["disabled"])
+        self.status.configure(text=_("Looking for a new version on GitHub..."), style="TLabel")
+        self._run(updater.find_latest, self._checked)
+
+    def _checked(self, r):
+        self.check_btn.state(["!disabled"])
+        if isinstance(r, Exception):
+            self.status.configure(text=_("The check failed: {}").format(_(str(r))), style="Warn.TLabel")
+            return
+        self.found = r
+        if updater.newer(r["version"], __version__):
+            self.status.configure(text=_("Version {} is available.").format(r["version"]), style="Accent.TLabel")
+            self._show_notes(r["notes"] or _("See the changes on {}").format(updater.PAGE))
+            self.go.configure(text=_("Update to version {}").format(r["version"]))
+            self.go.pack(side="right", padx=6)
+        else:
+            self.status.configure(text=_("You have the latest version ({}).").format(__version__), style="TLabel")
+            self._show_notes("")
+
+    def _update(self):
+        app = self.app
+        if app.dirty_sources():
+            if not messagebox.askyesno(APP_TITLE, "Save your changes first? (Needed before updating.)", parent=self):
+                return
+            if not app.save():
+                return
+        r = self.found
+        self.go.state(["disabled"])
+        self.check_btn.state(["disabled"])
+        if self.back:
+            self.back.state(["disabled"])
+        msgs = []
+
+        def say(t):
+            msgs.append(t)
+
+        def work():
+            say("Downloading...")
+            files = updater.read_zip(updater.download(r["ref"]), r["version"])
+            return updater.apply(APP_DIR, files, r["version"], progress=say)
+
+        def tick():
+            if self.busy and self.winfo_exists():
+                if msgs:
+                    self.status.configure(text=_(msgs[-1]), style="TLabel")
+                self.after(200, tick)
+        self._run(work, self._updated)
+        tick()
+
+    def _updated(self, r):
+        if isinstance(r, Exception):
+            self.status.configure(text=_("The update failed: {}").format(_(str(r))), style="Warn.TLabel")
+            self.go.state(["!disabled"])
+            self.check_btn.state(["!disabled"])
+            return
+        self.status.configure(text=_("Updated to version {}.").format(self.found["version"]), style="Accent.TLabel")
+        messagebox.showinfo(APP_TITLE, _(
+            "The editor was updated to version {}. Your files were kept, and a copy of them and of the old "
+            "version is in:\n{}\n\nThe editor now restarts.").format(self.found["version"], r), parent=self)
+        restart(self.app)
+
+    def _undo(self, bdir, info):
+        if not messagebox.askyesno(APP_TITLE, _(
+                "Put back version {} of the program? Your quests, boxes and settings are not changed. "
+                "The editor then restarts.").format(info.get("from", "?")), parent=self):
+            return
+        try:
+            updater.undo(APP_DIR, bdir)
+        except (OSError, ValueError) as exc:
+            messagebox.showerror(APP_TITLE, str(exc), parent=self)
+            return
+        restart(self.app)
+
+
+def restart(app):
+    """Start the editor again (after an update) and close this one."""
+    script = APP_DIR / "mh3u_quest_editor.py"
+    try:
+        subprocess.Popen([sys.executable, str(script)], cwd=str(APP_DIR))
+    except OSError:
+        messagebox.showinfo(APP_TITLE, "Start the editor again to use the new version.", parent=app)
+    app.destroy()
 
 
 def own_taskbar_identity():

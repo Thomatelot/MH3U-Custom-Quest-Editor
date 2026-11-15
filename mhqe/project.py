@@ -13,6 +13,7 @@ from pathlib import Path
 
 from . import arc as arcmod
 from . import gamedata as G
+from . import questlist
 from .backup import BackupManager
 from .packs import (DATA, PACK_NAMES, EventPack, PackError, fit_record,
                     file_name_for)
@@ -469,6 +470,26 @@ class RomSource:
         self.unsaved = set()
         return written
 
+    def original_quest_list(self) -> bytes | None:
+        """The game's quest.list (from quest00.arc, else the loose file)."""
+        if self._arc is not None:
+            for e in self._arc.entries:
+                if e.type_hash == questlist.TYPE_HASH and e.leaf == "quest":
+                    return e.data
+        p = self.loose_dir / "quest.list"
+        return p.read_bytes() if p.is_file() else None
+
+    def quest_list(self, extra) -> bytes:
+        """quest.list with the quests of your own added. Raises PackError if it cannot be made."""
+        data = self.original_quest_list()
+        if data is None:
+            raise PackError(f"The game's quest.list was not found (romfs/quest/{self.region_dir}/quest.list "
+                            "or quest00.arc): new quests can not be listed for the game.")
+        try:
+            return questlist.add(data, extra)
+        except questlist.QuestListError as exc:
+            raise PackError(f"The game's quest.list could not be updated: {exc}") from exc
+
     def export_mod(self, out_dir: str | Path) -> list[Path]:
         """Write the mod folder: <out>/quest/<eu|us>/*.quest and
         <out>/arc/quest/<eu|us>/quest00.arc (both overridable by the emulator /
@@ -489,6 +510,14 @@ class RomSource:
             p = loose / file_name_for(no)
             write_atomic(p, self.quests[no].to_bytes())
             written.append(p)
+        # the game only loads the quests named in quest.list: new quests must be added to it
+        listed = self.quest_list(sorted(self.added)) if self.added else None
+        lp = loose / "quest.list"
+        if listed is not None:
+            write_atomic(lp, listed)
+            written.append(lp)
+        else:
+            lp.unlink(missing_ok=True)
         if self._arc is not None:
             arc = arcmod.Arc(self._arc.version,
                              [arcmod.ArcEntry(e.path, e.type_hash, e.flags, e.data)
@@ -503,6 +532,10 @@ class RomSource:
             for no in sorted(self.added):          # the game lists every quest file of the archive
                 arc.entries.append(arcmod.ArcEntry(f"{folder}q_{no:05d}", model.type_hash, model.flags,
                                                    self.quests[no].to_bytes()))
+            if listed is not None:
+                for e in arc.entries:
+                    if e.type_hash == questlist.TYPE_HASH and e.leaf == "quest":
+                        e.data = listed
             target = out / "arc" / "quest" / self.region_dir / "quest00.arc"
             target.parent.mkdir(parents=True, exist_ok=True)
             write_atomic(target, arcmod.build(arc))

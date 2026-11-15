@@ -139,7 +139,7 @@ what it does, with the values the game's own quests use; the built-in **Guide** 
 | **Optional** | **Pillow** (`py -m pip install pillow`) and `exefs/code.bin`, only to rebuild the pictures from your own game. |
 | **Optional** | The extracted game **with `exefs/code.bin` next to `romfs`**, to build the *Monster pack*. |
 
-No internet connection is needed to run the editor, and it never uses one.
+No internet connection is needed to run the editor. It only goes online when you click *Settings > Check for updates...*.
 The author tested on **Windows with Citra** only. macOS and Linux: the code is portable Python, has a
 launcher for each, and looks for Citra, Azahar and Lime3DS folders there too (including Flatpak), but
 nobody has tried yet.
@@ -164,6 +164,15 @@ nobody has tried yet.
    with GodMode9 / a 3DS extraction tool on your console. Then in the editor:
    *Settings > Choose the romfs folder...*. The monster / item / map pictures are already included;
    *Settings > Rebuild the pictures from my game...* can regenerate them.
+
+### Updating
+
+*Settings > Check for updates...* compares your version with the one on GitHub, shows what changed and
+updates the editor in one click. Only the program files are replaced: your library, custom supply
+boxes, roaming lists, base-game edits, settings, backups and mods stay as they are. Before anything is
+written, a zip of your files and a copy of the old program go to `update_backups/`; if writing fails, the
+old version is put back at once, and *Go back to version ...* in the same window undoes an update later.
+(A copy made with `git clone` is updated with git instead.)
 
 <p align="center"><img src="docs/images/night-theme.png" width="640" alt="Night theme"></p>
 

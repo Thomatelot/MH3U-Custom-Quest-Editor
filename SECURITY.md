@@ -16,10 +16,15 @@ is Capcom's data, so do not post those.
 
 ## What the editor does and does not do
 
-* It runs **offline**: it never opens a network connection and never sends anything anywhere.
+* It runs **offline**. The only exception is *Settings > Check for updates...*: only when you click it,
+  the editor asks GitHub (`api.github.com`, `raw.githubusercontent.com`, `codeload.github.com`) for the
+  newest version of this repository and, if you then click *Update*, downloads it. Nothing about you,
+  your game or your quests is sent; GitHub only sees an ordinary request for a public page.
+  The download must be the editor (checked before anything is written); your own files are never written,
+  and a copy of them and of the old program files is kept in `update_backups/`.
 * It only reads and writes in: the folder of your save's quest files (`quest1`..`quest4`) that you
   chose or that was found in Citra's folder; its own folder (`settings.json`, `custom_supply.json`,
-  `backups/`, `library/`, `output/`, `error_log.txt`, and `assets/` if you rebuild the pictures); and, only when you press
+  `backups/`, `library/`, `output/`, `workspace/`, `update_backups/`, `error_log.txt`, `assets/` if you rebuild the pictures, and the program files when you update it); and, only when you press
   the install buttons, the `load/mods/<title id>` folder of Citra (`00040000000B1D00` EU,
   `00040000000AE400` US): `romfs/` for quest and supply mods, plus `exefs/code.ips`,
   `romfs/arc/enemy/` and `mhqe_monster_pack.json` for the optional Monster pack.

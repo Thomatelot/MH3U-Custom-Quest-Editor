@@ -48,3 +48,5 @@ desktop.ini
 *.p12
 *.jks
 *.keystore
+update_backups/
+workspace/

@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from mhqe import arc as arcmod, gamecode as GC, monsterpack as MP, progress, rules, startpos, strays  # noqa: E402
+from mhqe import arc as arcmod, gamecode as GC, monsterpack as MP, progress, questlist, rules, startpos, strays  # noqa: E402
 from mhqe.project import RomSource  # noqa: E402
 
 ROMFS = os.environ.get("MHQE_ROMFS")
@@ -73,6 +73,26 @@ class GameCode(unittest.TestCase):
         arc = arcmod.read(out / "arc" / "quest" / rom.region_dir / "quest00.arc")
         self.assertEqual(len(arc.entries), len(rom._arc.entries) + 1)
         self.assertTrue(any(e.leaf == "q_11120" for e in arc.entries))
+        # the game only loads the quests named in quest.list: both copies must list the new one
+        lst = next(e.data for e in arc.entries if e.type_hash == questlist.TYPE_HASH)
+        loose = (out / "quest" / rom.region_dir / "quest.list").read_bytes()
+        self.assertEqual(lst, loose)
+        self.assertEqual(questlist.numbers(loose), questlist.numbers(rom.original_quest_list()) + [11120])
+        rom.revert("11120")
+        rom.export_mod(out)
+        self.assertFalse((out / "quest" / rom.region_dir / "quest.list").exists())
+
+    def test_quest_list_like_the_tested_file(self):
+        """A tester added quest 1120 to quest.list by hand and it appeared in the game; adding it here
+        gives the same bytes (counts, sizes, the new record)."""
+        import struct
+        data = RomSource(ROMFS, workspace=Path(tempfile.mkdtemp()), load_edits=False).original_quest_list()
+        new = questlist.add(data, [1120])
+        self.assertEqual(len(new), len(data) + 16)
+        self.assertEqual(new[-16:], bytes.fromhex("05006F010C0000000100000060040000"))
+        for off, delta in ((0x08, 1), (0x134, 16), (0x148, 16), (0x151, 1)):
+            self.assertEqual(struct.unpack_from("<I", new, off)[0] - struct.unpack_from("<I", data, off)[0], delta)
+        self.assertEqual(questlist.add(new, [1120]), new)
 
     def test_pack_extras(self):
         like = strays.game_tables()[187][0]

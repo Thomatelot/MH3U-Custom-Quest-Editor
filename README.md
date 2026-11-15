@@ -8,6 +8,16 @@ macOS and Linux), written in pure Python, in **English or French**. It includes 
 pack** (ROM hack) that lets large monsters appear on maps the game does not allow, like Zinogre on the
 Sandy Plains.
 
+<p align="center">
+<a href="docs/images/Screenshots/Screenshot%20(1).png"><img src="docs/images/Screenshots/ingame-1.jpg" width="410" alt="Zinogre on the Sandy Plains with the Monster pack, in Citra"></a>
+<a href="docs/images/Screenshots/Screenshot%20(2).png"><img src="docs/images/Screenshots/ingame-2.jpg" width="410" alt="A custom quest in the Volcano, in Citra"></a>
+</p>
+<p align="center">
+<a href="docs/images/Screenshots/Screenshot%20(3).png"><img src="docs/images/Screenshots/ingame-3.jpg" width="410" alt="A custom quest in Citra"></a>
+<a href="docs/images/Screenshots/Screenshot%20(4).png"><img src="docs/images/Screenshots/ingame-4.jpg" width="410" alt="A custom quest in Citra"></a>
+</p>
+<p align="center"><em>Custom quests played in Citra (click a picture for the full size).</em></p>
+
 New in 1.4: **who can join** (minimum Hunter Rank, number of players, no armor), **day or night**, the
 fixed **Challenge gear** of the Challenge quests, and monsters that can start in **area 2 of the Great
 Desert** with the Monster pack.

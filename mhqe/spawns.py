@@ -202,3 +202,165 @@ def add_species(q, em: int, star: int, pool: str, places: int = 6) -> int:
             write(q, have + rows[:take])
             return take
     raise QuestFormatError(f"the game's quests on {G.map_name(map_id)} have no place for {G.mon_name(em)}")
+
+
+# ------------------------------------------------------------------ one place (record)
+# Layout of a 45-byte record, checked on the 11,383 records of the game's quests (a tester's notes
+# gave the same reading): the species (u32), how many times it comes back (u32: 1 to 8, or 255 =
+# again and again), the area, how many appear there at once, the variant (a young Aptonoth...),
+# then the position (x, y, z), a 0, the facing direction (0..65535 = one turn) and a 0. The other
+# bytes are kept as they are.
+SMALL_SPECIES = (10, 11, 13, 17, 21, 22, 23, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+                 48, 49, 50, 76, 77, 78, 79, 80, 81, 82, 83, 84, 40)
+BOULDERS = (40, 79, 80, 81, 82, 83, 84)
+RESPAWN_FOREVER = 255
+R_EM, R_RESPAWN, R_AREA, R_COUNT, R_VARIANT, R_POS = 0, 4, 14, 15, 16, 21
+
+
+class Place:
+    """Read / change one record. ``bytes(place)`` gives the record back."""
+
+    def __init__(self, rec: bytes):
+        if len(rec) != REC:
+            raise QuestFormatError("a small-monster place is 45 bytes")
+        self.raw = bytearray(rec)
+
+    def __bytes__(self) -> bytes:
+        return bytes(self.raw)
+
+    em = property(lambda s: struct.unpack_from("<I", s.raw, R_EM)[0],
+                  lambda s, v: struct.pack_into("<I", s.raw, R_EM, int(v)))
+    respawn = property(lambda s: struct.unpack_from("<I", s.raw, R_RESPAWN)[0],
+                       lambda s, v: struct.pack_into("<I", s.raw, R_RESPAWN, int(v)))
+    area = property(lambda s: s.raw[R_AREA], lambda s, v: s.raw.__setitem__(R_AREA, int(v) & 0xFF))
+    count = property(lambda s: s.raw[R_COUNT], lambda s, v: s.raw.__setitem__(R_COUNT, int(v) & 0xFF))
+    variant = property(lambda s: s.raw[R_VARIANT], lambda s, v: s.raw.__setitem__(R_VARIANT, int(v) & 0xFF))
+
+    @property
+    def pos(self) -> tuple[float, float, float, float]:
+        """(x, y, z, facing)"""
+        x, y, z, _w, ang, _v = struct.unpack_from("<6f", self.raw, R_POS)
+        return x, y, z, ang
+
+    @pos.setter
+    def pos(self, value) -> None:
+        x, y, z, ang = (float(v) for v in value)
+        struct.pack_into("<3f", self.raw, R_POS, x, y, z)
+        struct.pack_into("<f", self.raw, R_POS + 16, ang)
+
+
+def places(q) -> list[Place]:
+    return [Place(r) for r in records(q)]
+
+
+def write_places(q, items) -> None:
+    write(q, [bytes(p) for p in items])
+
+
+@lru_cache(maxsize=None)
+def variants_of(em: int) -> dict[int, int]:
+    """variant -> how many of the game's places use it, for one species."""
+    c: Counter = Counter()
+    for e in _lists():
+        for r in e["recs"]:
+            if em_of(r) == em:
+                c[r[R_VARIANT]] += 1
+    return dict(sorted(c.items()))
+
+
+@lru_cache(maxsize=None)
+def game_places(map_id: int) -> dict[int, list[tuple]]:
+    """area -> the different positions the game's quests use on this map, as
+    (x, y, z, facing, species that use it most, number of uses), most used first."""
+    seen: dict = {}
+    for e in lists_for_map(map_id):
+        for r in e["recs"]:
+            em = em_of(r)
+            if not em:
+                continue
+            p = Place(r)
+            key = (p.area,) + tuple(round(v, 1) for v in p.pos)
+            entry = seen.setdefault(key, [p.pos, Counter()])
+            entry[1][em] += 1
+    out: dict[int, list[tuple]] = {}
+    for key, (pos, users) in seen.items():
+        em, _n = users.most_common(1)[0]
+        out.setdefault(key[0], []).append(pos + (em, sum(users.values())))
+    for a in out:
+        out[a].sort(key=lambda t: -t[5])
+    return dict(sorted(out.items()))
+
+
+def is_new_here(em: int, map_id: int) -> bool:
+    """True if no quest of the game puts this small monster on this map (untested there)."""
+    return em not in species_on_map(map_id)
+
+
+def borrow_places(q, em: int, star: int, pool: str, places_n: int = 6) -> tuple[int, int]:
+    """Add a species that the game never puts on this map: it takes copies of the places of the
+    map's own small monsters (the most common species of the closest game list, spread over its
+    areas), with variant 0. Returns (places added, species whose places were borrowed)."""
+    refs = reference_lists(q.get("map"), star, pool)
+    rows = [r for e in refs[:1] for r in e["recs"] if em_of(r)]
+    if not rows:
+        raise QuestFormatError(f"the game's quests on {G.map_name(q.get('map'))} have no small-monster place "
+                               "to borrow")
+    donor = Counter(em_of(r) for r in rows).most_common(1)[0][0]
+    donor_rows = [r for r in rows if em_of(r) == donor]
+    by_area: dict[int, list[bytes]] = {}
+    for r in donor_rows:
+        by_area.setdefault(r[R_AREA], []).append(r)
+    picked: list[bytes] = []
+    while len(picked) < places_n and any(by_area.values()):
+        for a in list(by_area):
+            if by_area[a] and len(picked) < places_n:
+                picked.append(by_area[a].pop(0))
+    take = min(len(picked), room(q))
+    if take <= 0:
+        raise QuestFormatError("the quest has no room left for more small monsters")
+    new = []
+    for r in picked[:take]:
+        p = Place(r)
+        p.em, p.variant = em, 0
+        new.append(bytes(p))
+    write(q, records(q) + new)
+    return take, donor
+
+
+def hub_places(q, em: int, star: int, pool: str) -> int:
+    """Experimental hub map (Moga Village, Port Tanzia): the game has no position there, so the
+    species gets one place in the middle of each area, on the floor (y 0), to be moved by hand.
+    The other bytes come from one of the game's own places of the species."""
+    hub = G.hub_areas(q.get("map")) or {}
+    tpl = next((r for m in range(1, 16) for e in reference_lists(m, star, pool) for r in e["recs"]
+                if em_of(r) == em), None)
+    if tpl is None:
+        tpl = next((r for m in range(1, 16) for e in reference_lists(m, star, pool) for r in e["recs"]
+                    if em_of(r)), None)
+    if tpl is None or not hub:
+        raise QuestFormatError("no small-monster place to copy")
+    take = min(len(hub), room(q))
+    if take <= 0:
+        raise QuestFormatError("the quest has no room left for more small monsters")
+    new = []
+    for a in sorted(hub)[:take]:
+        x0, z0, x1, z1 = hub[a]
+        p = Place(tpl)
+        p.em, p.variant, p.area, p.count = em, 0, a, 1
+        p.pos = (round((x0 + x1) / 2), 0.0, round((z0 + z1) / 2), 0)
+        new.append(bytes(p))
+    write(q, records(q) + new)
+    return take
+
+
+def problems(q) -> list[str]:
+    """Small monsters on a map where the game never puts them (untested)."""
+    if not readable(q) or not available():
+        return []
+    new = [em for em in species(q) if em and is_new_here(em, q.get("map"))]
+    if not new or G.hub_areas(q.get("map")):
+        return []
+    return [("Small monsters that no quest of the game puts on " + G.map_name(q.get("map")) + ": "
+             + ", ".join(G.mon_name(em) for em in new) + ". Untested: the game already shows some small "
+             "monsters on maps where they have no data of their own, so they should appear, but they may "
+             "behave oddly (when running away, for example).")]

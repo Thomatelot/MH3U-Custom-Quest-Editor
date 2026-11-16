@@ -9,8 +9,9 @@ import math
 from collections import namedtuple
 
 from . import gamedata as G
-from . import arena, monsterpack, progress, rules, siege, startpos, strays, waves
+from . import arena, monsterpack, progress, rules, siege, spawns, startpos, strays, waves
 from .quest import LANGS, NANDO_FIELDS, NANDO_MAX, OBJ_MONSTER_TYPES, Quest
+from .i18n import _
 
 Issue = namedtuple("Issue", "level text")
 
@@ -50,6 +51,10 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
         add(level, text)
     for text in strays.problems(q, monster_pack):
         add("warning", text)
+    for text in strays.notes(q):
+        add("info", text)
+    for text in spawns.problems(q):
+        add("info", text)
     if q.get("prog_no") not in rules.MONSTER_RANKS:
         add("warning", f"Monster rank {q.get('prog_no')} is not one the game uses (0 to 4).")
     if rules.carves(q) == "mixed":
@@ -66,6 +71,16 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
             + ": every quest of the game has exactly one of the two (General tab, Time of day).")
     if q.get("map") not in G.MAP_NAMES:
         add("warning", f"Unknown map id {q.get('map')}.")
+    hub = (monster_pack or {}).get("map9") or ""
+    if q.get("map") == G.HUB_MAP and hub in G.HUBS:
+        name = _(G.HUBS[hub]["name"])
+        if pack_installed:
+            add("warning", _("Experimental: map 9 loads {} (Monster pack). Untested: the game may crash when the "
+                             "quest loads. Large monsters use their Arena positions, far from the ground there; "
+                             "small monsters need positions you type (Developer mode, Edit places).").format(name))
+        else:
+            add("error", _("Map 9 loads {} only with the Monster pack installed: install it (else it is the "
+                           "Arena).").format(name))
     if q.get("time_min") == 0:
         add("warning", "Time limit is 0 minutes.")
     t = q.get("time_min")
@@ -133,10 +148,21 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
                     + ("" if pack_installed else " The pack is not installed: install it first."))
         if status in ("native", "pack"):
             ar = startpos.areas(m["Type"], q.get("map"), monster_pack)
+            planned = [startpos.planned_number(i, monster_pack) for i, x in enumerate(startpos.CUSTOM)
+                       if x["em"] == m["Type"] and x["map"] == q.get("map")]
             if ar is not None and m["Starttype"] >= len(ar):
-                add("error" if status == "pack" else "warning",
-                    f"{name}: start position {m['Starttype']} does not exist for this monster on {where} "
-                    f"(the game has {len(ar)}: 0 to {len(ar) - 1}).")
+                if m["Starttype"] in planned:
+                    add("error", _("{}: start {} is one of your own starts, not in the Monster pack yet: build and "
+                                   "install the pack again.").format(name, m["Starttype"]))
+                else:
+                    add("error" if status == "pack" else "warning",
+                        f"{name}: start position {m['Starttype']} does not exist for this monster on {where} "
+                        f"(the game has {len(ar)}: 0 to {len(ar) - 1}).")
+            elif startpos.own_start(m["Type"], q.get("map"), m["Starttype"], monster_pack) is not None:
+                add("info" if pack_installed else "error",
+                    _("{}: start {} is one of your own starts (Monster pack, Developer mode): untested in the game.")
+                    .format(name, m["Starttype"])
+                    + ("" if pack_installed else " " + _("The pack is not installed: install it first.")))
         first_done = True
 
     used_n = sum(1 for m in mons if m["Type"])

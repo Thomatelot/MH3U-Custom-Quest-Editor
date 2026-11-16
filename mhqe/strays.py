@@ -48,11 +48,30 @@ def make_stable(q) -> None:
         q.set(f, v)
 
 
-def references(map_id: int, star: int) -> list[dict]:
-    """The game's unstable quests on this map, closest star rank first."""
+def references(map_id: int, star: int, anywhere: bool = False) -> list[dict]:
+    """The game's unstable quests on this map, closest star rank first. With ``anywhere``, when no
+    quest of that map is unstable (the arenas, the Great Desert...), those of every map: the
+    settings (chances, how many at once) are the same kind everywhere, only the list differs, and
+    any list can then be chosen."""
     out = [s for s in _sets() if s["map"] == map_id and s["per"] > 0 and s["type"] == 1]
-    out.sort(key=lambda s: (abs(s["star"] - star), s["no"]))
+    if not out and anywhere:
+        out = [s for s in _sets() if s["per"] > 0 and s["type"] == 1]
+    out.sort(key=lambda s: (s["map"] != map_id, abs(s["star"] - star), s["no"]))
     return out
+
+
+def area_count(map_id: int) -> int | None:
+    """Number of areas of a map (camp not counted), from data/map_zones.json."""
+    try:
+        d = json.loads((G.DATA_DIR / "map_zones.json").read_text(encoding="utf-8"))["maps"]
+    except (OSError, ValueError, KeyError):
+        return None
+    z = d.get(str(map_id))
+    return None if z is None else len([a for a in z if a != "0"])
+
+
+def game_has_unstable(map_id: int) -> bool:
+    return any(s["map"] == map_id and s["per"] > 0 for s in _sets())
 
 
 def apply(q, ref: dict) -> None:
@@ -100,6 +119,20 @@ def problems(q, pack: dict | None = None) -> list[str]:
     if bad:
         out.append("Roaming monsters that the game can not place on " + G.map_name(q.get("map")) + ": "
                    + ", ".join(bad) + " (they will not appear; the Monster pack can add them).")
+    return out
+
+
+def notes(q) -> list[str]:
+    """Things to know about roaming monsters on this map (not mistakes)."""
+    out = []
+    if is_unstable(q) and not game_has_unstable(q.get("map")):
+        if area_count(q.get("map")) == 1:
+            out.append("No quest of the game has roaming monsters on this one-area map: untested. A roaming "
+                       "monster has no other area to come from; a Qurupeco's call picks its monster from this "
+                       "same list (as in the event quest 'An Ominous Cry'), so that is the most likely way to "
+                       "see one.")
+        else:
+            out.append("No quest of the game has roaming monsters on this map: untested.")
     return out
 
 

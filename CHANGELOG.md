@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.7.0
+
+Ideas from the testers. Everything below is checked against the game's files and by the tests, but
+**untested in the game**: please report what you see.
+
+* **Any small monster on any map**, boulders included. The game keeps no list of maps for small
+  monsters (they are not in the placement table of the large ones) and already shows some of them on
+  maps where they have no data of their own (Bullfango has none at all). The species the game never puts
+  on a map are listed last in *Add a species* and marked * in the list; they borrow the places of the
+  map's own small monsters.
+* **Every small-monster place is editable**: *Edit places...* (Small monsters) lists each place by area:
+  species, area, how many at once, how many times they come back once slain (1 to 8, or again and again),
+  variant (with how often the game uses it) and position, picked among the game's own positions in that
+  area (raw coordinates in Developer mode). The 45-byte record was read on the game's 11,383 places.
+* **Roaming monsters on one-area maps** (Arena, Water Arena...): *Unstable* now works on every map. When no
+  game quest of the map has roaming monsters, the settings of a quest of another map are used, with a note.
+* **Monster categories as in the game:** Volvidon is a Fanged Beast (it was among the Leviathans), and
+  Royal Ludroth, Purple Ludroth, Gobul, Agnaktor and Glacial Agnaktor are Leviathans (they were among the
+  Piscine Wyverns), in the editor and in the phone notebook (new APK).
+* **Monster starts of your own** (Monster pack, Developer mode): *My monster starts...* (Monster pack
+  page, or a monster card's details) adds start records: another area of a map, or one of the game's
+  special forms (Brachydios' 1, the charged Zinogre's 2 and 3). They are added after the game's starts,
+  so the game's quests do not change; the *Starts in* list shows them as "your start". To make room the
+  pack points the game's start lists that are identical but for the monster number to one copy.
+* **Experiment: Moga Village or Port Tanzia as a quest map** (Monster pack, Developer mode). Quest map 9 is
+  never used by the game's quests (it loads the Arena); the pack can make it load the Village or the Port
+  through the game's quest map -> stage table (3 bytes). Nobody knows yet whether the game accepts it.
+  Large monsters there use their Arena positions; small monsters get one place in the middle of each
+  area, to move by hand (the box of each area is shown).
+* The Monster pack is now built in a separate folder first: if building fails, the pack built before is
+  kept.
+* Text fixes: the Environment help (roaming monsters can be chosen since 1.5), the guide's limits and the
+  Monster pack's numbers (51 monsters, 549 combinations since 1.5).
+
 ## 1.6.2
 
 * **Choosing the extracted game is easier (bug reported by a US player).** *Choose the romfs folder* only

@@ -112,7 +112,40 @@ def item_name(item_id: int) -> str:
 
 
 def map_name(m: int) -> str:
+    if m == HUB_MAP and MAP9_HUB:
+        from .i18n import _
+        return _(HUBS[MAP9_HUB]["name"]) + " " + _("(experimental)")
     return MAP_NAMES.get(m, f"map {m}")
+
+
+# Experimental (Monster pack, Developer mode): quest map 9, which no quest of the game uses, can be
+# made to load Moga Village or Port Tanzia (see gamecode.hub_map_patch). Large monsters there use
+# their Arena data. 'walls' = the box of each area's wall collision (x, z min and max), read from
+# arc/stage/m26 and m27 (the game numbers the hub areas from 0).
+HUB_MAP = 9
+HUBS = {
+    "village": {"name": "Moga Village", "stage": 26,
+                "walls": {0: (-3272, -1163, 3278, 2739), 1: (-462, -1081, 336, 778), 2: (-1750, -1232, 1896, 1244)}},
+    "port": {"name": "Port Tanzia", "stage": 27,
+             "walls": {0: (-2712, -2820, 1846, 1719), 1: (-2911, -2326, 583, 135)}},
+}
+MAP9_HUB = ""
+_MAP9_INTERNAL = None
+
+
+def set_map9(hub: str | None) -> None:
+    """What quest map 9 loads with the Monster pack in use: '' (the game's own: the Arena),
+    'village' or 'port'."""
+    global MAP9_HUB, _MAP9_INTERNAL
+    if _MAP9_INTERNAL is None:
+        _MAP9_INTERNAL = (MAP_TO_INTERNAL.get(HUB_MAP),)
+    MAP9_HUB = hub if hub in HUBS else ""
+    MAP_TO_INTERNAL[HUB_MAP] = 8 if MAP9_HUB else _MAP9_INTERNAL[0]
+
+
+def hub_areas(m: int) -> dict | None:
+    """{area: (x min, z min, x max, z max)} when map m is an experimental hub map, else None."""
+    return HUBS[MAP9_HUB]["walls"] if m == HUB_MAP and MAP9_HUB else None
 
 
 def resolve_monster(value) -> int:

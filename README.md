@@ -18,6 +18,13 @@ Sandy Plains.
 </p>
 <p align="center"><em>Custom quests played in Citra (click a picture for the full size).</em></p>
 
+New in 1.7: **any small monster on any map** (boulders included) and **every small-monster place
+editable** (area, how many at once, how many times they come back, variant, position), **roaming monsters
+on one-area maps** like the Arena, Volvidon among the Fanged Beasts, and, in Developer mode with the
+Monster pack, **monster starts of your own** (another area, Brachydios' or Zinogre's charged forms) and an
+experiment: **Moga Village or Port Tanzia as a quest map**. All of these are untested in the game: please
+report.
+
 New in 1.4: **who can join** (minimum Hunter Rank, number of players, no armor), **day or night**, the
 fixed **Challenge gear** of the Challenge quests, and monsters that can start in **area 2 of the Great
 Desert** with the Monster pack.
@@ -95,7 +102,9 @@ what it does, with the values the game's own quests use; the built-in **Guide** 
   there the hunters always use their own gear.
 * **Monsters:** up to 5 large monsters, with *How the monsters arrive* (all at the start, one after
   another, in groups), **Size like** (tiny to giant, King Size), **Strength like** (health, attack and
-  toughness taken from the game's quests by hub and star rank), and the small monsters of the zone.
+  toughness taken from the game's quests by hub and star rank), and the small monsters of the zone:
+  any species on any map, boulders included, and each place editable (area, how many at once, how many
+  times they come back, variant, position).
 * **Supply Box:** the game's boxes, or **your own named boxes** (any items; the game has room for 10).
 * **Rewards:** auto-fill from the game's own quests by monster and rank, then edit freely.
 * **Text:** quest name, client, description, objectives in the 5 languages.
@@ -107,8 +116,10 @@ what it does, with the values the game's own quests use; the built-in **Guide** 
 * **Browsers:** monsters grouped by type (Flying Wyverns, Brute Wyverns...) with the easiest first and
   difficulty stars, or listed by difficulty; items grouped by family (healing, bombs and traps, ores,
   monster parts, jewels...) following the game's icons. Search finds anything.
-* **Monster pack (ROM hack, optional):** 47 large monsters on all 14 maps (497 new combinations), and
-  monster sizes above the game's 255 % limit, up to 2000 % (Developer mode; untested in the game).
+* **Monster pack (ROM hack, optional):** 51 large monsters on all 14 maps (549 new combinations),
+  monster sizes above the game's 255 % limit, up to 2000 %, and in Developer mode starts of your own
+  (another area, a special form) and Moga Village or Port Tanzia as quest map 9 (all untested in the
+  game).
 * **Phone notebook (Android app):** write quests on your phone when you have an idea, send them to the
   PC (Google Drive, USB cable, share), and the editor turns them into real quests. See
   [Phone notebook](#phone-notebook-android).
@@ -207,7 +218,7 @@ read [Troubleshooting](#troubleshooting).
 |---|---|---|
 | **Your save's quest files** `quest1`, `quest2`, `quest3` (event quests) and `quest4` (challenge quests) | `C:\Users\<you>\AppData\Roaming\Citra\sdmc\Nintendo 3DS\<id0>\<id1>\extdata\00000000\00000B1D\user` (EU) or `...\00000AE4\user` (US), found automatically | Every *Save*, *Put a quest here*, *Clear slot*, *Restore* |
 | **Optional mod folders** (your own supply boxes; edited Village / Port quests) | `output\MH3U_Supply_Mod\romfs` and `output\MH3U_Quest_Mod\romfs` next to the editor; copied into `<Citra>\load\mods\<title id>\romfs` only when you press the install buttons | Only if you use those features |
-| **Monster pack (ROM hack)** | `output\MH3U_Monster_Pack_EU` (or `_US`) next to the editor; copied into `<Citra>\load\mods\<title id>\` (`romfs\arc\enemy\` 47 files, `exefs\code.ips`, `mhqe_monster_pack.json`) only when you press *Install in Citra*; *Remove from Citra* deletes exactly those files | Only if you build and install it |
+| **Monster pack (ROM hack)** | `output\MH3U_Monster_Pack_EU` (or `_US`) next to the editor; copied into `<Citra>\load\mods\<title id>\` (`romfs\arc\enemy\` 51 files, `exefs\code.ips`, `mhqe_monster_pack.json`) only when you press *Install in Citra*; *Remove from Citra* deletes exactly those files | Only if you build and install it |
 | **The editor's own files** | next to the program: `settings.json`, `custom_supply.json`, `backups\` (`backups\us\` for the US version), `library\`, `error_log.txt`, and `assets\` if you rebuild the pictures | Always |
 
 Title id: `00040000000B1D00` (EU) or `00040000000AE400` (US). It **never** modifies your ROM, your
@@ -232,7 +243,7 @@ current files first.
 The game keeps, **inside its program** (`code.bin`), a table of the maps where each large monster may
 start a quest; on any other map the monster is silently skipped. Each monster's own file also holds
 its spawn areas, routes and special moves per map. The *Monster pack* page builds, **from your own
-extracted game**, a mod that gives 47 large monsters every map they are missing (497 combinations, all 14
+extracted game**, a mod that gives 51 large monsters every map they are missing (549 combinations, all 14
 maps): for each new map it borrows the start positions and map data of a monster that lives there,
 and picks the game's start list offering the most start areas.
 
@@ -240,13 +251,14 @@ and picks the game's start list offering the most start areas.
 
 * **What it changes:** a 7 KB patch `exefs/code.ips` (new start lists and the extended size table,
   written in unused space of the program and over the old lists they replace, one pointer per monster
-  and one for the size table) and 47 files
+  and one for the size table) and 51 files
   `romfs/arc/enemy/emNNN.arc`. It is a mod: the
   ROM and the save are untouched, and *Remove from Citra* brings the game back exactly. It cannot be
   combined with another `code.ips` / `code.bin` mod.
-* **Left out:** Ceadeus, Goldbeard Ceadeus, Jhen Mohran and Hallowed Jhen Mohran stay on their own
-  maps. The siege maps are open to the others, following the game's own example (on the Underwater
-  Ruin a monster gets only a start point in area 3, like Abyssal Lagiacrus in the game).
+* **Siege monsters and maps:** since 1.5 Ceadeus, Goldbeard Ceadeus, Jhen Mohran and Hallowed Jhen
+  Mohran can go on every map too (they borrow another monster's routes: the riskiest of all). The siege
+  maps are open to the others, following the game's own example (on the Underwater Ruin a monster gets
+  only a start point in area 3, like Abyssal Lagiacrus in the game).
 * **Tested:** only **Zinogre on Sandy Plains** (Citra). Everything else follows the same rules but is
   **untested**: a monster may get stuck or the game may crash. Water arenas, Sacred Land, Tower, the
   siege maps, and Alatreon / Dire Miralis away from their maps are the riskiest (marked `+!`).
@@ -258,6 +270,16 @@ and picks the game's start list offering the most start areas.
   sizes from +100 % to +1900 %, so *Size %* accepts up to **2000 %** in Developer mode. Such a quest needs
   the pack installed. Checked against the game's code, **not tried in the game**: a giant may clip
   through walls or be hard to reach.
+* **Starts of your own (Developer mode):** *My monster starts...* adds start records for a large
+  monster: another area of a map (one where it has positions), or one of the game's special forms (form 1
+  = Brachydios' start in "Clashing Fists!", 2 and 3 = the charged Zinogre and Stygian Zinogre; on other
+  monsters the effect is unknown). They come after the game's own starts, so the game's quests keep their
+  numbers. To make room, the pack points the game's start lists that are identical but for the monster
+  number to one copy. Checked byte by byte by the tests, **not tried in the game**.
+* **Experimental: Moga Village / Port Tanzia (Developer mode).** Quest map 9 is never used by the game's
+  quests; the pack can make it load the Village or the Port (3 bytes of the program). Nobody knows yet
+  whether a quest loads there: it may crash. Large monsters use their Arena positions (far from the
+  hub's ground); small monsters need positions you type. Please report what happens.
 * **Multiplayer:** every player needs the same pack. Built from the same game version it is identical
   for everybody: compare the **fingerprint** on the page.
 * **Real 3DS:** copy the content of the pack folder into `luma\titles\<title id>\` (game patching
@@ -317,13 +339,15 @@ rests on a test in the game and what rests on reading the game's files.
 | Time limit: up to **98 min** the clock counts down, from **99 min** it is frozen | ✅ Tested in Citra (values above 120 untested) |
 | *Environment: Unstable* appears on the quest board when the chance of roaming monsters is above 0 | ✅ Tested in Citra |
 | A monster on a map the game does not allow is skipped (never appears); with the Monster pack, Zinogre appears on Sandy Plains | ✅ Tested in Citra |
-| The other 496 combinations of the Monster pack | 🔎 Built and checked by the tests (same rules as the tested one), not played: please test and report |
+| The other 548 combinations of the Monster pack | 🔎 Built and checked by the tests (same rules as the tested one), not played: please test and report |
 | *Starts in*: start areas per monster and map; *Hunters start* odds | 🔎 Read from the game's code (3DS); identical to the Wii U tables, where random and fixed hunter starts were confirmed in the game by mh3u-quest-studio. Map numbers collected in that game by the same project |
 | **North American (US) version** | 🔎 Compared file by file with the EU version (same quest format, base quests, monster files and pack; different program id, save folder `00000AE4` and `us` folder). Not played: please report |
 | Quest fields: meaning of most settings, objectives, rewards, supply boxes | 🔎 Read from the game's own quests (the **(i)** says "not confirmed" where that is all there is) |
 | Three monsters arriving at once; five monsters one after the other | 🔎 Follow the same rule as the tested patterns but never appear in a game quest: please test |
-| Which monsters wander into an *Unstable* zone | ❌ Cannot be chosen: the list is stored in the game, not in the quest |
-| An "enraged" / "charged" monster | ❌ No such setting was found in the quest file. King Size (+ health and attack) is the closest |
+| Which monsters wander into an *Unstable* zone | 🔎 Since 1.5: chosen from the game's lists, read from its code (and lists of your own with the Monster pack). Roaming monsters on one-area maps (Arena...): untested |
+| An "enraged" / "charged" monster | 🔎 No "enraged" setting in the quest file. The charged Brachydios / Zinogre come from the game's start records (*Starts in* marks them); starts of your own with these forms (Monster pack, Developer mode): untested |
+| Small monsters on maps where the game never puts them (boulders included), edited places | 🔎 Record layout checked on the game's 11,383 small-monster places; the game already shows some small monsters on maps without data of their own. Not tried in the game: please report |
+| Moga Village / Port Tanzia as quest map 9 (Monster pack, Developer mode) | ❔ Experiment: the table and the loading code were read in the program, nothing was tried in the game |
 | Start areas on the map (yellow areas, pins) | 🔎 Area outlines from the game's map pictures, placed with mh3u-quest-studio's area markers (they line up on every map); the start areas themselves come from the game's code |
 | Who can join (HR, players, no armor) and the quest-board line | 🔎 Rules table from mh3u-quest-studio (confirmed in the Wii U game); every 3DS quest pairs rules and board lines the same way. Not tried with a custom quest |
 | Day / night | 🔎 Every game quest sets exactly one of the two flags; night quests are the ones whose texts speak of the night. Not tried with a custom quest |

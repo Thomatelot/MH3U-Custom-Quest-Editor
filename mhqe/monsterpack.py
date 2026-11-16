@@ -423,12 +423,96 @@ def full_size(size: int, sizeparam: int) -> int:
 
 
 def extras_match(manifest: dict | None, extras: dict | None) -> bool:
-    """True if the pack was built with these new quests and roaming-monster lists."""
+    """True if the pack was built with these new quests, roaming-monster lists and starts."""
     extras = extras or {}
     man = manifest or {}
     want_q = {str(int(n)) for n in extras.get("quests") or []}
     want_r = {str(int(k)): [list(map(int, e)) for e in v] for k, v in (extras.get("roaming") or {}).items() if v}
-    return want_q <= set(man.get("quests", {})) and want_r == man.get("roaming", {})
+    want_s = sorted((start_key(x) for x in extras.get("starts") or []), key=lambda k: k[:2])
+    have_s = sorted((start_key(x) for x in man.get("starts") or []), key=lambda k: k[:2])
+    return (want_q <= set(man.get("quests", {})) and want_r == man.get("roaming", {}) and want_s == have_s
+            and (extras.get("map9") or "") == (man.get("map9") or ""))
+
+
+# ----------------------------------------------------------------- your own starts
+# A start record (56 bytes) holds no position: the monster id (+0), 1 (+4), 0xFF (+8), the start
+# area (+9), 0 (+10), the form (+11: 1 = Brachydios' slime-charged start of "Clashing Fists!", 2 and 3
+# = Zinogre's and Stygian Zinogre's charged starts; 0 everywhere else in the game), a flag (+12, 0 or
+# 1 in the game's records, meaning unknown) and 1, 1 at +52. The position inside the area comes from
+# the monster's em_mappos00. The pack can add starts of your own: a copy of the monster's first
+# record on that map with another area, form and flag, appended to its start list (so the game's
+# own start numbers keep their meaning; yours come after them).
+HUB_NAMES = {"village": "Moga Village", "port": "Port Tanzia"}
+FORMS = {0: "Normal", 1: "Special form 1", 2: "Special form 2", 3: "Special form 3"}
+FORM_MONSTERS = {74: (1,), 41: (2, 3), 72: (2, 3)}      # the forms the game itself uses
+MAX_STARTS = 16
+
+
+def start_key(x: dict) -> tuple:
+    flag = x.get("flag")
+    return (int(x["em"]), int(x["map"]), int(x["area"]), int(x.get("form", 0)), -1 if flag is None else int(flag))
+
+
+def _records_at(code: bytes, va: int) -> tuple[list[bytes], bytes]:
+    o, out = va - BASE, []
+    while len(out) < MAX_STARTS and struct.unpack_from("<I", code, o + 56 * len(out))[0] != 0:
+        out.append(code[o + 56 * len(out):o + 56 * (len(out) + 1)])
+    k = len(out)
+    return out, code[o + 56 * k:o + 56 * (k + 1)]
+
+
+def custom_start_record(base: bytes, area: int, form: int, flag: int | None) -> bytes:
+    """flag None: keep the value of the record copied (the monster's usual start)."""
+    r = bytearray(base)
+    r[9], r[11] = area & 0xFF, form & 0xFF
+    if flag is not None:
+        r[12] = flag & 0xFF
+    return bytes(r)
+
+
+def shared_start_arrays(code: bytes, place: dict, table_va: int) -> tuple[dict[int, int], dict[int, int]]:
+    """Room for your own starts. With the whole pack only a few hundred bytes of code.bin stay free,
+    while many start lists of the game are the same as another one but for the monster number of
+    their records (+0). The pack already gives monsters the start list of another monster (that is
+    how Zinogre starts on Sandy Plains, tested), so such a list can point to its twin and its bytes
+    become free. Only lists that nothing but the placement lists points to are freed (74 of the 152
+    are also read directly by the game's code: those stay). Returns ({freed list: twin}, {list: size})."""
+    arrays = {}
+    for lst in place.values():
+        for _st, ptr in lst:
+            if ptr not in arrays:
+                recs, end = _records_at(code, ptr)
+                arrays[ptr] = (recs, end)
+    entries = set()
+    for em in range(86):
+        o = table_va - BASE + 4 * em
+        p_ = struct.unpack_from("<I", code, o)[0]
+        if not (BASE <= p_ < BASE + len(code)):
+            continue
+        o = p_ - BASE
+        while o + 8 <= len(code):
+            s_, _q = struct.unpack_from("<II", code, o)
+            if s_ == 0xFF:
+                break
+            entries.add(o + 4)
+            o += 8
+    elsewhere = set()
+    for o in range(0, len(code) - 3, 4):
+        v = struct.unpack_from("<I", code, o)[0]
+        if v in arrays and o not in entries:
+            elsewhere.add(v)
+    sizes = {p_: 56 * (len(r) + 1) for p_, (r, _e) in arrays.items()}
+    twin, redirect = {}, {}
+    for p_ in sorted(arrays, key=lambda a: (a not in elsewhere, a)):
+        recs, end = arrays[p_]
+        if not recs:
+            continue
+        key = b"".join(r[4:] for r in recs) + end
+        if key in twin and p_ not in elsewhere:
+            redirect[p_] = twin[key]
+        else:
+            twin.setdefault(key, p_)
+    return redirect, sizes
 
 
 def is_current(manifest: dict) -> bool:
@@ -524,9 +608,19 @@ def plan_pack(mons, place, monsters, stages) -> list[dict]:
 
 # =================================================================== building
 def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extras=None) -> dict:
+    """Build the pack (see _build). If it fails, the pack built before is left as it was."""
+    try:
+        return _build(romfs, out_dir, monsters, stages, log, extras)
+    except BaseException:
+        shutil.rmtree(Path(out_dir).with_name(Path(out_dir).name + ".building"), ignore_errors=True)
+        raise
+
+
+def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extras=None) -> dict:
     """Write <out_dir>/romfs/arc/enemy/*.arc, <out_dir>/exefs/code.ips and the manifest.
     extras = {"quests": [numbers of new base-game quests to register in the game's quest list],
-              "roaming": {list number: entries} roaming-monster lists of the user's own}."""
+              "roaming": {list number: entries} roaming-monster lists of the user's own,
+              "starts": [{"em", "map", "area", "form", "flag"}] monster starts of the user's own}."""
     extras = extras or {}
     game = GameFiles(romfs)
     code = game.code
@@ -542,7 +636,8 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extras
     if monsters is None:
         monsters = [em for em in sorted(mons) if is_large(em) and em not in EXCLUDED_MONSTERS]
     plan = plan_pack(mons, place, monsters, stages)
-    out_dir = Path(out_dir)
+    final_dir = Path(out_dir)
+    out_dir = final_dir.with_name(final_dir.name + ".building")   # the pack built before stays until this one is done
     if out_dir.exists():
         shutil.rmtree(out_dir)
     enemy = out_dir / "romfs" / "arc" / "enemy"
@@ -584,9 +679,25 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extras
             stage_arrays.setdefault(st, set()).add(ptr)
     lists = {}
     desert = desert_starts(code, place)          # Great Desert: a start in area 2 too
+    wanted_starts: dict[int, dict[int, list[dict]]] = {}
+    for x in extras.get("starts") or []:
+        st = G.MAP_TO_INTERNAL.get(int(x["map"])) if int(x["map"]) != G.HUB_MAP else None
+        if st is None:
+            raise PackError(f"Your start for {G.mon_name(int(x['em']))}: map {x['map']} has no stage.")
+        wanted_starts.setdefault(int(x["em"]), {}).setdefault(st, []).append(x)
+    for em in wanted_starts:
+        by_em.setdefault(em, [])
+    starts_out, custom_arrays = [], {}
+    redirect, array_sizes = ({}, {})
+    if wanted_starts:
+        redirect, array_sizes = shared_start_arrays(code, place, table_va)
+        for em in place:                           # every list is written again, pointing to the twins
+            if place[em]:
+                by_em.setdefault(em, [])
     for em, items in sorted(by_em.items()):
         lst = list(place[em])
-        spawn = (final.get(em) or mons[em]).spawn.stages
+        md = final.get(em) or mons.get(em)
+        spawn = md.spawn.stages if md else {}
         for p in sorted(items, key=lambda x: x["stage"]):
             st = p["stage"]
             if st == DESERT and desert is not None:
@@ -603,6 +714,39 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extras
                     ptr = max(best)[3]
             lst.append((st, ptr))
             p["start_areas"] = start_areas(code, ptr)
+        for st, mine in sorted(wanted_starts.get(em, {}).items()):
+            k = next((i for i, (s_, _q) in enumerate(lst) if s_ == st), None)
+            if k is None:
+                raise PackError(f"Your start for {G.mon_name(em)} on {G.map_name(int(mine[0]['map']))}: the monster "
+                                "does not go on this map (not in the game, not added by the pack).")
+            ptr = lst[k][1]
+            if ptr == DESERT_SENTINEL:
+                base_recs = [desert[i:i + 56] for i in range(0, len(desert) - 56, 56)]
+                end = desert[-56:]
+            else:
+                base_recs, end = _records_at(code, ptr)
+            if not base_recs:
+                raise PackError(f"{G.mon_name(em)} has no start record on {G.map_name(int(mine[0]['map']))}.")
+            if len(base_recs) + len(mine) > MAX_STARTS:
+                raise PackError(f"Too many starts for {G.mon_name(em)} on {G.map_name(int(mine[0]['map']))} "
+                                f"({MAX_STARTS} at most).")
+            areas_ok = set(spawn.get(st, {}))
+            new = []
+            for i, x in enumerate(mine):
+                area = int(x["area"])
+                if areas_ok and area not in areas_ok:
+                    raise PackError(f"Your start for {G.mon_name(em)} on {G.map_name(int(x['map']))}: area "
+                                    f"{area} is not one where it has positions (it has {sorted(areas_ok)}).")
+                flag = x.get("flag")
+                new.append(custom_start_record(base_recs[0], area, int(x.get("form", 0)),
+                                               None if flag is None else int(flag)))
+                starts_out.append({"em": em, "map": int(x["map"]), "stage": st, "area": area,
+                                   "form": int(x.get("form", 0)), "flag": None if flag is None else int(flag),
+                                   "index": len(base_recs) + i})
+            sentinel = 0xC5700000 + len(custom_arrays)
+            custom_arrays[sentinel] = b"".join(base_recs + new) + end
+            lst[k] = (st, sentinel)
+        lst = [(s_, redirect.get(q, q)) for s_, q in lst]
         lists[em] = b"".join(struct.pack("<II", s_, q) for s_, q in lst) + struct.pack("<II", 0xFF, 0)
     # free space: the padding after two segments, plus the old lists no longer pointed to
     free = [list(r) for r in regions]
@@ -611,10 +755,19 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extras
         p_ = struct.unpack_from("<I", code, table_va - BASE + 4 * e2)[0]
         if p_:
             old_users.setdefault(p_, set()).add(e2)
+    still = {q for em, lst in place.items() if em not in lists for _s, q in lst}
     for p_, users in sorted(old_users.items()):
         refs = code.count(struct.pack("<I", p_))
         if users <= set(lists) and refs == len(users):    # nothing else points to it
             free.append([p_, p_ + 8 * (len(place[min(users)]) + 1)])
+        else:                                       # an old list that stays: its start lists too
+            still |= {q for _s, q in place[min(users)]}
+    freed_arrays = [p_ for p_ in redirect if p_ not in still]
+    for p_ in freed_arrays:                        # start lists that now point to their twin
+        free.append([p_, p_ + array_sizes[p_]])
+    if freed_arrays:
+        log(f"Room for your own starts: {sum(array_sizes[p_] for p_ in freed_arrays)} bytes of duplicate "
+            "start lists freed.")
     merged = []
     for a_, b_ in sorted(free):                    # neighbouring old lists form one block
         if merged and a_ <= merged[-1][1]:
@@ -652,6 +805,18 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extras
         slot[0] += (len(desert) + 7) // 8 * 8
         records.append((pos - BASE, desert))
         lists = {em: b.replace(DESERT_SENTINEL_BYTES, struct.pack("<II", DESERT, pos)) for em, b in lists.items()}
+    for sentinel, blob in custom_arrays.items():     # your own starts: the new start lists
+        slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= len(blob)), None)
+        if slot is None:
+            raise PackError("Not enough free space in code.bin for your own monster starts: remove some.")
+        pos = slot[0]
+        slot[0] += (len(blob) + 7) // 8 * 8
+        records.append((pos - BASE, blob))
+        old = struct.pack("<I", sentinel)
+        lists = {em: b"".join(b[i:i + 4] if i % 8 == 0 or b[i:i + 4] != old else struct.pack("<I", pos)
+                              for i in range(0, len(b), 4)) for em, b in lists.items()}
+    if starts_out:
+        log(f"Monster starts of your own: {len(starts_out)}.")
     for em in sorted(lists, key=lambda e2: -len(lists[e2])):      # biggest first
         blob = lists[em]
         slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= len(blob)), None)
@@ -689,6 +854,13 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extras
         records += recs
         quests = {str(no): slot for no, slot in sorted(placed.items())}
         log(f"New quests registered in the game's quest list: {len(recs)}.")
+    hub = extras.get("map9") or ""
+    if hub:                                        # experimental: map 9 loads Moga Village or Port Tanzia
+        try:
+            records += GC.hub_map_patch(code, hub)
+        except (GC.CodeError, KeyError) as exc:
+            raise PackError(str(exc)) from exc
+        log(f"Experimental: quest map 9 loads {HUB_NAMES[hub]}.")
     left = sum(b_ - a_ for a_, b_ in free)
     log(f"Free space left in code.bin: {left} bytes.")
     records.sort()
@@ -699,15 +871,18 @@ def build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extras
     manifest = {
         "format": PACK_FORMAT, "region": game.region, "title_id": G.REGIONS.get(game.region, {}).get("title_id"),
         "fingerprint": content_hash.hexdigest()[:16],
-        "monsters": sorted(by_em), "stages": stages,
+        "monsters": sorted({p["em"] for p in plan}), "stages": stages,
         "added": [{k: p[k] for k in ("em", "stage", "donor", "start_areas")} for p in plan],
         "placement_table": f"0x{table_va:X}",
         "big_sizes": big,
         "features": ["big_sizes"] * bool(big) + ["desert_area2"] * bool(desert) + ["siege_bosses"],
-        "quests": quests, "roaming": roaming,
+        "quests": quests, "roaming": roaming, "starts": starts_out, "map9": hub,
     }
     (out_dir / MANIFEST).write_text(json.dumps(manifest, indent=1), encoding="utf-8")
-    log(f"Done: {len(plan)} monster/map pairs added for {len(by_em)} monsters, fingerprint {manifest['fingerprint']}.")
+    if final_dir.exists():
+        shutil.rmtree(final_dir)
+    out_dir.rename(final_dir)
+    log(f"Done: {len(plan)} monster/map pairs added for {len(manifest['monsters'])} monsters, fingerprint {manifest['fingerprint']}.")
     return manifest
 
 

@@ -338,9 +338,9 @@ def pick_item(app, initial=None, title="Choose an item"):
 
 def pick_map(app, initial=None):
     icons = app.icons
-    entries = [{"key": m, "name": n, "sub": f"map {m}" if app.dev_mode.get() else "",
+    entries = [{"key": m, "name": G.map_name(m), "sub": f"map {m}" if app.dev_mode.get() else "",
                 "icon": (lambda m=m: icons.map(m, 64))}
-               for m, n in sorted(G.MAP_NAMES.items())]
+               for m in sorted(G.MAP_NAMES)]
     return _run(app, title="Choose the map", entries=entries, tile=(230, 76), icon_size=64,
                 initial=initial, columns=3,
                 note="Pick a map where your monsters have spawn data; the editor warns you otherwise.")
@@ -373,6 +373,32 @@ def pick_supply(app, initial=None):
                 initial=initial, columns=2, views=[("Boxes", "box", ("My boxes", "Game boxes"))] if mine else None,
                 note="The game's boxes are fixed lists of items. Your own boxes (made in the Supply Box tab) "
                      "come first. Search for an item to find the boxes that contain it.")
+
+
+def pick_any_small(app, map_id, exclude=(), title="Choose a small monster", initial=None, note=None):
+    """Every small monster and boulder: first those that the game's quests use on this map, then the
+    others (untested on this map)."""
+    from . import spawns
+    icons, dev = app.icons, app.dev_mode.get()
+    used = spawns.species_on_map(map_id)
+    entries = []
+    for em in spawns.SMALL_SPECIES:
+        if em in exclude or em not in G.MONSTERS:
+            continue
+        n = used.get(em, 0)
+        here = n > 0
+        sub = (_(f"used in {n} game quest{'s' if n != 1 else ''} here") if here
+               else _("never on this map in the game (untested)"))
+        entries.append({"key": em, "name": G.mon_name(em), "sub": sub + (f" · em{em:03d}" if dev else ""),
+                        "cat": "On this map" if here else "Other small monsters",
+                        "sub_color": None if here else theme.color("warn"),
+                        "search": f"{G.mon_name(em)} em{em:03d}" if dev else G.mon_name(em),
+                        "icon": (lambda em=em: icons.monster(em, 54))})
+    if not entries:
+        return None
+    cats = [c for c in ("On this map", "Other small monsters") if any(e["cat"] == c for e in entries)]
+    return _run(app, title=title, entries=entries, tile=(230, 64), icon_size=54, columns=3,
+                categories=cats, initial=initial, dev=dev, note=note)
 
 
 def pick_small_species(app, allowed, title="Choose a small monster", initial=None, note=None):

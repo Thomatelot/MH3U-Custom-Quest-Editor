@@ -34,20 +34,112 @@ FORM_EXAMPLES = {(74, 1): "Clashing Fists!", (72, 3): "Descent into Hades", (72,
                  (41, 2): "Lurkers in the Woods"}
 
 
-def form(em: int, map_id: int, pos: int) -> int:
+def form(em: int, map_id: int, pos: int, pack: dict | None = None) -> int:
     """The 'form' number of a start position (0 = the ordinary monster). The game has special forms
     for Brachydios (1), Zinogre and Stygian Zinogre (2, 3) only: a start record tells the monster
-    which one it is (see gamecode.py)."""
+    which one it is (see gamecode.py). A start of your own (Monster pack) has the form you chose."""
+    mine = own_start(em, map_id, pos, pack)
+    if mine is not None:
+        return int(mine.get("form", 0))
     lst = _F.get(str(em), {}).get(str(G.MAP_TO_INTERNAL.get(map_id)), [])
     return lst[pos] if 0 <= pos < len(lst) else 0
 
 
-def form_text(em: int, map_id: int, pos: int) -> str:
-    f = form(em, map_id, pos)
+def form_text(em: int, map_id: int, pos: int, pack: dict | None = None) -> str:
+    f = form(em, map_id, pos, pack)
     if not f:
         return ""
     ex = FORM_EXAMPLES.get((em, f))
     return _("special form {}").format(f) + (_(" (as in '{}')").format(ex) if ex else "")
+
+
+# --------------------------------------------------------------- starts of your own (Monster pack)
+# Developer mode: the Monster pack can add start records of your own (another area, a special
+# form). They come after the game's starts of that monster on that map: the game's numbers keep
+# their meaning. Untested in the game.
+CUSTOM: list[dict] = []          # {"em", "map", "area", "form", "flag" (None = as the usual start)}
+
+try:
+    _S = json.loads((G.DATA_DIR / "spawn_areas.json").read_text(encoding="utf-8")).get("areas", {})
+except (OSError, ValueError):
+    _S = {}
+
+
+def load_custom(path) -> None:
+    CUSTOM.clear()
+    try:
+        d = json.loads(path.read_text(encoding="utf-8"))
+        for x in d.get("starts", []):
+            flag = x.get("flag")
+            CUSTOM.append({"em": int(x["em"]), "map": int(x["map"]), "area": int(x["area"]),
+                           "form": int(x.get("form", 0)), "flag": None if flag is None else int(flag)})
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
+
+
+def save_custom(path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"starts": CUSTOM}, indent=1), encoding="utf-8")
+
+
+def own_start(em: int, map_id: int, pos: int, pack: dict | None) -> dict | None:
+    """The start of your own with this number, as built into the Monster pack, or None."""
+    internal = G.MAP_TO_INTERNAL.get(map_id)
+    for x in (pack or {}).get("starts") or []:
+        if x["em"] == em and x["stage"] == internal and x["index"] == pos:
+            return x
+    return None
+
+
+def spawn_areas(em: int, map_id: int, pack: dict | None = None) -> list[int]:
+    """Areas where the monster has positions on this map (its own data, or the data the pack gives
+    it): the areas a start of your own can use."""
+    internal = G.MAP_TO_INTERNAL.get(map_id)
+    if internal is None:
+        return []
+    own = _S.get(str(em), {}).get(str(internal))
+    if own:
+        return own
+    for p in (pack or {}).get("added", []):
+        if p["em"] == em and p["stage"] == internal:
+            return _S.get(str(p["donor"]), {}).get(str(internal), [])
+    return []
+
+
+def game_start_count(em: int, map_id: int, pack: dict | None = None) -> int | None:
+    """How many starts the game (or the pack, for a monster it adds) has for this monster here."""
+    internal = G.MAP_TO_INTERNAL.get(map_id)
+    native = _A.get(str(em), {}).get(str(internal))
+    if native is not None:
+        return len(native)
+    for p in (pack or {}).get("added", []):
+        if p["em"] == em and p["stage"] == internal:
+            return len(p.get("start_areas") or [])
+    return None
+
+
+def planned_number(i: int, pack: dict | None = None) -> int | None:
+    """The Starttype number CUSTOM[i] will get once the pack is built (None if unknown)."""
+    x = CUSTOM[i]
+    n = game_start_count(x["em"], x["map"], pack)
+    if n is None:
+        return None
+    return n + sum(1 for y in CUSTOM[:i] if y["em"] == x["em"] and y["map"] == x["map"])
+
+
+def custom_problems(x: dict, pack: dict | None = None) -> list[str]:
+    out = []
+    if G.MAP_TO_INTERNAL.get(x["map"]) is None:
+        out.append(_("This map has no monster starts."))
+        return out
+    ar = spawn_areas(x["em"], x["map"], pack)
+    if game_start_count(x["em"], x["map"], pack) is None:
+        out.append(_("This monster does not go on this map (not in the game; the pack adds it once built)."))
+    elif ar and x["area"] not in ar:
+        out.append(_("The monster has no position in this area of this map."))
+    if x.get("form") and x["form"] not in {74: (1,), 41: (2, 3), 72: (2, 3)}.get(x["em"], ()):
+        out.append(_("The game never gives this form to this monster: unknown effect, it may crash."))
+    return out
 
 
 def areas(em: int, map_id: int, pack: dict | None = None) -> list[int] | None:
@@ -56,13 +148,20 @@ def areas(em: int, map_id: int, pack: dict | None = None) -> list[int] | None:
     internal = G.MAP_TO_INTERNAL.get(map_id)
     if internal is None:
         return None
-    native = _A.get(str(em), {}).get(str(internal))
-    if native is not None:
-        return native
-    for p in (pack or {}).get("added", []):
-        if p["em"] == em and p["stage"] == internal:
-            return p.get("start_areas")
-    return None
+    out = _A.get(str(em), {}).get(str(internal))
+    if out is None:
+        for p in (pack or {}).get("added", []):
+            if p["em"] == em and p["stage"] == internal:
+                out = p.get("start_areas")
+                break
+    mine = sorted((x for x in (pack or {}).get("starts") or [] if x["em"] == em and x["stage"] == internal),
+                  key=lambda x: x["index"])
+    if out is None or not mine:
+        return out
+    out = list(out[:mine[0]["index"]])          # yours come right after the game's starts
+    for x in mine:
+        out.append(x["area"])
+    return out
 
 
 def positions(map_id: int) -> list[int]:
@@ -115,9 +214,13 @@ def area_label(map_id: int, internal: int, monster: bool = True) -> str:
     return f"area {n}" if n is not None else f"area ? (game number {internal})"
 
 
-def choice_text(pos: int, areas: list[int] | None, map_id: int, em: int | None = None) -> str:
+def choice_text(pos: int, areas: list[int] | None, map_id: int, em: int | None = None,
+                pack: dict | None = None) -> str:
     """Text of one entry of the 'Starts in' list."""
-    ft = form_text(em, map_id, pos) if em else ""
+    if em and own_start(em, map_id, pos, pack) is not None:
+        ft = form_text(em, map_id, pos, pack)
+        return choice_text(pos, areas, map_id) + "  ·  " + _("your start") + ("  ·  " + ft if ft else "")
+    ft = form_text(em, map_id, pos, pack) if em else ""
     if ft:
         return choice_text(pos, areas, map_id) + "  ·  " + ft
     if areas is None:

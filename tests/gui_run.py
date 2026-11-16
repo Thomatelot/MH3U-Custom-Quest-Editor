@@ -191,8 +191,10 @@ def run():
     check(bool(free), "pack 3 has free slots")
     ev.tree.selection_set(free[0])
     settle()
-    picks.append(lambda entries: next(e["key"] for e in entries if e.get("cat") == "Game quests"
-                                      and "Great Jaggi" in e["sub"]))
+    from mhqe import gamedata as _G
+    from mhqe.i18n import _ as _tr
+    picks.append(lambda entries: next(e["key"] for e in entries if e.get("cat") in ("Game quests", _tr("Game quests"))
+                                      and _G.mon_name(12) in e["sub"]))
     app.new_quest()
     settle()
     nq = src.get(free[0])
@@ -580,6 +582,8 @@ def run():
     from mhqe import gamedata as G, monsterpack as MP
     app.show_page("pack")
     shot("15_pack_before")
+    import shutil
+    shutil.rmtree(app.monster_pack_dir(), ignore_errors=True)    # a pack left by an earlier run
     app.build_monster_pack()
     end = time.time() + 120
     while time.time() < end and MP.read_manifest(app.monster_pack_dir()) is None:

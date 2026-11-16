@@ -21,6 +21,13 @@ virtual address = file offset + 0x100000):
   hands to the monster when it appears (function 0x5C6DEC). It is 0 except in 13 records of
   Brachydios, Zinogre and Stygian Zinogre, the ones used by 'Clashing Fists!', 'Descent into
   Hades' and a few G rank quests.
+
+* QUEST MAP -> STAGE (file offset 0xAEAEEE, 16 x 2 bytes): the quest field 'map' indexes it; byte 0
+  is the stage the game loads (stage\\m01 ... m14; 26 = Moga Village, 27 = Port Tanzia, loaded by
+  the same code, function 0x646770, for the hubs), byte 1 another stage for the same map (night
+  versions m15 ... m25). Function 0x62B714 reads it. Right after it (0xAEAF0E, 18 bytes): quest
+  map -> number of the map in the monster placement tables (see monsterpack). Map 9 is never used
+  by the game's quests: it loads the Arena with the placement of the event Water Arena.
 """
 from __future__ import annotations
 
@@ -146,3 +153,28 @@ def start_forms(code: bytes, records_va: int) -> list[int]:
     while len(out) < 16 and struct.unpack_from("<I", code, o + 56 * len(out))[0] != 0:
         out.append(code[o + 56 * len(out) + 11])
     return out
+
+
+# ------------------------------------------------------------------ quest map -> stage
+STAGE_TABLE = bytes([0, 0, 1, 0x0F, 2, 0x10, 3, 0x11, 4, 0x12, 5, 0x13, 6, 0x14, 7, 0x15, 8, 0x16, 8, 8,
+                     0x0B, 0x0B, 0x0A, 0x0A, 0x0B, 0x17, 0x0C, 0x18, 0x0D, 0x19, 0x0E, 0x0E])
+PLACE_TABLE = bytes([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 10, 11, 12, 13, 14, 0xFF, 0xFF])
+HUB_STAGES = {"village": 26, "port": 27}          # stage\\mura, stage\\minato
+FREE_MAP = 9                                      # the quest map no game quest uses
+
+
+def find_stage_tables(code: bytes) -> int:
+    """File offset of the quest map -> stage table (the placement table follows it)."""
+    off = code.find(STAGE_TABLE + PLACE_TABLE)
+    if off < 0 or code.find(STAGE_TABLE + PLACE_TABLE, off + 1) >= 0:
+        raise CodeError("The quest map -> stage table was not found in code.bin (unknown game version?).")
+    return off
+
+
+def hub_map_patch(code: bytes, hub: str, placement: int = 8) -> list[tuple[int, bytes]]:
+    """Experimental: make quest map 9 load Moga Village or Port Tanzia. Large monsters there use the
+    placement data of 'placement' (the Arena: the Monster pack gives it to every large monster)."""
+    stage = HUB_STAGES[hub]
+    off = find_stage_tables(code)
+    return [(off + 2 * FREE_MAP, bytes([stage, stage])),
+            (off + len(STAGE_TABLE) + FREE_MAP, bytes([placement]))]

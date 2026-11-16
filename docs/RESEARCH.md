@@ -44,6 +44,40 @@ Checked: event quest "An Ominous Cry" uses slot 212 = Savage Deviljho 100 % (as 
   1000, 1600, 2000, 2600, 11000, 11300, 11600, 12000, 12300, 12600, 12900, 20100, 20200, 20300...).
   Which of the two decides G rank rewards is not established.
 
+## Small-monster places (1.7)
+After the quest's 21-byte small-monster header and a u32 count, each place is a 45-byte record:
++0 species (u32), +4 how many times it comes back once slain (u32: 1-8, 255 = again and again), +14 area,
++15 how many appear at once, +16 variant (a young Aptonoth...), +21 six floats: x, y, z, 0, facing
+(0-65535 = one turn), 0. The other bytes are kept as they are. Checked on the 11,383 records of the
+game's quests (a tester's notes gave the same reading). Small monsters are not in the placement table
+of the large ones, and the game already puts some of them on maps where their em_mappos00 has no data
+for that stage (Bullfango has none at all; Uroktor on the Volcano), so any species on any map should
+work; untested.
+
+## Your own start records (1.7)
+The pack appends records to a monster's start list for a map: a copy of its first record there with
++9 (area), +11 (form) and +12 changed; the record has no position, the game takes it from the
+monster's em_mappos00, so the area must be one of those. With the whole pack only a few hundred bytes of
+code.bin stay free. 74 of the game's 152 start lists are also pointed to by the game's code (literal
+pools, e.g. 0xAA13C0), the other 78 only by the placement lists; among those, the lists identical to
+another one but for +0 (monster number) of their records are pointed to their twin (as the pack already
+lends start lists, tested with Zinogre on Sandy Plains), which frees 6,160 bytes (EU and US).
+
+## Quest map -> stage (1.7)
+- VA 0xBEAEEE (file 0xAEAEEE), 16 x 2 bytes, index = the quest's map: byte 0 is the stage loaded,
+  byte 1 another stage of the same map (the night versions m15-m25). Read by 0x62B714 and 0x62D910.
+  Map 1-8 -> 1-8, map 9 -> 8 (the Arena), 10 -> 11, 11 -> 10, 12 -> 11, 13-15 -> 12-14.
+- Right after it (VA 0xBEAF0E), 18 bytes: quest map -> number of the map in the placement table
+  (map 9 and 10 -> 9, the event Water Arena; 16-17 = 0xFF). Read by 0x627E7C and 0x637244.
+- Stage loading (0x646770): stage numbers below 28 go through a remap table at 0xC42588 (15-25 -> the
+  day stage folders), then 26 -> "mura" (Moga Village: mura-a00..a02, collision g00/w00) and 27 ->
+  "minato" (Port Tanzia: minato-a00, a01), else "m%2.2dd".
+- No quest of the game uses map 9 (365 base quests; maps 9 and 10 absent). The pack's experiment sets
+  map 9 to (26, 26) or (27, 27) and its placement number to 8 (the Arena, which the pack gives to every
+  large monster). Box of the wall collision of each hub area: Village a00 x -3272..3278, z -1163..2739;
+  a01 x -462..336, z -1081..778; a02 x -1750..1896, z -1232..1244; Port a00 x -2712..1846, z
+  -2820..1719; a01 x -2911..583, z -2326..135. Not tried in the game.
+
 ## What makes a monster (for a future comparison with MHP3rd)
 Each large monster is `romfs/arc/enemy/emNNN.arc` (MT Framework ARC, zlib), about 90-170 files:
 | Part | Files (magic) | Notes |

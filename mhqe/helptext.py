@@ -315,19 +315,59 @@ ARRIVAL_NOTE = ("The game's own quests with these patterns bring the next group 
 
 SPAWN_TIP = ("The small monsters that live in the zone. Each line is a species and the number of places where "
              "it can appear: the game keeps such a list in every quest, and the game's quests have 5 to 15 "
-             "species on a map. Places are copied from the game's own quests on the same map, so they always "
-             "suit the map. Replacing a species keeps its places.")
+             "species on a map. Places are copied from the game's own quests on the same map, so they suit the "
+             "map (a species the game never puts there borrows the places of the map's own small monsters). "
+             "Replacing a species keeps its places; 'Edit places...' changes them one by one.")
+
+SMALL_ANYWHERE = ("Any small monster can be put on any map, boulders included: the species that the game never "
+                  "puts on a map are listed last in the picker and marked * (untested there). They borrow the "
+                  "places of the map's own small monsters, which 'Edit places...' then changes one by one. The game "
+                  "keeps no list of the maps a small monster may use (unlike the large monsters), and it already "
+                  "shows some small monsters on maps where they have no data of their own, so they should appear; "
+                  "they may behave oddly, when running away for example.")
+OWN_STARTS = ("Developer mode, Monster pack page > 'My monster starts...' (or 'My starts for this monster' in a "
+              "monster card's details). A start of your own puts a large monster in another area of a map (one where "
+              "it has positions), or gives it one of the game's special forms: form 1 = Brachydios' start in "
+              "'Clashing Fists!', forms 2 and 3 = the charged Zinogre and Stygian Zinogre. The game only gives "
+              "these forms to those monsters: on another one the effect is unknown and the game may crash. Byte "
+              "12 of a start record is 0 or 1 in the game, meaning unknown; it is left as in the monster's usual "
+              "start unless you change it.\n\n"
+              "The pack adds your starts after the game's own starts of that monster on that map, so the "
+              "numbers the game's quests use do not change; yours get the next numbers (the dialog shows them). "
+              "To make room in the game's program, the pack then points the game's start lists that are "
+              "identical but for the monster number to one copy (the way it already lends start lists, tested "
+              "with Zinogre on Sandy Plains). Untested in the game.")
+MAP9_TIP = ("Experimental, untested in the game. Quest map 9 is never used by the game's quests (it loads the "
+            "Arena). With this choice the Monster pack makes it load Moga Village (3 areas, numbered 0 to 2) or "
+            "Port Tanzia (2 areas, 0 and 1), the hubs, in the same way as a hunting map. Nobody knows yet "
+            "whether the game accepts it: the quest may crash when it loads, the hunters may appear in an odd "
+            "place, and there is no base camp or supply box there.\n\n"
+            "Large monsters on map 9 use their Arena data (the pack gives every large monster the Arena): their "
+            "positions are the Arena's, far from the hub's ground, so they may be out of reach or not appear at "
+            "all. Small monsters: their positions are in the quest; type them in Developer mode (Small monsters "
+            "> Edit places), inside the area's box shown there. Build and install the pack again after a change. "
+            "Please report what happens.")
+PLACES_TIP = ("Every place of the quest's small-monster list, one per line: the species, the area, how many "
+              "appear there at once, how many times they come back once slain (or again and again) and the "
+              "variant (some species have several, a young Aptonoth for example: the list shows the variants "
+              "the game uses for that species, with how often). The position is chosen among the positions "
+              "where the game's own quests put small monsters in that area, so it is always on the ground; "
+              "Developer mode also shows the raw coordinates (a wrong value can put a monster inside a wall). "
+              "Species marked * never appear on this map in the game: untested there. The quest file holds a "
+              "limited number of places (shown under the list).")
 
 SPAWN_FILL_TIP = ("Copies the complete small-monster list of one of the game's quests on this map (you "
                   "choose which, closest rank first) and sets their strength for the chosen rank. "
                   "Everything stays editable.")
 
 ENV_TIP = ("Stable: only the monsters you listed are in the zone. Unstable: other large monsters can also wander "
-           "into the zone at random (the quest board shows 'Environment: Unstable'). You cannot choose WHICH "
-           "monsters: the game keeps a roaming-monster list for each zone, outside the quest file (it was not "
-           "found in the game's files), and the quest only holds the chance, the maximum and a list number. "
-           "The editor therefore reuses the settings of a game quest on the same zone. The monsters named on "
-           "the wiki for a quest are not necessarily the roaming ones.\n\n"
+           "into the zone at random (the quest board shows 'Environment: Unstable'). Which monsters come from a "
+           "roaming-monster list kept in the game's program (code.bin), not in the quest file: the quest holds "
+           "the chance, how many at once and the number of the list. 'Choose the roaming monsters...' picks one "
+           "of the game's lists, and with the Monster pack you can make lists of your own. Turning Unstable on "
+           "copies the settings of a game quest on the same map (or on another map when no quest of the game "
+           "has roaming monsters there: untested). The monsters named on the wiki for a quest are not "
+           "necessarily the roaming ones.\n\n"
            "To have a monster present for sure, add it as a large monster (and use the arrival patterns).")
 
 TEXT = {

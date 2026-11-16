@@ -196,6 +196,9 @@ def _monsters():
             _(H.SPAWN_TIP) + _("\n\nAdd a species, Change..., Remove: edit the list. 'Fill from zone and rank...': ")
             + _(H.SPAWN_FILL_TIP) + _("\n\nStrength of all small monsters: ") + _(H.tip("zako_rows"))
         )),
+        ("Small monsters: places", (
+            _(H.PLACES_TIP) + _("\n\n") + _(H.SMALL_ANYWHERE)
+        )),
         ("Developer mode: per-monster details", (
             _("Stamina: ") + _(H.tip("Stamina")) + _("\n\n"
             "Start type: the raw number behind 'Starts in'.\n\n"
@@ -325,14 +328,14 @@ def _pack():
             "monster the maps it is missing: for each new map it borrows the start positions and map data of a "
             "'donor' monster that lives there (same kind of habitat and size where possible), and adds them to the "
             "monster's tables. For each new map it also picks, among the game's own start lists for that map, the one "
-            "offering the most start areas the monster can use. The result: 497 new monster/map combinations: every "
-            "one of 47 large monsters can start on all 14 maps.\n\n"
+            "offering the most start areas the monster can use. The result: 549 new monster/map combinations: every "
+            "one of 51 large monsters can start on all 14 maps.\n\n"
             "The siege maps follow the game's own example: on the Underwater Ruin a monster gets only a start point "
             "in area 3, exactly like Abyssal Lagiacrus in the game (which has no other data for that map); on the "
             "Great Desert it gets Jhen Mohran's data; on the Tainted Sea Dire Miralis'.")
         )),
         ("What it changes (ROM hack)", (
-            _("It is a mod, built on your PC from your own extracted game: 47 files romfs/arc/enemy/emNNN.arc, a 7 KB "
+            _("It is a mod, built on your PC from your own extracted game: 51 files romfs/arc/enemy/emNNN.arc, a 7 KB "
             "patch exefs/code.ips (only new start lists and the extended size table, written in unused space of the "
             "program and over the old lists it replaces, one pointer per monster and one for the size table) and "
             "mhqe_monster_pack.json. Your ROM and your save are not modified; removing the mod (button "
@@ -367,6 +370,12 @@ def _pack():
             "They are built for one scripted fight (the Underwater Ruin, the Dragonship) and have no walking routes of "
             "their own, so elsewhere they borrow another monster's. They are the riskiest combinations: they may not "
             "move, sink into the ground or crash the game. Untested. Small monsters are not concerned.")
+        )),
+        ("Starts of your own (Developer mode)", (
+            _(H.OWN_STARTS)
+        )),
+        ("Experimental: Moga Village and Port Tanzia", (
+            _(H.MAP9_TIP)
         )),
         ("New quests and roaming lists", (
             _("The pack also writes into the game's program: the numbers of your new base-game quests (so the game "
@@ -417,10 +426,10 @@ def _limits():
             "never appear in a game quest, so test them.")
         )),
         ("Known limits", (
-            _("The monsters that roam an Unstable zone cannot be chosen: their list is stored in the game, not in the "
-            "quest. There is no 'enraged' or 'charged' setting in the quest file: the game's 'Clashing Fists!' and "
-            "'Descent into Hades' use King Size monsters. The block at the end of an event quest that is not understood "
-            "is kept unchanged.\n"
+            _("There is no 'enraged' setting in the quest file. The charged Brachydios, Zinogre and Stygian Zinogre of "
+            "'Clashing Fists!' and 'Descent into Hades' come from the game's start records (the 'Starts in' list marks "
+            "them; the Monster pack can add starts of your own). The block at the end of an event quest that is not "
+            "understood is kept unchanged.\n"
             "Versions: the European version was studied and tested. The North American version was compared file by "
             "file with it: same quest format and base quests, same monster files, only the program id, the save "
             "folder (00000AE4) and the 'us' folder of the base quests differ. Its event quest files could not be "

@@ -121,7 +121,7 @@ class StartDialog(tk.Toplevel):
             row = ttk.Frame(left)
             row.pack(anchor="w", fill="x", pady=1)
             if self.areas is not None:
-                text = startpos.choice_text(pos, self.areas, map_id, em)
+                text = startpos.choice_text(pos, self.areas, map_id, em, pack)
             else:
                 text = startpos.label(pos) + (f"   ({u['n']} in the game)" if u else "   (not used on this map)")
             ttk.Radiobutton(row, text=text, value=pos, variable=self.var, command=self._show).pack(side="left")
@@ -728,8 +728,8 @@ class GeneralTab(Tab):
                 sref = strays.references(m, q.get("star"))
                 if sref:
                     strays.apply(q, sref[0])
-                else:
-                    strays.make_stable(q)
+                # else: no quest of the game is unstable there; the quest keeps its list (any list
+                # works on any map, the checks say which monsters the new map can not take)
         if m == siege.DESERT and siege.jhen_of(q) is not None and not siege.ship_ok(q):
             self._ship_setup()
         self.editor.reload_tabs()
@@ -762,7 +762,7 @@ class GeneralTab(Tab):
             idx = q.get("nora_set_table")
             self.env_text.configure(text=_(strays.describe(q)))
             pack, _inst = self.app.monster_pack()
-            warn = strays.problems(q, pack)
+            warn = strays.problems(q, pack) + strays.notes(q)
             text = (_("Roaming monsters (list {}{}): ").format(idx, _(", one of yours") if strays.is_custom(idx) else "")
                     + (strays.table_text(idx) or _("none")))
             self.env_ref.configure(text=text + "".join("\n" + _(w) for w in warn),
@@ -779,14 +779,17 @@ class GeneralTab(Tab):
         if self.env.get() == 0:
             strays.make_stable(q)
         else:
-            refs = strays.references(q.get("map"), q.get("star"))
+            refs = strays.references(q.get("map"), q.get("star"), anywhere=True)
             if not refs:
-                messagebox.showinfo("Environment", f"None of the game's quests on {G.map_name(q.get('map'))} "
-                                    "is Unstable, so there is no roaming-monster list to reuse there.",
-                                    parent=self)
                 self.env.set(0)
                 return
             strays.apply(q, refs[0])
+            if refs[0]["map"] != q.get("map"):
+                messagebox.showinfo(_("Environment"), _(
+                    "None of the game's quests on {} has roaming monsters, so the settings of a quest of "
+                    "another map were used ({}). Choose the monsters with 'Choose the roaming monsters...'. "
+                    "Untested on this map: see the note under the list.").format(
+                        G.map_name(q.get("map")), G.map_name(refs[0]["map"])), parent=self)
         self.editor.reload_tabs()
         self.editor.changed()
 
@@ -839,7 +842,7 @@ class GeneralTab(Tab):
         q = self.q
         if q is None:
             return
-        refs = strays.references(q.get("map"), q.get("star"))
+        refs = strays.references(q.get("map"), q.get("star"), anywhere=True)
         if not refs:
             return
         opts = []
@@ -1071,7 +1074,7 @@ class MonsterCard(ttk.Frame):
             lab = ttk.Label(st, text="", style="Card.Muted.TLabel")
             lab.grid(row=r * 2 + 1, column=0, columnspan=4, sticky="w", pady=(0, 4))
             self.stats[field] = lab
-        self.stamina = self.more_btn = self.more = self.start_btn = None
+        self.stamina = self.more_btn = self.more = self.start_btn = self.own_btn = None
         self.more_open = False
         if tab.dev:                       # obscure, almost identical in every quest: developer mode only
             sm = ttk.Frame(self, style="Card.TFrame")
@@ -1087,6 +1090,11 @@ class MonsterCard(ttk.Frame):
             self._spin(self.more, 0, 0, "Start type", "Starttype", 0, 255)
             self.start_btn = ttk.Button(self.more, text="Start positions on the map...", command=self._start)
             self.start_btn.grid(row=2, column=0, columnspan=6, sticky="w", pady=(4, 0))
+            self.own_btn = ttk.Button(self.more, text=_("My starts for this monster (Monster pack)..."),
+                                      command=self._own_starts)
+            self.own_btn.grid(row=3, column=0, columnspan=6, sticky="w", pady=(4, 0))
+            Tooltip(self.own_btn, _("Starts of your own for this monster: another area, a special form. Added by "
+                                    "the Monster pack after the game's starts. Untested in the game."))
             self._spin(self.more, 0, 3, "Size spread", "Sizeparam", 0, 255)
             self._spin(self.more, 1, 0, "Set type", "Settype", 0, 255)
             self._spin(self.more, 1, 3, "Nando2", "Nando2", 0, 255)
@@ -1240,7 +1248,9 @@ class MonsterCard(ttk.Frame):
         if m["Starttype"] not in values:
             values.append(m["Starttype"])
         self._start_values = values
-        self.start_box.configure(values=[startpos.choice_text(v, ar, mp, m['Type']) for v in values])
+        self.start_box.configure(values=[startpos.choice_text(v, ar, mp, m['Type'], pack) for v in values])
+        if self.own_btn is not None:
+            self.own_btn.state(["!disabled"] if monsterpack.is_large(m["Type"]) else ["disabled"])
         self.start_box.current(values.index(m["Starttype"]))
 
     def _fill_map(self, m, pack):
@@ -1276,6 +1286,15 @@ class MonsterCard(ttk.Frame):
             self.q.set_monster(self.slot, Starttype=self._start_values[i])
             self.tab.do_load(self.q)
             self.tab.editor.changed()
+
+    def _own_starts(self):
+        m = self.q.monsters[self.slot]
+        dlg = OwnStartsDialog(self.tab.app, em=m["Type"], map_id=self.q.get("map"))
+        self.tab.wait_window(dlg)
+        if dlg.use is not None and dlg.use != m["Starttype"]:
+            self.q.set_monster(self.slot, Starttype=dlg.use)
+        self.tab.do_load(self.q)
+        self.tab.editor.changed()
 
     def _start(self):
         m = self.q.monsters[self.slot]
@@ -1347,6 +1366,9 @@ class SpawnList(ttk.Frame):
         self.fill_btn = ttk.Button(bar, text="Fill from zone and rank...", command=self.fill)
         self.fill_btn.pack(side="left", padx=6)
         info(bar, H.SPAWN_FILL_TIP, "Card.").pack(side="left")
+        self.places_btn = ttk.Button(bar, text="Edit places...", command=self.edit_places)
+        self.places_btn.pack(side="left", padx=(12, 0))
+        info(bar, H.PLACES_TIP, "Card.").pack(side="left", padx=4)
         self.note = ttk.Label(self, style="Card.Muted.TLabel", wraplength=560, justify="left", text="")
         self.note.pack(anchor="w", pady=(6, 0))
         self._imgs = []
@@ -1367,7 +1389,10 @@ class SpawnList(ttk.Frame):
             self._imgs.append(img)
             ttk.Label(self.rows, image=img, style="Card.TLabel").grid(row=r, column=0, padx=(0, 6), pady=1)
             label = G.mon_name(em) + (f"   em{em:03d}" if self.tab.dev else "")
-            ttk.Label(self.rows, text=label, style="Card.TLabel", width=22).grid(row=r, column=1, sticky="w")
+            new_here = spawns.is_new_here(em, q.get("map"))
+            ttk.Label(self.rows, text=label + ("  *" if new_here else ""),
+                      style="Card.Warn.TLabel" if new_here else "Card.TLabel", width=24).grid(
+                row=r, column=1, sticky="w")
             ttk.Label(self.rows, text=f"{n} place{'s' if n != 1 else ''}", style="Card.Muted.TLabel",
                       width=10).grid(row=r, column=2, sticky="w")
             ttk.Button(self.rows, text="Change...", command=lambda e=em: self.change(e)).grid(row=r, column=3, padx=2)
@@ -1375,6 +1400,7 @@ class SpawnList(ttk.Frame):
         on_map = bool(spawns.species_on_map(q.get("map"))) if spawns.available() else False
         for b in (self.add_btn, self.fill_btn):
             b.state(["!disabled"] if ok and on_map else ["disabled"])
+        self.places_btn.state(["!disabled"] if ok and (counts or on_map) else ["disabled"])
         if not spawns.available():
             self.note.configure(text="The game's small-monster lists are missing from this copy of the editor.")
         elif not spawns.readable(q):
@@ -1385,8 +1411,10 @@ class SpawnList(ttk.Frame):
             self.note.configure(text="No small monster at all: the zone will be empty of them. Use 'Fill from "
                                      "zone and rank' or add a species.")
         else:
-            self.note.configure(text=f"{sum(counts.values())} places, {len(counts)} species. "
-                                     f"Room for {spawns.room(q)} more places in the quest file.")
+            new = [em for em in counts if spawns.is_new_here(em, q.get("map"))]
+            self.note.configure(text=_("{} places, {} species. Room for {} more places in the quest file.").format(
+                sum(counts.values()), len(counts), spawns.room(q))
+                + ("\n" + _("* never on this map in the game: untested.") if new else ""))
 
     # ---- actions
     def _done(self, q):
@@ -1407,23 +1435,25 @@ class SpawnList(ttk.Frame):
                 q.set(field, pick)
                 used[i] = pick
 
-    def _allowed(self, exclude=()):
-        return {em: n for em, n in spawns.species_on_map(self.q.get("map")).items() if em not in exclude}
-
     def change(self, em):
         q = self.q
-        allowed = self._allowed(exclude=set(spawns.species(q)))
-        if not allowed:
-            messagebox.showinfo("Small monsters", "There is no other small monster that the game's quests "
-                                f"use on {G.map_name(q.get('map'))}.", parent=self.tab)
-            return
-        new = picker.pick_small_species(self.tab.app, allowed, title=f"Replace {G.mon_name(em)} with...",
-                                        note="Its places in the zone are kept, only the species changes. "
-                                             "Only species that the game's quests use on this map are listed.")
+        new = picker.pick_any_small(self.tab.app, q.get("map"), exclude=set(spawns.species(q)),
+                                    title=f"Replace {G.mon_name(em)} with...",
+                                    note="Its places in the zone are kept, only the species changes. Species "
+                                         "that the game never puts on this map are listed last: untested there.")
         if new is None:
             return
         spawns.change(q, em, new)
+        if spawns.variants_of(new) and spawns.variants_of(new) != spawns.variants_of(em):
+            spawns.write_places(q, [self._plain_variant(p, new) for p in spawns.places(q)])
         self._done(q)
+
+    @staticmethod
+    def _plain_variant(p, em):
+        """A variant the new species never uses in the game becomes 0 (its usual one)."""
+        if p.em == em and p.variant not in spawns.variants_of(em):
+            p.variant = 0
+        return p
 
     def remove(self, em):
         q = self.q
@@ -1432,22 +1462,43 @@ class SpawnList(ttk.Frame):
 
     def add(self):
         q = self.q
-        allowed = self._allowed(exclude=set(spawns.species(q)))
-        if not allowed:
-            messagebox.showinfo("Small monsters", "Every small monster that the game's quests use on "
-                                f"{G.map_name(q.get('map'))} is already in the list.", parent=self.tab)
-            return
-        em = picker.pick_small_species(self.tab.app, allowed, title="Add a small monster",
-                                       note="Its places are copied from the game's own quest on this map. "
-                                            "Only species that the game's quests use here are listed.")
+        em = picker.pick_any_small(self.tab.app, q.get("map"), exclude=set(spawns.species(q)),
+                                   title="Add a small monster",
+                                   note="Species of this map get their places from the game's own quests here. "
+                                        "The others (listed last, untested on this map) borrow the places of "
+                                        "this map's small monsters; 'Edit places...' changes them one by one.")
         if em is None:
             return
+        star, pool = q.get("star"), autofill.pool_for_star(q.get("star"))
         try:
-            spawns.add_species(q, em, q.get("star"), autofill.pool_for_star(q.get("star")))
+            if G.hub_areas(q.get("map")):
+                n = spawns.hub_places(q, em, star, pool)
+                self.tab.app.set_status(_("{} places added for {}: one in the middle of each area. Move them in "
+                                          "'Edit places...' (Developer mode).").format(n, G.mon_name(em)))
+            elif spawns.is_new_here(em, q.get("map")):
+                n, donor = spawns.borrow_places(q, em, star, pool)
+                self.tab.app.set_status(_("{} places added for {}, at the places of {} on this map.").format(
+                    n, G.mon_name(em), G.mon_name(donor)))
+            else:
+                spawns.add_species(q, em, star, pool)
         except QuestFormatError as e:
-            messagebox.showwarning("Small monsters", str(e), parent=self.tab)
+            messagebox.showwarning("Small monsters", _(str(e)), parent=self.tab)
             return
         self._done(q)
+
+    def edit_places(self):
+        q = self.q
+        if q is None or not spawns.readable(q):
+            return
+        dlg = PlacesDialog(self.tab.app, q)
+        self.tab.app.wait_window(dlg)
+        if dlg.result is not None:
+            try:
+                spawns.write_places(q, dlg.result)
+            except QuestFormatError as e:
+                messagebox.showwarning("Small monsters", _(str(e)), parent=self.tab)
+                return
+            self._done(q)
 
     def fill(self):
         q = self.q
@@ -1486,6 +1537,306 @@ class SpawnList(ttk.Frame):
             for f in ("zako_nando_hp", "zako_nando_at", "zako_nando_etc"):
                 q.set(f, res[0][f])
         self._done(q)
+
+
+class PlacesDialog(tk.Toplevel):
+    """Every place of the quest's small-monster list, by area: species, how many at once, how many
+    times they come back, variant and position. Positions are picked among the game's own positions
+    in that area (always on the ground); raw coordinates are for Developer mode only."""
+
+    COLS = (("area", "Area", 55), ("species", "Species", 175), ("count", "At once", 75),
+            ("respawn", "Comes back", 140), ("variant", "Variant", 70), ("pos", "Position", 200))
+
+    def __init__(self, app, q):
+        super().__init__(app)
+        self.withdraw()
+        self.title(_("Small monsters: places"))
+        self.transient(app)
+        self.configure(background=theme.color("bg"))
+        self.app, self.q, self.result = app, q, None
+        self.dev = app.dev_mode.get()
+        self.map_id = q.get("map")
+        self.items = spawns.places(q)
+        self.limit = len(self.items) + spawns.room(q)
+        self.game = spawns.game_places(self.map_id)
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill="both", expand=True)
+        ttk.Label(f, text=_("{}: every place where a small monster appears. Places of the same area are "
+                            "listed together.").format(G.map_name(self.map_id)), wraplength=900,
+                  justify="left").pack(anchor="w")
+        hub = G.hub_areas(self.map_id)
+        if hub:
+            ttk.Label(f, style="Warn.TLabel", wraplength=900, justify="left", text=_(
+                "Experimental map: the game has no small-monster position here. Type each position (Developer "
+                "mode) inside its area; the box of each area's walls is:") + "  " + "   ".join(
+                _("area {}: x {} to {}, z {} to {}").format(a, b[0], b[2], b[1], b[3]) for a, b in hub.items())
+                      ).pack(anchor="w", pady=(4, 0))
+        body = ttk.Frame(f)
+        body.pack(fill="both", expand=True, pady=(8, 0))
+        left = ttk.Frame(body)
+        left.pack(side="left", fill="both", expand=True)
+        self.tree = ttk.Treeview(left, columns=[c for c, _t, _w in self.COLS], show="headings", height=18,
+                                 selectmode="browse")
+        for c, t, w in self.COLS:
+            self.tree.heading(c, text=_(t))
+            self.tree.column(c, width=w, anchor="w", stretch=c == "pos")
+        sb = ttk.Scrollbar(left, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        sb.pack(side="left", fill="y")
+        self.tree.bind("<<TreeviewSelect>>", lambda _e: self._show())
+        right = ttk.Frame(body, padding=(14, 0, 0, 0))
+        right.pack(side="left", fill="y")
+        g = ttk.Frame(right)
+        g.pack(anchor="n")
+        r = 0
+        ttk.Label(g, text=_("Species")).grid(row=r, column=0, sticky="w", pady=3)
+        self.sp_btn = ttk.Button(g, text="", command=self._species, width=24)
+        self.sp_btn.grid(row=r, column=1, sticky="w")
+        r += 1
+        ttk.Label(g, text=_("Area")).grid(row=r, column=0, sticky="w", pady=3)
+        self.area = ttk.Combobox(g, state="readonly", width=8, values=self._areas())
+        self.area.grid(row=r, column=1, sticky="w")
+        self.area.bind("<<ComboboxSelected>>", lambda _e: self._set_area())
+        r += 1
+        ttk.Label(g, text=_("At once")).grid(row=r, column=0, sticky="w", pady=3)
+        self.count = tk.IntVar()
+        ttk.Spinbox(g, from_=0 if self.dev else 1, to=255 if self.dev else 5, width=6, textvariable=self.count,
+                    command=self._commit).grid(row=r, column=1, sticky="w")
+        r += 1
+        ttk.Label(g, text=_("Comes back")).grid(row=r, column=0, sticky="w", pady=3)
+        self.respawn = ttk.Combobox(g, state="readonly", width=20,
+                                    values=[_("again and again")] + [_("{} time(s)").format(n) for n in range(1, 9)])
+        self.respawn.grid(row=r, column=1, sticky="w")
+        self.respawn.bind("<<ComboboxSelected>>", lambda _e: self._commit())
+        r += 1
+        ttk.Label(g, text=_("Variant")).grid(row=r, column=0, sticky="w", pady=3)
+        self.variant = ttk.Combobox(g, width=22, state="normal" if self.dev else "readonly")
+        self.variant.grid(row=r, column=1, sticky="w")
+        self.variant.bind("<<ComboboxSelected>>", lambda _e: self._commit())
+        self.variant.bind("<Return>", lambda _e: self._commit())
+        r += 1
+        ttk.Label(g, text=_("Position")).grid(row=r, column=0, sticky="nw", pady=3)
+        pf = ttk.Frame(g)
+        pf.grid(row=r, column=1, sticky="w")
+        self.pos_lab = ttk.Label(pf, text="", style="Muted.TLabel")
+        self.pos_lab.pack(anchor="w")
+        ttk.Button(pf, text=_("Use a place of the game..."), command=self._pick_pos).pack(anchor="w", pady=(2, 0))
+        self.raw = []
+        if self.dev:
+            rf = ttk.Frame(pf)
+            rf.pack(anchor="w", pady=(4, 0))
+            for i, lab in enumerate(("x", "y", "z", _("facing"))):
+                ttk.Label(rf, text=lab).grid(row=i, column=0, sticky="w")
+                v = tk.StringVar()
+                e = ttk.Entry(rf, textvariable=v, width=12)
+                e.grid(row=i, column=1, sticky="w")
+                e.bind("<Return>", lambda _e: self._commit())
+                e.bind("<FocusOut>", lambda _e: self._commit())
+                self.raw.append(v)
+        r += 1
+        info(g, H.PLACES_TIP).grid(row=r, column=0, sticky="w", pady=(10, 0))
+        bar = ttk.Frame(left)
+        bar.pack(side="bottom", anchor="w", pady=(8, 0), before=self.tree)
+        ttk.Button(bar, text=_("Add a place"), command=self._add).pack(side="left")
+        ttk.Button(bar, text=_("Duplicate"), command=self._dup).pack(side="left", padx=6)
+        ttk.Button(bar, text=_("Remove"), command=self._remove).pack(side="left")
+        self.info = ttk.Label(bar, text="", style="Muted.TLabel")
+        self.info.pack(side="left", padx=12)
+        b = ttk.Frame(f)
+        b.pack(fill="x", pady=(12, 0))
+        ttk.Button(b, text=_("OK"), style="Accent.TButton", command=self._ok).pack(side="right")
+        ttk.Button(b, text=_("Cancel"), command=self.destroy).pack(side="right", padx=6)
+        self.bind("<Escape>", lambda _e: self.destroy())
+        self._loading = False
+        self._fill()
+        center_on(self, app)
+        self.deiconify()
+        make_modal(self)
+
+    # ---- helpers
+    def _areas(self):
+        hub = G.hub_areas(self.map_id)
+        if hub:
+            return [str(a) for a in sorted(set(hub) | {p.area for p in self.items})]
+        areas = set(self.game) | {p.area for p in self.items}
+        return [str(a) for a in sorted(areas)] or [str(a) for a in range(1, 13)]
+
+    @staticmethod
+    def _respawn_text(n):
+        return _("again and again") if n == spawns.RESPAWN_FOREVER else _("{} time(s)").format(n)
+
+    def _variant_values(self, em):
+        seen = spawns.variants_of(em)
+        vals = [_("{}  (used {} times)").format(v, n) for v, n in seen.items()]
+        return vals or ["0"]
+
+    def _row(self, p):
+        x, y, z, _a = p.pos
+        name = G.mon_name(p.em) + ("  *" if spawns.is_new_here(p.em, self.map_id) else "")
+        return (p.area, name, p.count, self._respawn_text(p.respawn), p.variant, f"x {x:.0f}  y {y:.0f}  z {z:.0f}")
+
+    def _fill(self, select=None):
+        self.tree.delete(*self.tree.get_children())
+        order = sorted(range(len(self.items)), key=lambda i: (self.items[i].area, G.mon_name(self.items[i].em), i))
+        for i in order:
+            self.tree.insert("", "end", iid=str(i), values=self._row(self.items[i]))
+        self.info.configure(text=_("{} places (room for {})").format(len(self.items), self.limit))
+        if select is not None and self.tree.exists(str(select)):
+            self.tree.selection_set(str(select))
+            self.tree.see(str(select))
+        elif order:
+            self.tree.selection_set(str(order[0]))
+        self._show()
+
+    def _cur(self):
+        sel = self.tree.selection()
+        return int(sel[0]) if sel else None
+
+    def _show(self):
+        i = self._cur()
+        if i is None:
+            return
+        p = self.items[i]
+        self._loading = True
+        self.sp_btn.configure(text=G.mon_name(p.em))
+        self.area.configure(values=self._areas())
+        self.area.set(str(p.area))
+        self.count.set(p.count)
+        self.respawn.set(self._respawn_text(p.respawn))
+        self.variant.configure(values=self._variant_values(p.em))
+        self.variant.set(next((v for v in self._variant_values(p.em) if v.split()[0] == str(p.variant)), str(p.variant)))
+        x, y, z, a = p.pos
+        self.pos_lab.configure(text=f"x {x:.1f}   y {y:.1f}   z {z:.1f}")
+        for var, val in zip(self.raw, (x, y, z, a)):
+            var.set(f"{val:.2f}")
+        self._loading = False
+
+    def _update_row(self, i):
+        self.tree.item(str(i), values=self._row(self.items[i]))
+
+    # ---- edits
+    def _commit(self):
+        i = self._cur()
+        if i is None or self._loading:
+            return
+        p = self.items[i]
+        try:
+            p.count = max(0, min(255, int(self.count.get())))
+        except (tk.TclError, ValueError):
+            pass
+        k = self.respawn.current()
+        if k >= 0:
+            p.respawn = spawns.RESPAWN_FOREVER if k == 0 else k
+        v = (self.variant.get().split() or ["0"])[0]
+        if v.isdigit() and (self.dev or int(v) in spawns.variants_of(p.em) or int(v) == 0):
+            p.variant = int(v)
+        if self.raw:
+            try:
+                p.pos = tuple(float(var.get().replace(",", ".")) for var in self.raw)
+            except ValueError:
+                pass
+        self._update_row(i)
+        self._show()
+
+    def _species(self):
+        i = self._cur()
+        if i is None:
+            return
+        p = self.items[i]
+        em = picker.pick_any_small(self.app, self.map_id, initial=p.em, title=_("Species of this place"))
+        if em is None:
+            return
+        p.em = em
+        if p.variant not in spawns.variants_of(em):
+            p.variant = 0
+        self._update_row(i)
+        self._show()
+
+    def _set_area(self):
+        i = self._cur()
+        if i is None or self._loading:
+            return
+        p = self.items[i]
+        a = int(self.area.get())
+        if a == p.area:
+            return
+        p.area = a
+        spots = self.game.get(a)
+        if spots:                                   # a position of the new area, so it is on its ground
+            x, y, z, ang, _em, _n = spots[0]
+            p.pos = (x, y, z, ang)
+        self._fill(select=i)
+
+    def _pick_pos(self):
+        i = self._cur()
+        if i is None:
+            return
+        p = self.items[i]
+        spots = self.game.get(p.area, [])
+        if not spots:
+            messagebox.showinfo(_("Position"), _("The game's quests have no small monster in area {} of this "
+                                                 "map: choose another area.").format(p.area), parent=self)
+            return
+        entries = []
+        for k, (x, y, z, ang, em, n) in enumerate(spots):
+            entries.append({"key": k, "name": f"x {x:.0f}   z {z:.0f}   (y {y:.0f})",
+                            "sub": _("{} here in the game, {} time(s)").format(G.mon_name(em), n),
+                            "search": G.mon_name(em), "icon": (lambda em=em: self.app.icons.monster(em, 27))})
+        k = picker._run(self, title=_("A place of the game in area {}").format(p.area), entries=entries,
+                        tile=(300, 40), icon_size=27, columns=2,
+                        note=_("Positions where the game's own quests put small monsters in this area, most used "
+                               "first. They are on the ground of the map."))
+        if k is None:
+            return
+        x, y, z, ang, _em, _n = spots[k]
+        p.pos = (x, y, z, ang)
+        self._update_row(i)
+        self._show()
+
+    def _add(self):
+        if len(self.items) >= self.limit:
+            messagebox.showinfo(_("Small monsters"), _("The quest file has no room for more places."), parent=self)
+            return
+        i = self._cur()
+        base = self.items[i] if i is not None else None
+        hub = G.hub_areas(self.map_id)
+        if base is None:
+            recs = [r for e in spawns.reference_lists(self.map_id if not hub else 1, self.q.get("star"), "LR")[:1]
+                    for r in e["recs"] if spawns.em_of(r)]
+            if not recs:
+                return
+            base = spawns.Place(recs[0])
+        new = spawns.Place(bytes(base))
+        if hub and new.area not in hub:            # a hub map: the middle of its first area, on its floor
+            a = min(hub)
+            x0, z0, x1, z1 = hub[a]
+            new.area = a
+            new.pos = (round((x0 + x1) / 2), 0.0, round((z0 + z1) / 2), 0)
+        self.items.append(new)
+        self._fill(select=len(self.items) - 1)
+
+    def _dup(self):
+        i = self._cur()
+        if i is None:
+            return
+        if len(self.items) >= self.limit:
+            messagebox.showinfo(_("Small monsters"), _("The quest file has no room for more places."), parent=self)
+            return
+        self.items.append(spawns.Place(bytes(self.items[i])))
+        self._fill(select=len(self.items) - 1)
+
+    def _remove(self):
+        i = self._cur()
+        if i is None:
+            return
+        del self.items[i]
+        self._fill(select=min(i, len(self.items) - 1) if self.items else None)
+
+    def _ok(self):
+        self._commit()
+        self.result = self.items
+        self.destroy()
 
 
 class MonstersTab(Tab):
@@ -3119,6 +3470,202 @@ class EditorPage(ttk.Frame):
 
 
 # ====================================================== roaming-monster lists of your own
+class OwnStartsDialog(tk.Toplevel):
+    """Developer mode: monster starts of your own (another area, a special form), written into the
+    game by the Monster pack after the game's own starts of that monster on that map."""
+
+    FORM_CHOICES = [(0, "Normal"), (1, "Special form 1 (Brachydios' start in 'Clashing Fists!')"),
+                    (2, "Special form 2 (charged Zinogre / Stygian Zinogre)"),
+                    (3, "Special form 3 (charged Zinogre / Stygian Zinogre)")]
+    FLAG_CHOICES = [(None, "As its usual start"), (0, "0"), (1, "1")]
+
+    def __init__(self, app, em=None, map_id=None):
+        super().__init__(app)
+        self.app, self.use = app, None
+        self.pack_man, _inst = app.monster_pack()
+        self.title(_("My monster starts"))
+        self.transient(app)
+        self.configure(background=theme.color("bg"))
+        self.items = [dict(x) for x in startpos.CUSTOM]
+        self.em_hint, self.map_hint = em, map_id
+        self._areas: list[int] = []
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill="both", expand=True)
+        ttk.Label(f, text=_("My monster starts  -  Developer mode, untested in the game"), style="H2.TLabel").pack(anchor="w")
+        ttk.Label(f, style="Muted.TLabel", wraplength=760, justify="left", text=_(
+            "A start of your own puts a large monster in another area of a map, or gives it one of the game's "
+            "special forms. The Monster pack adds it after the game's own starts of that monster on that map "
+            "(their numbers do not change): build and install the pack again after a change, then choose the "
+            "new number in the card's 'Starts in' list. The position inside the area is the monster's own. "
+            "Special forms: the game only gives form 1 to Brachydios and forms 2 and 3 to Zinogre and "
+            "Stygian Zinogre; on another monster the effect is unknown and the game may crash. Byte 12 of a "
+            "start: its meaning is unknown (0 or 1 in the game).")).pack(anchor="w", pady=(4, 8))
+        body = ttk.Frame(f)
+        body.pack(fill="both", expand=True)
+        cols = ("map", "area", "form", "flag", "no")
+        self.tree = ttk.Treeview(body, columns=cols, show="tree headings", height=9, selectmode="browse")
+        self.tree.heading("#0", text=_("Monster"))
+        self.tree.column("#0", width=170)
+        for c, t, w in zip(cols, (_("Map"), _("Area"), _("Form"), _("Byte 12"), _("Number")),
+                           (140, 60, 140, 175, 90)):
+            self.tree.heading(c, text=t)
+            self.tree.column(c, width=w, anchor="w")
+        self.tree.pack(side="left", fill="both", expand=True)
+        self.tree.bind("<<TreeviewSelect>>", lambda _e: self._show())
+        form = ttk.Frame(body, padding=(12, 0, 0, 0))
+        form.pack(side="left", anchor="n")
+        ttk.Label(form, text=_("Monster")).grid(row=0, column=0, sticky="w", pady=2)
+        self.mon_btn = ttk.Button(form, text="", width=26, command=self._pick_monster)
+        self.mon_btn.grid(row=0, column=1, sticky="w")
+        ttk.Label(form, text=_("Map")).grid(row=1, column=0, sticky="w", pady=2)
+        self.maps = [m for m in sorted(G.MAP_NAMES) if G.MAP_TO_INTERNAL.get(m) and m != G.HUB_MAP]
+        self.map_box = ttk.Combobox(form, state="readonly", width=26, values=[G.map_name(m) for m in self.maps])
+        self.map_box.grid(row=1, column=1, sticky="w")
+        self.map_box.bind("<<ComboboxSelected>>", lambda _e: self._set("map", self.maps[self.map_box.current()]))
+        ttk.Label(form, text=_("Area")).grid(row=2, column=0, sticky="w", pady=2)
+        self.area_box = ttk.Combobox(form, state="readonly", width=26)
+        self.area_box.grid(row=2, column=1, sticky="w")
+        self.area_box.bind("<<ComboboxSelected>>", lambda _e: self._set("area", self._areas[self.area_box.current()]))
+        ttk.Label(form, text=_("Form")).grid(row=3, column=0, sticky="w", pady=2)
+        self.form_box = ttk.Combobox(form, state="readonly", width=46, values=[_(t) for _v, t in self.FORM_CHOICES])
+        self.form_box.grid(row=3, column=1, sticky="w")
+        self.form_box.bind("<<ComboboxSelected>>",
+                           lambda _e: self._set("form", self.FORM_CHOICES[self.form_box.current()][0]))
+        ttk.Label(form, text=_("Byte 12")).grid(row=4, column=0, sticky="w", pady=2)
+        self.flag_box = ttk.Combobox(form, state="readonly", width=26, values=[_(t) for _v, t in self.FLAG_CHOICES])
+        self.flag_box.grid(row=4, column=1, sticky="w")
+        self.flag_box.bind("<<ComboboxSelected>>",
+                           lambda _e: self._set("flag", self.FLAG_CHOICES[self.flag_box.current()][0]))
+        self.msg = ttk.Label(form, text="", style="Warn.TLabel", wraplength=330, justify="left")
+        self.msg.grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        bar = ttk.Frame(f)
+        bar.pack(anchor="w", pady=(10, 0))
+        ttk.Button(bar, text=_("Add a start"), command=self._add).pack(side="left")
+        ttk.Button(bar, text=_("Remove"), command=self._remove).pack(side="left", padx=6)
+        self.use_btn = ttk.Button(bar, text=_("Save and use in this quest"), style="Accent.TButton",
+                                  command=lambda: self._save(True))
+        if em:
+            self.use_btn.pack(side="left")
+        ttk.Button(bar, text=_("Save"), command=lambda: self._save(False)).pack(side="left", padx=6)
+        ttk.Button(bar, text=_("Cancel"), command=self.destroy).pack(side="left")
+        self._fill()
+        mine = [i for i, x in enumerate(self.items) if x["em"] == em and x["map"] == map_id]
+        if mine:
+            self._select(mine[-1])
+        elif self.items:
+            self._select(0)
+        else:
+            self._show()
+        center_on(self, app)
+        make_modal(self)
+
+    # ------------------------------------------------------------------ list
+    def _number(self, i):
+        saved = startpos.CUSTOM
+        try:
+            startpos.CUSTOM = self.items
+            return startpos.planned_number(i, self.pack_man)
+        finally:
+            startpos.CUSTOM = saved
+
+    def _fill(self):
+        self.tree.delete(*self.tree.get_children())
+        for i, x in enumerate(self.items):
+            n = self._number(i)
+            area = startpos.area_label(x["map"], x["area"])
+            self.tree.insert("", "end", iid=str(i), text=G.mon_name(x["em"]), values=(
+                G.map_name(x["map"]), area.replace("area ", "") if area.startswith("area ") else area,
+                _(dict(self.FORM_CHOICES)[x["form"]].split(" (")[0]),
+                _(dict(self.FLAG_CHOICES)[x["flag"]]),
+                _("start {}").format(n) if n is not None else "?"))
+
+    def _cur(self):
+        sel = self.tree.selection()
+        return int(sel[0]) if sel else None
+
+    def _select(self, i):
+        self.tree.selection_set(str(i))
+        self.tree.see(str(i))
+        self._show()
+
+    def _show(self):
+        i = self._cur()
+        state = "readonly" if i is not None else "disabled"
+        for w in (self.map_box, self.area_box, self.form_box, self.flag_box):
+            w.configure(state=state)
+        if i is None:
+            self.mon_btn.configure(text=_("(add a start)"), state="disabled")
+            self.msg.configure(text="")
+            return
+        x = self.items[i]
+        self.mon_btn.configure(text=G.mon_name(x["em"]), state="normal")
+        self.map_box.current(self.maps.index(x["map"]) if x["map"] in self.maps else 0)
+        self._areas = startpos.spawn_areas(x["em"], x["map"], self.pack_man) or [x["area"]]
+        if x["area"] not in self._areas:
+            self._areas = sorted(set(self._areas) | {x["area"]})
+        self.area_box.configure(values=[_(startpos.area_label(x["map"], a)) for a in self._areas])
+        self.area_box.current(self._areas.index(x["area"]))
+        self.form_box.current([v for v, _t in self.FORM_CHOICES].index(x["form"]))
+        self.flag_box.current([v for v, _t in self.FLAG_CHOICES].index(x["flag"]))
+        self.msg.configure(text="\n".join(startpos.custom_problems(x, self.pack_man)))
+
+    def _set(self, key, value):
+        i = self._cur()
+        if i is None:
+            return
+        x = self.items[i]
+        x[key] = value
+        if key in ("em", "map"):
+            ar = startpos.spawn_areas(x["em"], x["map"], self.pack_man)
+            if ar and x["area"] not in ar:
+                x["area"] = ar[0]
+        self._fill()
+        self._select(i)
+
+    def _pick_monster(self):
+        i = self._cur()
+        if i is None:
+            return
+        em = picker.pick_monster(self.app, initial=self.items[i]["em"], title=_("Monster of this start"))
+        if em and monsterpack.is_large(em):
+            self._set("em", em)
+
+    def _add(self):
+        em = self.em_hint
+        if not em:
+            em = picker.pick_monster(self.app, title=_("Monster of this start"))
+            if not em or not monsterpack.is_large(em):
+                return
+        mp = self.map_hint if self.map_hint in self.maps else self.maps[0]
+        ar = startpos.spawn_areas(em, mp, self.pack_man)
+        x = {"em": em, "map": mp, "area": ar[0] if ar else 1, "form": 0, "flag": None}
+        if len([y for y in self.items if y["em"] == em and y["map"] == mp]) >= 8:
+            return
+        self.items.append(x)
+        self._fill()
+        self._select(len(self.items) - 1)
+
+    def _remove(self):
+        i = self._cur()
+        if i is None:
+            return
+        del self.items[i]
+        self._fill()
+        if self.items:
+            self._select(min(i, len(self.items) - 1))
+        else:
+            self._show()
+
+    def _save(self, use):
+        startpos.CUSTOM[:] = [dict(x) for x in self.items]
+        self.app.save_monster_starts()
+        if use:
+            i = self._cur()
+            if i is not None and self.items[i]["em"] == self.em_hint and self.items[i]["map"] == self.map_hint:
+                self.use = startpos.planned_number(i, self.pack_man)
+        self.destroy()
+
+
 class RoamingListsDialog(tk.Toplevel):
     """Make roaming-monster lists in the numbers the game leaves empty (installed by the Monster pack)."""
 
@@ -3158,7 +3705,7 @@ class RoamingListsDialog(tk.Toplevel):
         cur = q.get("nora_set_table")
         like = strays.table(cur) if strays.is_unstable(q) else None
         if not like:
-            refs = strays.references(q.get("map"), q.get("star"))
+            refs = strays.references(q.get("map"), q.get("star"), anywhere=True)
             like = strays.table(refs[0]["table"]) if refs else strays.game_tables().get(2)
         self.like = list(like[0])
         self._fill_box(cur if strays.is_custom(cur) else None)

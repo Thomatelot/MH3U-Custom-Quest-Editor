@@ -24,9 +24,9 @@ from . import autofill, guide, spawns, supp
 from . import gamedata as G
 from . import monsterpack
 from . import helptext as H
-from . import arena, i18n, phone, picker, progress, strays, theme, updater
+from . import arena, i18n, phone, picker, progress, startpos, strays, theme, updater
 from .i18n import _
-from .editor import EditorPage, stars
+from .editor import EditorPage, OwnStartsDialog, stars
 from .finder import Finder
 from .icons import ASSETS, Icons
 from .library import LibrarySource
@@ -47,6 +47,7 @@ PACK_OUTPUT = APP_DIR / "output"                     # + MH3U_Monster_Pack_<EU|U
 SUPPLY_OUTPUT = APP_DIR / "output" / "MH3U_Supply_Mod" / "romfs"
 LIBRARY_DIR = APP_DIR / "library"
 ROAMING_FILE = APP_DIR / "workspace" / "roaming_lists.json"      # roaming-monster lists of your own
+STARTS_FILE = APP_DIR / "workspace" / "monster_starts.json"      # monster starts of your own (Monster pack)
 QUEST_TYPES = [("MH3U quest", "*.mh3uq *.quest"), ("All files", "*.*")]
 EVENT_PACKS = ("quest1", "quest2", "quest3")
 CHALLENGE_PACKS = ("quest4",)
@@ -399,6 +400,11 @@ class MonsterPackPage(ttk.Frame):
             "- Big sizes: the pack also extends the game's size table, so a quest can make a monster up to "
             "2000 % (Developer mode, 'Size %' above 255). Untested in the game: a giant may clip through "
             "walls or be hard to reach.\n"
+            "- Starts of your own (Developer mode, 'My monster starts...'): another start area or one of the "
+            "game's special forms for a large monster. They are added after the game's own starts, so the game's "
+            "quests do not change. Untested in the game.\n"
+            "- Experimental (Developer mode): quest map 9, which no quest of the game uses, can load Moga Village "
+            "or Port Tanzia instead of the Arena. Untested: the game may crash when such a quest loads.\n"
             "- Back up your save before trying (Backups button). The pack can not be combined with another "
             "code mod (code.ips / code.bin).")).pack(anchor="w", pady=(4, 0))
         self.status = status_card(outer)
@@ -407,7 +413,7 @@ class MonsterPackPage(ttk.Frame):
                               "+! added, higher risk)", style="H3.TLabel").pack(anchor="w", pady=(10, 2))
         box = ttk.Frame(outer)
         box.pack(fill="both", expand=True, pady=(0, 10))
-        self.maps = [m for m in sorted(G.MAP_NAMES) if G.MAP_TO_INTERNAL.get(m)]
+        self.maps = [m for m in sorted(G.MAP_NAMES) if G.MAP_TO_INTERNAL.get(m) and m != G.HUB_MAP]
         cols = [f"m{m}" for m in self.maps]
         self.tree = ttk.Treeview(box, columns=cols, show="tree headings", style="Small.Treeview", height=14)
         self.tree.heading("#0", text="Monster")
@@ -455,8 +461,8 @@ class MonsterPackPage(ttk.Frame):
                         if built else _("Pack not built yet."))).pack(anchor="w", pady=(4, 0))
         if built and not monsterpack.extras_match(built, app.pack_extras()):
             ttk.Label(f, style="Card.Warn.TLabel", text=_(
-                "Your new base-game quests or roaming-monster lists changed since the pack was built: build it "
-                "again, then install it.")).pack(anchor="w")
+                "Your new base-game quests, roaming-monster lists or monster starts changed since the pack was "
+                "built: build it again, then install it.")).pack(anchor="w")
         if inst:
             same = built and built.get("fingerprint") == inst.get("fingerprint")
             ttk.Label(f, style="Card.Ok.TLabel" if same or not built else "Card.Warn.TLabel", text=(
@@ -478,9 +484,35 @@ class MonsterPackPage(ttk.Frame):
                    state="normal" if inst else "disabled").pack(side="left")
         ttk.Button(row, text="Open the pack folder", command=lambda: open_folder(app.monster_pack_dir()),
                    state="normal" if built else "disabled").pack(side="left", padx=6)
+        if app.dev_mode.get() or startpos.CUSTOM:
+            ttk.Button(row, text=_("My monster starts...") + (f" ({len(startpos.CUSTOM)})" if startpos.CUSTOM else ""),
+                       command=self._own_starts).pack(side="left")
+        hub = app.settings.get("pack_map9", "") or ""
+        if app.dev_mode.get() or hub:
+            r2 = ttk.Frame(f, style="Card.TFrame")
+            r2.pack(anchor="w", pady=(6, 0))
+            ttk.Label(r2, text=_("Experimental: quest map 9 (no quest of the game uses it) loads"),
+                      style="Card.TLabel").pack(side="left")
+            self._hubs = ["", "village", "port"]
+            box = ttk.Combobox(r2, state="readonly", width=34, values=[
+                _("the Arena (as in the game)"), _("Moga Village") + " " + _("(experimental)"),
+                _("Port Tanzia") + " " + _("(experimental)")])
+            box.current(self._hubs.index(hub) if hub in self._hubs else 0)
+            box.pack(side="left", padx=6)
+            box.bind("<<ComboboxSelected>>", lambda _e, b=box: self._set_hub(self._hubs[b.current()]))
+            info(r2, _(H.MAP9_TIP), "Card.").pack(side="left")
         self.progress = ttk.Label(f, text="", style="Card.Muted.TLabel")
         self.progress.pack(anchor="w")
         self.fill(inst or built)
+
+    def _set_hub(self, hub):
+        self.app.settings.set("pack_map9", hub)
+        self.refresh()
+
+    def _own_starts(self):
+        dlg = OwnStartsDialog(self.app)
+        self.wait_window(dlg)
+        self.refresh()
 
     def fill(self, manifest):
         self.tree.delete(*self.tree.get_children())
@@ -696,6 +728,7 @@ class App(tk.Tk):
         self.withdraw()
         self.settings = Settings()
         strays.load_custom(ROAMING_FILE)
+        startpos.load_custom(STARTS_FILE)
         i18n.set_language(self.settings.get("language") or i18n.system_language())
         G.set_names_language(i18n.LANG)
         arena.set_language(i18n.LANG)
@@ -716,6 +749,7 @@ class App(tk.Tk):
             except tk.TclError:
                 pass
         G.set_region(self._initial_region())
+        self.monster_pack()                        # what quest map 9 loads with the pack in use
         self.backups = self._make_backups()
         self.boxes = CustomBoxes(APP_DIR / "custom_supply.json")
         self.sources: dict = {"packs": None, "library": None, "rom": None}
@@ -780,7 +814,7 @@ class App(tk.Tk):
             return False
         G.set_region(region)
         self.settings.set("region", region)
-        self.forget_monster_pack()
+        self.forget_monster_pack()                 # (also: what quest map 9 loads with this version's pack)
         self.backups = self._make_backups()
         self.sources = {"packs": None, "library": None, "rom": None}
         self._base_cache = None
@@ -1464,10 +1498,17 @@ class App(tk.Tk):
         strays.save_custom(ROAMING_FILE)
         self.forget_monster_pack()
 
+    def save_monster_starts(self):
+        startpos.save_custom(STARTS_FILE)
+        self.forget_monster_pack()
+        if "pack" in getattr(self, "pages", {}):
+            self.pages["pack"].refresh()
+
     def pack_extras(self) -> dict:
         """What the Monster pack must add besides the monsters: new base-game quests, roaming lists."""
         src = self.sources.get("rom")
-        return {"quests": sorted(src.added) if src else [], "roaming": dict(strays.CUSTOM)}
+        return {"quests": sorted(src.added) if src else [], "roaming": dict(strays.CUSTOM),
+                "starts": [dict(x) for x in startpos.CUSTOM], "map9": self.settings.get("pack_map9", "") or ""}
 
     def backup_now(self):
         src = self.sources["packs"]
@@ -1758,10 +1799,12 @@ class App(tk.Tk):
         if getattr(self, "_pack_state", None) is None:
             inst, _where = self.installed_monster_pack()
             self._pack_state = (inst, True) if inst else (monsterpack.read_manifest(self.monster_pack_dir()), False)
+            G.set_map9((self._pack_state[0] or {}).get("map9"))
         return self._pack_state
 
     def forget_monster_pack(self):
         self._pack_state = None
+        self.monster_pack()                        # read again now: it also sets what quest map 9 loads
 
     def build_monster_pack(self):
         romfs = self.romfs_dir()
@@ -1770,6 +1813,9 @@ class App(tk.Tk):
                                 "folder). exefs/code.bin must be next to the romfs folder.", parent=self)
             return
         page = self.pages["pack"]
+        if getattr(self, "_pack_building", False):
+            return
+        self._pack_building = True
         page.build_btn.configure(state="disabled")
         self.configure(cursor="watch")
         result = {}
@@ -1793,6 +1839,7 @@ class App(tk.Tk):
                 self.after(150, poll)
                 return
             self.configure(cursor="")
+            self._pack_building = False
             if "err" in result:
                 messagebox.showerror(APP_TITLE, f"The pack could not be built:\n\n{result['err']}", parent=self)
             else:
@@ -1808,6 +1855,9 @@ class App(tk.Tk):
         poll()
 
     def install_monster_pack(self):
+        if getattr(self, "_pack_building", False):
+            self.set_status(_("Wait until the pack is built."))
+            return
         dests = find_emulator_title_dirs()
         if not dests:
             messagebox.showinfo(APP_TITLE, "Citra's 'load' folder was not found. Copy the content of\n"

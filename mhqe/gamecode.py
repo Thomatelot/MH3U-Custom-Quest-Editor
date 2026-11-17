@@ -40,6 +40,7 @@ ROAM_ENTRY = 30
 ROAM_FIELDS = ("em", "hp", "attack", "defence", "size", "f5", "size_spread", "f7", "f8", "f9",
                "chance", "f11", "zenny", "points", "level")
 ROAM_HEAD = struct.pack("<5H", 12, 10, 7, 3, 100)   # the first list: a Great Jaggi
+ROAM_SLOTS = 256                                    # the quest's list number is one byte
 
 
 class CodeError(ValueError):

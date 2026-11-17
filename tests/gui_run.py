@@ -618,6 +618,40 @@ def run():
     settle(0.6)
     check(G.TITLE_ID == "00040000000B1D00" and app.sources["packs"] is not None, "back to the EU version and its save")
 
+    # ---- 1.8: the species picker with '(none)' (1.7.0 crashed), Save button, Citra folder
+    n_err = len(errors)
+    pk = picker.Picker(app, title="Small monster species", entries=picker.monster_entries(app.icons, True, True),
+                       tile=(200, 64), icon_size=54, views=picker.monster_views(True), initial=0, columns=4, dev=True)
+    settle(0.5)
+    check(pk.shown and pk.shown[pk.sel]["key"] == 0, "species picker opens on '(none)' with the boulders listed")
+    shot("30_species_picker", pk)
+    pk.destroy()
+    check(len(errors) == n_err, "no error from the species picker")
+    app.show_home()
+    settle()
+    ev = app.pages["ingame"].event
+    check(ev.save_btn is not None and "disabled" in ev.save_btn.state(), "Save button shown, off with nothing to save")
+    key = next(e.key for e in app.sources["packs"].entries() if e.group in A.EVENT_PACKS and e.quest is not None)
+    app.sources["packs"].mark_dirty(key)
+    app.mark_unsaved()
+    settle()
+    check("disabled" not in ev.save_btn.state(), "Save button on once a quest is changed")
+    shot("31_save_button")
+    ev.save_btn.invoke()
+    settle()
+    check(not app.dirty_sources() and "disabled" in ev.save_btn.state(), "Save button saved everything")
+    A.find_emulator_mod_dirs = lambda: []
+    mgr = E.BoxManager(app)
+    settle(0.3)
+    check(mgr.citra_btn.winfo_ismapped(), "box manager offers 'Choose Citra's folder' when none is found")
+    shot("32_boxes_no_citra", window=mgr)
+    mgr.destroy()
+    A.find_emulator_mod_dirs = orig_fe
+    dlg = A.SettingsDialog(app)
+    settle(0.5)
+    shot("33_settings", dlg)
+    dlg.destroy()
+
 
 try:
     run()

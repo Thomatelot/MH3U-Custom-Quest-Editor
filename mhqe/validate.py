@@ -9,7 +9,7 @@ import math
 from collections import namedtuple
 
 from . import gamedata as G
-from . import arena, monsterpack, progress, rules, siege, spawns, startpos, strays, waves
+from . import arena, loadsize, monsterpack, progress, rules, siege, spawns, startpos, strays, waves
 from .quest import LANGS, NANDO_FIELDS, NANDO_MAX, OBJ_MONSTER_TYPES, Quest
 from .i18n import _
 
@@ -49,8 +49,10 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
         add("warning", text)
     for level, text in siege.problems(q):
         add(level, text)
-    for text in strays.problems(q, monster_pack):
-        add("warning", text)
+    for level, text in strays.problem_levels(q, monster_pack):
+        add(level, text)
+    for level, text in loadsize.problems(q):
+        add(level, text)
     for text in strays.notes(q):
         add("info", text)
     for text in spawns.problems(q):
@@ -62,8 +64,9 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
     if all_quests and no in all_quests:
         for level, text in progress.problems(all_quests, no, monster_pack):
             add(level, text)
-    if rules.time_warning(q):
-        add("warning", rules.time_warning(q))
+    note = rules.time_note(q)
+    if note:
+        add(*note)
     cat = q.get("category")
     if bool(cat & rules.DAY_BIT) == bool(cat & rules.NIGHT_BIT):
         add("warning", "The quest is set to " + ("both day and night" if cat & rules.DAY_BIT else
@@ -95,6 +98,11 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
     hw = startpos.hunter_warning(q.get("map"), q.get("supp_enemy_num"))
     if hw:
         add("info", hw)
+    if (q.get("map") == siege.RUIN and q.get("supp_enemy_num") != 2
+            and not any(m["Type"] in siege.CEADEUS for m in q.monsters)):
+        add("info", "Underwater Ruin without Ceadeus: area 1 is closed by rocks that only Ceadeus breaks, and the "
+                    "way from the base camp leads to the end of area 2 (seen in the game). The game's quests "
+                    "without Ceadeus start the hunters in area 3 (General tab: Hunters start 2).")
 
     mons = q.monsters
     first_done = False

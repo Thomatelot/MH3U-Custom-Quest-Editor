@@ -106,10 +106,13 @@ what it does, with the values the game's own quests use; the built-in **Guide** 
   any species on any map, boulders included, and each place editable (area, how many at once, how many
   times they come back, variant, position).
 * **Supply Box:** the game's boxes, or **your own named boxes** (any items; the game has room for 10).
+  A portable Citra is found through the save folder, or with *Choose Citra's folder...* (Settings).
 * **Rewards:** auto-fill from the game's own quests by monster and rank, then edit freely.
 * **Text:** quest name, client, description, objectives in the 5 languages.
-* **Safety:** checks that warn about mistakes that can stop a quest from loading, **automatic backups
-  before every save**, a copy of the original files that is never deleted, *Undo changes*.
+* **Safety:** checks that warn about mistakes that can stop a quest from loading (including a quest that
+  loads more monster data than any game quest on that kind of map, which can leave the game on *Now
+  Loading*), **automatic backups before every save**, a copy of the original files that is never deleted,
+  *Undo changes*, a *Save changes* button on every quest list.
 * **Where they start, on the map:** each monster card shows the area map with its start area in yellow;
   the big map has a pin on every start area of that monster, click one to choose it. *Hunters start*
   (General tab) shows where the hunters begin, with the game's odds, on the map too.
@@ -277,9 +280,9 @@ and picks the game's start list offering the most start areas.
   numbers. To make room, the pack points the game's start lists that are identical but for the monster
   number to one copy. Checked byte by byte by the tests, **not tried in the game**.
 * **Experimental: Moga Village / Port Tanzia (Developer mode).** Quest map 9 is never used by the game's
-  quests; the pack can make it load the Village or the Port (3 bytes of the program). Nobody knows yet
-  whether a quest loads there: it may crash. Large monsters use their Arena positions (far from the
-  hub's ground); small monsters need positions you type. Please report what happens.
+  quests; the pack can make it load the Village or the Port (3 bytes of the program). Port Tanzia loads
+  in Citra and the hunters can walk between its areas, but the large monster did not appear (it uses its
+  Arena positions, outside the Port). Moga Village is untested. Small monsters need positions you type.
 * **Multiplayer:** every player needs the same pack. Built from the same game version it is identical
   for everybody: compare the **fingerprint** on the page.
 * **Real 3DS:** copy the content of the pack folder into `luma\titles\<title id>\` (game patching
@@ -306,9 +309,11 @@ the same mod files.
 ## Phone notebook (Android)
 
 **MH3U Quest Notebook** is a small Android app (5.0 or newer) for writing quests away from the PC:
-name and texts, Village or Port, stars, map, monsters (size, strength, how they arrive), objective, money,
-who can join, day or night, rewards. It works offline, needs no permission, and keeps the quests on the
-phone.
+name and texts, Village or Port, stars, map, monsters (size, strength or your own Health / Attack /
+Toughness rows, where each one starts, how they arrive), small monsters (as the game's quests, or none,
+and their strength), objective, money, who can join, day or night, where the hunters start, Stable or
+Unstable, the supply box, rewards. It works offline, needs no permission, and keeps the quests on the
+phone. Version 1.1 of the app comes with editor 1.8; install it over the old one (same signature).
 
 1. Copy [`android/MH3U-Quest-Notebook.apk`](android/MH3U-Quest-Notebook.apk) to the phone and open it
    (Android asks once to allow installing apps from Files, Drive or your browser).
@@ -344,10 +349,11 @@ rests on a test in the game and what rests on reading the game's files.
 | **North American (US) version** | 🔎 Compared file by file with the EU version (same quest format, base quests, monster files and pack; different program id, save folder `00000AE4` and `us` folder). Not played: please report |
 | Quest fields: meaning of most settings, objectives, rewards, supply boxes | 🔎 Read from the game's own quests (the **(i)** says "not confirmed" where that is all there is) |
 | Three monsters arriving at once; five monsters one after the other | 🔎 Follow the same rule as the tested patterns but never appear in a game quest: please test |
-| Which monsters wander into an *Unstable* zone | 🔎 Since 1.5: chosen from the game's lists, read from its code (and lists of your own with the Monster pack). Roaming monsters on one-area maps (Arena...): untested |
+| Which monsters wander into an *Unstable* zone | 🔎 Since 1.5: chosen from the game's lists, read from its code (and lists of your own with the Monster pack). Since 1.8 the meaning of the roaming settings, the 3-monster limit of a list and the fields of a list's monsters were read in the code too. Roaming monsters on one-area maps (Arena...) and lists 214-255: untested |
+| Night on the Underwater Ruin | ✅ A tester played a night quest there: it works, only the light differs (the game never uses this night version). Arena and Water Arena by night: untested |
 | An "enraged" / "charged" monster | 🔎 No "enraged" setting in the quest file. The charged Brachydios / Zinogre come from the game's start records (*Starts in* marks them); starts of your own with these forms (Monster pack, Developer mode): untested |
 | Small monsters on maps where the game never puts them (boulders included), edited places | 🔎 Record layout checked on the game's 11,383 small-monster places; the game already shows some small monsters on maps without data of their own. Not tried in the game: please report |
-| Moga Village / Port Tanzia as quest map 9 (Monster pack, Developer mode) | ❔ Experiment: the table and the loading code were read in the program, nothing was tried in the game |
+| Moga Village / Port Tanzia as quest map 9 (Monster pack, Developer mode) | ⚠️ Port Tanzia tried in Citra: the quest loads and the hunters walk between its areas, but the large monster did not appear. Moga Village not tried |
 | Start areas on the map (yellow areas, pins) | 🔎 Area outlines from the game's map pictures, placed with mh3u-quest-studio's area markers (they line up on every map); the start areas themselves come from the game's code |
 | Who can join (HR, players, no armor) and the quest-board line | 🔎 Rules table from mh3u-quest-studio (confirmed in the Wii U game); every 3DS quest pairs rules and board lines the same way. Not tried with a custom quest |
 | Day / night | 🔎 Every game quest sets exactly one of the two flags; night quests are the ones whose texts speak of the night. Not tried with a custom quest |
@@ -355,6 +361,8 @@ rests on a test in the game and what rests on reading the game's files.
 | Great Desert area 2 (Monster pack) | 🔎 Uses Jhen Mohran's own area-2 spawn data; not tried in the game |
 | Monster sizes above 255 % (Monster pack) | 🔎 The size code and table were read in the 3DS program and the patched table checked by the tests; **not tried in the game** |
 | Phone notebook (Android app) | 🔎 The page was tested in a phone-sized browser, the APK checked (signatures, contents) and the import tested on the PC. **Not yet tried on a real phone**: please report |
+| Monster data warning (*Now Loading* for ever) | 🔎 Based on one tester's quest that never finished loading (18.7 MB of monster files, far above any game quest); the real memory limit is not known, the editor compares with the game's quests |
+| Portable Citra | 🔎 Folder layout of Citra's portable mode; checked with a copy of that layout, not with a real portable Citra: please report |
 | French interface | 🔎 Interface, checks and guide translated; item, monster and map names from the game's French text. A few rare texts may still show in English |
 | **Real 3DS**, Japanese version, Linux, macOS | ❔ Not tested by the author: you may be the first to find out. Please report |
 
@@ -397,6 +405,8 @@ better.** Please:
 | My quest is not in the game | Citra must be **closed** when you save. Check the slot (packs 1-3 = event quests; pack 4 = challenge quests). |
 | A monster never appears | The game does not allow it on that map (the card warns): change the map, or build and install the *Monster pack*. With the pack: was the game restarted after installing it? |
 | The game freezes when loading a quest | The quest is based on a different map, or (with the Monster pack) the combination does not work: restore the backup and copy a quest of the same map, or try another start position or map. Please report combinations that crash. |
+| *Now Loading* never ends (the screen still moves) | Most likely too many monsters: see the *Monster data* line of the Monsters tab and the checks. Remove large monsters, small-monster species or roaming monsters until it is below what the game's quests load. |
+| Citra's `load` folder is not found (portable Citra) | *Settings > Choose Citra's folder...*: the folder of the program (it holds `user`) or that `user` folder. |
 | I chose the wrong version | *Settings > Game version*: each version has its own save folder, extracted game and backups. |
 | Empty pictures | The `assets` folder is incomplete: download the repository again, or *Settings > Rebuild the pictures from my game...* (needs `romfs`, Pillow, optionally `exefs/code.bin`). |
 | The supply box / game quests show the game's own contents | The mod files are not installed in Citra (`load\mods\<title id>\romfs`), or not on the SD card for a 3DS. |

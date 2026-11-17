@@ -172,8 +172,7 @@ class Picker(tk.Toplevel):
                  if (grp == ALL or self._group_of(e) == grp)
                  and (not q or q in e.get("search", e["name"]).lower())]
         if v:
-            order = {g: i for i, g in enumerate(v[2])}
-            shown.sort(key=lambda e: (order.get(self._group_of(e), len(order)), e.get(v[1] + "_order", 0)))
+            sort_entries(shown, v)
         self.shown = shown
         self.sel = 0
         if initial is not None:
@@ -284,6 +283,21 @@ class Picker(tk.Toplevel):
             self.destroy()
 
 
+def _order_key(o) -> tuple:
+    """Entries of one group may give their order as a number or a tuple (or none): compare them
+    as tuples so a mix never fails ('(none)' among the monsters of the 'Other' group, 1.7.0)."""
+    if o is None:
+        return (-1,)
+    return o if isinstance(o, tuple) else (o,)
+
+
+def sort_entries(entries: list, view) -> None:
+    """Sort in place by the view's group order, then by each entry's own order in its group."""
+    _label, key, groups = view
+    order = {g: i for i, g in enumerate(groups)}
+    entries.sort(key=lambda e: (order.get(e.get(key, ""), len(order)), _order_key(e.get(key + "_order"))))
+
+
 def _run(parent, **kw):
     dlg = Picker(parent, **kw)
     parent.wait_window(dlg)
@@ -296,9 +310,24 @@ DIFFICULTY_GROUPS = tuple(t[2] for t in C.THREAT_TIERS) + ("Small monsters", "Ot
 def pick_monster(app, initial=None, title="Choose a monster", allow_none=False, small_first=False):
     """Monsters by class (easiest first in each class) or by difficulty tier."""
     icons, dev = app.icons, app.dev_mode.get()
+    entries = monster_entries(icons, dev, allow_none)
+    return _run(app, title=title, entries=entries, tile=(200, 64), icon_size=54, views=monster_views(small_first),
+                initial=initial, columns=4, dev=dev,
+                note="Stars: how hard players usually find the monster (an editorial guide, not a game value). "
+                     "The quest's Health and Attack rows decide how strong it really is.")
+
+
+def monster_views(small_first=False):
+    small_groups = ("Small monsters",) if small_first else ()
+    type_groups = small_groups + tuple(g for g in C.MONSTER_CLASSES if g not in small_groups)
+    return [("By type", "type", type_groups), ("By difficulty", "tier", DIFFICULTY_GROUPS)]
+
+
+def monster_entries(icons, dev: bool, allow_none: bool) -> list[dict]:
     entries = []
     if allow_none:
-        entries.append({"key": 0, "name": _("(none)"), "type": "Other", "tier": "Other", "search": "none"})
+        entries.append({"key": 0, "name": _("(none)"), "type": "Other", "tier": "Other", "search": "none",
+                        "type_order": (-1, ""), "tier_order": (-1, "")})
     for em, name in G.MONSTERS.items():
         cls = C.MONSTER_CLASS.get(em, "Other")
         threat = C.MONSTER_THREAT.get(em, 0)
@@ -310,13 +339,7 @@ def pick_monster(app, initial=None, title="Choose a monster", allow_none=False, 
                         "tier": C.threat_tier(em) or cls, "tier_order": (threat, name),
                         "search": f"{name} {C.english_name(em)} {_(cls)}" + (f" em{em:03d}" if dev else ""),
                         "icon": (lambda em=em: icons.monster(em, 54))})
-    small_groups = ("Small monsters",) if small_first else ()
-    type_groups = small_groups + tuple(g for g in C.MONSTER_CLASSES if g not in small_groups)
-    return _run(app, title=title, entries=entries, tile=(200, 64), icon_size=54,
-                views=[("By type", "type", type_groups), ("By difficulty", "tier", DIFFICULTY_GROUPS)],
-                initial=initial, columns=4, dev=dev,
-                note="Stars: how hard players usually find the monster (an editorial guide, not a game value). "
-                     "The quest's Health and Attack rows decide how strong it really is.")
+    return entries
 
 
 def pick_item(app, initial=None, title="Choose an item"):

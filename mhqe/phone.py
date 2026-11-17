@@ -12,11 +12,12 @@ import json
 import math
 from pathlib import Path
 
-from . import autofill, rules, spawns, startpos, waves
+from . import autofill, rules, siege, spawns, startpos, strays, waves
 from . import gamedata as G
 from . import helptext as H
 from .i18n import _
-from .quest import MON_SLOTS, NLANG, QuestFormatError
+from .packs import DATA
+from .quest import MON_SLOTS, NANDO_MAX, NLANG, QuestFormatError
 
 FORMAT = "mh3u-quest-draft"
 BUNDLE = "mh3u-quest-drafts"
@@ -25,6 +26,8 @@ FILE_TYPES = [("Phone quest draft", "*.mh3ud *.json"), ("All files", "*.*")]
 
 KINDS = {"hunt": 0x0001, "capture": 0x0081, "slay": 0x0101, "small": 0x8101, "deliver": 0x0002}
 SIEGE_TYPES = (0x0404, 0x2515, 0x4014, 0x2000)
+# maps that no quest of the game uses -> the map that loads the same arena (gamecode.STAGE_TABLE)
+SIBLING_MAPS = {9: 8, 10: 12}
 TEXTS = (("name", "name"), ("objective_text", "objective"), ("sub_objective", "sub_objective"),
          ("failure", "failure"), ("client", "client"), ("description", "description"))
 
@@ -42,6 +45,16 @@ def _int(v, lo, hi, default):
     return max(lo, min(hi, v))
 
 
+def _rows(v):
+    """Health / attack / toughness rows [hp, at, df] (0-127 each), or None."""
+    if not isinstance(v, (list, tuple)) or len(v) != 3:
+        return None
+    try:
+        return [max(0, min(NANDO_MAX, int(x))) for x in v]
+    except (TypeError, ValueError):
+        return None
+
+
 def clean(d: dict) -> dict:
     """A draft with every value checked and put in range (the file comes from a phone)."""
     if not isinstance(d, dict) or d.get("format") != FORMAT:
@@ -50,7 +63,7 @@ def clean(d: dict) -> dict:
     for key, _f in TEXTS[1:]:
         out[key] = str(d.get(key) or "")
     out["hub"] = "Port" if d.get("hub") == "Port" else "Village"
-    out["star"] = _int(d.get("star"), 1, 10, 1)
+    out["star"] = _int(d.get("star"), 1, 9, 1)          # the game's quests go up to 9 stars
     out["rank"] = _int(d.get("rank"), 0, 4, 0)
     out["map"] = _int(d.get("map"), 1, 15, 1)
     if out["map"] not in G.MAP_NAMES:
@@ -74,9 +87,21 @@ def clean(d: dict) -> dict:
         if em not in G.MONSTERS:
             continue
         strength = m.get("strength")
+        start = m.get("start")
         mons.append({"em": em, "count": _int(m.get("count"), 1, 99, 1), "size": _int(m.get("size"), 1, 255, 100),
-                     "strength": strength if strength in H.GROUPS else None})
+                     "strength": strength if strength in H.GROUPS else None,
+                     "rows": _rows(m.get("rows")),
+                     "start": None if start is None else _int(start, 0, 15, 0)})
     out["monsters"] = mons
+    # notebook 1.1 (draft version 2): what the PC editor's standard mode also sets
+    hs = d.get("hunters")
+    out["hunters"] = None if hs is None else _int(hs, 0, 2, 0)
+    env = d.get("environment")
+    out["environment"] = env if env in ("stable", "unstable") else None
+    out["small"] = "none" if d.get("small") == "none" else "auto"
+    out["small_rows"] = _rows(d.get("small_rows"))
+    sup = d.get("supply")
+    out["supply"] = sup if isinstance(sup, int) and not isinstance(sup, bool) and sup in G.SUPP_SETS else None
     out["arrival"] = _int(d.get("arrival"), 0, 0xFFFF, 0)
     o = d.get("objective") if isinstance(d.get("objective"), dict) else {}
     kind = o.get("kind") if o.get("kind") in KINDS else "hunt"
@@ -121,12 +146,17 @@ def group_key(d, strength=None) -> str | None:
     return min(keys, key=lambda k: abs(int(k.split()[1]) - d["star"]), default=None)
 
 
-def template_score(d, q, cat: str):
+def is_siege(q) -> bool:
+    return q.objective(1)[0] in SIEGE_TYPES or q.objective(2)[0] in SIEGE_TYPES
+
+
+def template_score(d, q, cat: str, *, map_id: int | None = None, siege_ok: bool = False):
     """How well a quest fits as the copy a draft starts from (higher is better), or None when it
-    must not be used: another map, a siege or Dragonship quest, an arena special."""
-    if q.get("map") != d["map"]:
+    must not be used: another map, a siege or Dragonship quest (unless ``siege_ok``), an arena
+    special."""
+    if q.get("map") != (d["map"] if map_id is None else map_id):
         return None
-    if q.objective(1)[0] in SIEGE_TYPES or q.objective(2)[0] in SIEGE_TYPES:
+    if is_siege(q) and not siege_ok:
         return None
     score = 0
     if cat == "Game quests":
@@ -146,17 +176,59 @@ def template_score(d, q, cat: str):
     return score
 
 
-def best_template(d, candidates):
-    """(label, quest, category) of the best quest to copy among ``candidates`` (as given by the
-    app's template_quests()), or None."""
-    scored = [(template_score(d, q, cat), i) for i, (_l, q, cat) in enumerate(candidates)]
+def _best(d, candidates, **kw):
+    scored = [(template_score(d, q, cat, **kw), i) for i, (_l, q, cat) in enumerate(candidates)]
     scored = [(s, i) for s, i in scored if s is not None]
-    if not scored:
-        return None
-    return candidates[max(scored)[1]]
+    return candidates[max(scored)[1]] if scored else None
+
+
+def find_template(d, candidates):
+    """(label, quest, category, note) of the quest to copy among ``candidates`` (as given by the
+    app's template_quests()), or None. In this order: a quest of the draft's map that is not a
+    siege fight; on a map whose quests are all siege fights (the Great Desert), one of them, as
+    the desktop editor does; on a map that no quest uses (the arena variants), a quest of the map
+    that loads the same arena. ``note`` says which of the last two happened (None for the first)."""
+    hit = _best(d, candidates)
+    if hit:
+        return (*hit, None)
+    hit = _best(d, candidates, siege_ok=True)
+    if hit:
+        return (*hit, _("Every quest of the game on {} is a siege fight: the quest was made from one of them, "
+                        "with your monsters and objective.").format(G.map_name(d["map"])))
+    sib = SIBLING_MAPS.get(d["map"])
+    if sib is not None:
+        hit = _best(d, candidates, map_id=sib)
+        if hit:
+            return (*hit, _("No quest of the game uses {}: the quest was made from one of {}, the same arena.")
+                    .format(G.map_name(d["map"]), G.map_name(sib)))
+    return None
+
+
+def best_template(d, candidates):
+    """(label, quest, category) of the best quest to copy, or None (see find_template)."""
+    hit = find_template(d, candidates)
+    return hit[:3] if hit else None
 
 
 # -------------------------------------------------------------------- apply
+def _desert(q, d, notes) -> None:
+    """The Great Desert runs the Dragonship in every quest: without its integrity (objective B)
+    the ship is destroyed and the quest fails as soon as it starts (seen in the game, 1.4.1)."""
+    if siege.jhen_of(q) is not None:
+        siege.apply_ship(q, failure_text=not d["failure"].strip())
+        notes.append(_("Great Desert: set up like the game's Dragonship fights (objective and Dragonship "
+                       "integrity)."))
+    elif q.objective(2)[0] == 0:
+        q.set_objective(2, siege.SHIP_OBJ, siege.SHIP_ID, siege.JHEN[25], 0)
+        q.set("clr_pattern", 0)
+        q.set("category", q.get("category") | siege.SHIP_BIT)
+        notes.append(_("Great Desert without a Jhen Mohran: the Dragonship integrity was kept as objective B "
+                       "(not a goal) so the ship is not destroyed at the start. Untested in the game."))
+    else:
+        notes.append(_("Great Desert: objective B is taken by your second monster, so the Dragonship has no "
+                       "integrity and the quest may fail as soon as it starts. Untested in the game."))
+
+
 def _spread_starts(q, pack) -> None:
     """Same rule as the Monsters tab: copies of one species start on different spots."""
     seen: dict = {}
@@ -178,8 +250,12 @@ def apply(q, d, *, pack=None, source_no=None, donors=()) -> list[str]:
     for the user: what was filled in for them and what could not be applied."""
     notes: list[str] = []
     if q.get("map") != d["map"]:
-        raise DraftError("The quest to copy must be on the draft's map.")
+        if SIBLING_MAPS.get(d["map"]) != q.get("map"):
+            raise DraftError("The quest to copy must be on the draft's map.")
+        q.set("map", d["map"])                    # same arena (see SIBLING_MAPS)
     bare = spawns.is_bare(q)
+    if bare:
+        q.pad_to(DATA)        # a base-game quest is shorter than an event slot: room for its small monsters
 
     # texts: the phone writes one language; the game shows the console's, so all five get it
     for key, field in TEXTS:
@@ -230,13 +306,38 @@ def apply(q, d, *, pack=None, source_no=None, donors=()) -> list[str]:
         if key:
             hp, at, df = H.preset_rows(key)
             block.update(Nando_hp=hp, Nando_at=at, Nando_etc=df, **H.preset_extra(key))
+        if m["rows"]:
+            block.update(Nando_hp=m["rows"][0], Nando_at=m["rows"][1], Nando_etc=m["rows"][2])
         block.update(Num=m["count"], Size=m["size"], Starttype=0)   # a single card may hold copies
         if m["size"] != 100:
             block["Sizeparam"] = 0                # fixed size, as the size presets do
         q.set_monster(i, **block)
     _spread_starts(q, pack)
+    for i, m in enumerate(cards):                 # starts chosen on the phone (the game's own list)
+        if m["start"] is None:
+            continue
+        ar = startpos.areas(m["em"], q.get("map"), pack)
+        if ar and m["start"] < len(ar):
+            q.set_monster(i, Starttype=m["start"])
+        else:
+            notes.append(_("{}: the start chosen on the phone does not exist on this map; the usual start is "
+                           "used.").format(G.mon_name(m["em"])))
     n = len(cards)
     q.set("start_param", waves.available_value(n, d["arrival"]) if n > 1 else 0)
+
+    # where the hunters start, roaming monsters
+    if d["hunters"] is not None:
+        q.set("supp_enemy_num", d["hunters"])
+    if d["environment"] == "stable":
+        strays.make_stable(q)
+    elif d["environment"] == "unstable":
+        refs = strays.references(d["map"], d["star"], anywhere=True)
+        if refs:
+            strays.apply(q, refs[0])
+            if refs[0]["map"] != d["map"]:
+                notes.append(_("Roaming monsters: no quest of the game has them on this map; the settings of "
+                               "\"{}\" were used (untested here). Choose the list on the General tab.")
+                             .format(refs[0].get("name", refs[0]["no"])))
 
     # objective
     o = d["objective"]
@@ -254,6 +355,8 @@ def apply(q, d, *, pack=None, source_no=None, donors=()) -> list[str]:
         q.set_objective(1, KINDS[kind], o["em"], o["count"], 1)
         q.set_objective(2, 0, 0, 0, 0)
         q.set("clr_pattern", 0)
+    if q.get("map") == siege.DESERT:
+        _desert(q, d, notes)
     if not d["objective_text"].strip():
         q.set_text("objective", G.objectives_sentence(q), langs=range(NLANG))
         notes.append(_("Objective text: written from the objective."))
@@ -265,7 +368,15 @@ def apply(q, d, *, pack=None, source_no=None, donors=()) -> list[str]:
             spawns.adopt_game_list(q, source_no, d["star"], pool, donors)
         except QuestFormatError:
             pass
-    if autofill.available():
+    if d["small"] == "none" and spawns.readable(q):
+        spawns.write(q, [])
+        notes.append(_("Small monsters: none, as chosen on the phone."))
+    if d["small_rows"]:
+        for field, v in zip(("zako_nando_hp", "zako_nando_at", "zako_nando_etc"), d["small_rows"]):
+            q.set(field, v)
+    if d["supply"] is not None:
+        q.set("item_set_no", d["supply"])
+    elif autofill.available():
         res = autofill.supply_box(d["map"], pool)
         if res:
             autofill.apply_supply(q, res[0])

@@ -1,5 +1,69 @@
 # Changelog
 
+## 1.8.0
+
+Reports from the testers. Checked by the tests and the scripted run of the window; **untested in the
+game** unless said otherwise.
+
+* **Fix: removing a small-monster species gave an "Unexpected error"** (`'<' not supported between
+  instances of 'tuple' and 'int'`). 1.7.0 put the boulders in the "Other" group of the species list, next
+  to "(none)", and sorting that group failed.
+* **Star rank 0 to 9:** the game's quests never go above 9 (Village 1-9, Port and event quests 1-8), and
+  the editor warned about 10 while offering it. A quest that already has 10 keeps it (shown "not used by
+  the game"). The phone notebook offers Village 1-9 and Port 1-8.
+* **Save button on the quest lists** (In-game quests, Library, Base game; next to the number of quests):
+  writes every quest marked * (the same as Ctrl+S). The save's quest files hold several quests each, so it saves every change, not
+  only the selected quest.
+* **Portable Citra:** the editor now finds Citra's `load` folder in the Citra that holds the chosen save
+  folder (a portable Citra keeps everything in a `user` folder next to the program), and a new *Choose
+  Citra's folder...* button (Settings, My supply boxes, and offered when installing) points it at any
+  Citra. Used for the supply files of your own boxes, the base-game mod and the Monster pack. The `load`
+  folder is made if needed.
+* **Monster data:** the Monsters tab shows how much monster data the quest makes the game load (large,
+  small and roaming monsters), and the checks warn above what any quest of the game loads on a map of the
+  same kind. A tester's quest that stayed on *Now Loading* for ever had 4 large monsters, 8 small species
+  and a roaming monster on the Flooded Forest: 18.7 MB, where the game's quests load 14.5 MB at most on maps
+  of several areas. The real limit is not known; the editor only compares with the game's quests.
+* **Underwater Ruin:** a note when a quest has no Ceadeus and the hunters start at the camp (area 1 is
+  closed by rocks only Ceadeus breaks, the way from the camp leads to the end of area 2, as a tester saw
+  in the game; the game's quests without Ceadeus start the hunters in area 3).
+* **Night on the maps the game only uses by day:** the Underwater Ruin, the Arena and the Water Arena have
+  a night version that the game never uses (read in the game's quest map -> stage table and files). A
+  tester played the Underwater Ruin's: everything works, only the light and shading differ. The checks
+  now say this as a note instead of a warning; the Sacred Land, the Tainted Sea and the arena variants
+  have no night version (the same map is loaded).
+* **Roaming monsters, read in the game's code:**
+  * the five settings are now named by what the game does with them: *Chance at the start of the hunt*
+    (rolled once), *Chance each time one may come* (the "second %": the chance at each try, 20 less after
+    each one that came; a tester read it as minutes), *How many can come* (until now "at most at the same
+    time"; the game stops at 3) and *Only when called (Qurupeco)* (until now "always comes": with it no
+    roaming monster comes on its own, only when called; set in the game's 11 Qurupeco quests). All four
+    are now in the standard mode;
+  * **your own lists: Health, Attack, Toughness and Size of each monster** can be changed (with the
+    multipliers), plus size spread, stamina, start, level, zenny and HR points in Developer mode. When a
+    roaming monster comes, the game builds it from these fields exactly like a quest's monster;
+  * **a list holds 3 monsters at most:** the game only draws among the first 3 (its own lists have 1 to 3),
+    so the 4th to 8th monster that the editor allowed were never used;
+  * **42 more list numbers (214 to 255):** the list number of a quest is one byte and the game does not
+    check it, so the Monster pack can move the game's table of lists to a bigger copy (two words of the
+    program point to it). Used only when you make such a list; the pack then also shares the game's
+    duplicate start lists for room, as for starts of your own. Untested in the game;
+  * *Unstable* no longer copies the settings of a Qurupeco quest into a quest without a Qurupeco (its
+    roaming monster only comes when called, so none would ever come), and the checks report it.
+* **Great Desert without a Jhen Mohran:** a warning when the quest has no Dragonship integrity (objective
+  B): the ship can then be destroyed as soon as the quest starts.
+* **Quests from the phone:**
+  * maps whose game quests are all siege fights (the Great Desert) now use one of them, set up as a
+    Dragonship fight with a Jhen Mohran, or with the Dragonship integrity kept as objective B without one;
+  * the arena variants (no game quest uses them) use a quest of the same arena (Arena, Water Arena);
+  * a quest made from a game quest now gets the small monsters of that quest (before, the copy had no
+    room for them and the quest came without any). The same for *New quest* in the library.
+* **Phone notebook 1.1** (new APK, same signature: install it over the old one). New options, as in the
+  editor's standard mode: where the hunters start, Stable / Unstable (roaming monsters), the supply box (a
+  game box, with its items), where each large monster starts, custom Health / Attack / Toughness rows
+  (with the multipliers), small monsters (as the game's quests, or none) and their strength. Older drafts
+  keep their meaning.
+
 ## 1.7.0
 
 Ideas from the testers. Everything below is checked against the game's files and by the tests, but

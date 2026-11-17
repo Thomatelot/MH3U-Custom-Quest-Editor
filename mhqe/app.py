@@ -30,8 +30,9 @@ from .editor import EditorPage, OwnStartsDialog, stars
 from .finder import Finder
 from .icons import ASSETS, Icons
 from .library import LibrarySource
-from .packs import PackError
-from .project import (APP_DIR, Backups, PackSource, RomSource, Settings, find_emulator_mod_dirs,
+from .packs import DATA as PACK_DATA, PackError
+from .project import (APP_DIR, Backups, PackSource, RomSource, Settings, citra_root_of, find_emulator_mod_dirs,
+                      set_extra_roots,
                       find_emulator_title_dirs, pack_dir_region, regions_with_saves,
                       find_emulator_pack_dirs, find_pack_dir, find_romfs, read_base_numbers, romfs_region)
 from .quest import Quest, QuestFormatError
@@ -100,15 +101,19 @@ class QuestList(ttk.Frame):
                             command=self.refresh).pack(side="left", padx=12)
         self.count = ttk.Label(bar, text="", style="Muted.TLabel")
         self.count.pack(side="right")
+        self.save_btn = ttk.Button(bar, text="Save", command=app.save)
+        self.save_btn.pack(side="right", padx=(0, 12))
+        Tooltip(self.save_btn, "Write every unsaved change (the quests marked *): your save's quest files, "
+                               "your library, the base-game mod (Ctrl+S). A backup is made first.")
         body = ttk.Frame(self, padding=(10, 6))
         body.pack(fill="both", expand=True)
         cols = ("name", "star", "map", "monsters")
         self.tree = ttk.Treeview(body, columns=cols, selectmode="browse")
         first = {"packs": "Slot", "library": "", "rom": ""}[kind]
-        for col, text, w, stretch in (("#0", first, 92 if kind == "packs" else 64, False),
+        for col, text, w, stretch in (("#0", first, 116 if kind == "packs" else 64, False),
                                       ("name", "Quest", 320, True), ("star", "Rank", 96, False),
                                       ("map", "Map", 150, False), ("monsters", "Monsters", 320, True)):
-            self.tree.heading(col, text=text, anchor="w")
+            self.tree.heading(col, text=_(text) if text else "", anchor="w")
             self.tree.column(col, width=w, anchor="w", stretch=stretch, minwidth=40)
         c = theme.current()
         self.tree.tag_configure("free", foreground=c["free"])
@@ -124,6 +129,7 @@ class QuestList(ttk.Frame):
         self.actions = ttk.Frame(self, padding=(10, 0, 10, 10))
         self.actions.pack(fill="x")
         self.buttons: dict[str, ttk.Button] = {}
+        app.quest_lists.append(self)
 
     def source(self):
         return self.app.sources.get(self.kind)
@@ -155,7 +161,7 @@ class QuestList(ttk.Frame):
             if self.kind == "packs":
                 used = sum(1 for e in entries if e.quest is not None)
                 self.tree.insert("", "end", iid=gid, text=pack_label(gname), open=True, tags=("group",),
-                                 values=(f"{used} of {len(entries)} slots used"
+                                 values=(_("{} of {} slots used").format(used, len(entries))
                                          + (f"   (file {gname})" if dev else ""), "", "", ""))
             elif self.kind == "rom":
                 self.tree.insert("", "end", iid=gid, text="", open=True, tags=("group",),
@@ -184,7 +190,7 @@ class QuestList(ttk.Frame):
                                          G.map_name(q.get("map")), names),
                                  tags=("modified",) if e.modified else ())
                 shown += 1
-        self.count.configure(text=f"{shown} quest{'s' if shown != 1 else ''}")
+        self.count.configure(text=_("{} quests").format(shown) if shown != 1 else _("1 quest"))
         if keep and self.tree.exists(keep):
             self.tree.selection_set(keep)
             self.tree.see(keep)
@@ -225,6 +231,14 @@ class QuestList(ttk.Frame):
             self.buttons[key] = b
         self.update_actions()
 
+    def update_save(self):
+        if self.save_btn is None or not self.save_btn.winfo_exists():
+            return
+        dirty = bool(self.app.dirty_sources())
+        self.save_btn.configure(text=_("Save changes") if dirty else _("All saved"),
+                                style="Accent.TButton" if dirty else "TButton")
+        self.save_btn.state(["!disabled"] if dirty else ["disabled"])
+
     def update_actions(self):
         src = self.source()
         key = self.selected()
@@ -240,6 +254,7 @@ class QuestList(ttk.Frame):
             rules["new"] = src is not None
         for k, b in self.buttons.items():
             b.state(["!disabled"] if rules.get(k, True) else ["disabled"])
+        self.update_save()
 
 
 def status_card(parent):
@@ -749,6 +764,8 @@ class App(tk.Tk):
             except tk.TclError:
                 pass
         G.set_region(self._initial_region())
+        self.quest_lists: list = []
+        self.refresh_emulator_roots()              # a portable Citra known from the settings
         self.monster_pack()                        # what quest map 9 loads with the pack in use
         self.backups = self._make_backups()
         self.boxes = CustomBoxes(APP_DIR / "custom_supply.json")
@@ -825,7 +842,17 @@ class App(tk.Tk):
         return True
 
     # --------------------------------------------------------------- sources
+    def refresh_emulator_roots(self):
+        """Tell the emulator lookup about Citra folders known from the settings: the one chosen
+        with 'Choose Citra's folder...' and the ones the save folders are in (portable Citra)."""
+        saves = [self.settings.get(k) for k in ("pack_dir", "pack_dir_us")]
+        src = getattr(self, "sources", {}).get("packs")
+        if src is not None:
+            saves.insert(0, str(src.folder))
+        set_extra_roots(chosen=[self.settings.get("citra_dir")], derived=saves)
+
     def load_sources(self):
+        self.refresh_emulator_roots()
         romfs = self.romfs_dir()
         base = read_base_numbers(romfs) if romfs and Path(romfs).is_dir() else set()
         pack = self.settings.get(self.setting_key("pack_dir"))
@@ -881,6 +908,7 @@ class App(tk.Tk):
                 messagebox.showerror(APP_TITLE, str(exc))
             return False
         self.settings.set(self.setting_key("pack_dir"), str(found))
+        self.refresh_emulator_roots()
         return True
 
     def _base_numbers(self):
@@ -1001,6 +1029,12 @@ class App(tk.Tk):
 
     def mark_unsaved(self):
         self.title("* " + APP_TITLE)
+        self.refresh_save_buttons()
+
+    def refresh_save_buttons(self):
+        self.quest_lists = [ql for ql in self.quest_lists if ql.winfo_exists()]
+        for ql in self.quest_lists:
+            ql.update_save()
 
     # ---------------------------------------------------------------- editing
     def edit_selected(self):
@@ -1340,14 +1374,14 @@ class App(tk.Tk):
         keys, lines = [], []
         for d in drafts:
             title = d["name"] or _("(untitled quest)")
-            hit = phone.best_template(d, candidates)
+            hit = phone.find_template(d, candidates)
             if hit is None:
                 lines.append("✖ " + title + "\n    " + _(
                     "No quest on {} to start from. Choose the game's files in Settings (the editor copies one "
                     "of the game's quests of the same map), or put a quest of this map in your library.")
                     .format(G.map_name(d["map"])))
                 continue
-            label, tpl, cat = hit
+            label, tpl, cat, how = hit
             q = tpl.copy()
             try:
                 notes = phone.apply(q, d, pack=pack, donors=donors,
@@ -1355,6 +1389,8 @@ class App(tk.Tk):
             except (phone.DraftError, QuestFormatError, ValueError) as exc:
                 lines.append("✖ " + title + "\n    " + _(str(exc)))
                 continue
+            if how:
+                notes.insert(0, how)
             keys.append(lib.add(q, d["name"]))
             lines.append("✔ " + title + "\n    " + _("Made from: {}").format(label) +
                          "".join("\n    • " + n for n in notes))
@@ -1378,6 +1414,14 @@ class App(tk.Tk):
             return
         q = tpl.copy()
         q.set_text("name", name)
+        if spawns.is_bare(q):                     # copied from a base-game quest: give it its small monsters
+            q.pad_to(PACK_DATA)
+            packs = self.sources.get("packs")
+            try:
+                spawns.adopt_game_list(q, tpl.get("quest_no"), q.get("star"), autofill.pool_for_star(q.get("star")),
+                                       [e.quest for e in packs.entries() if e.quest is not None] if packs else [])
+            except QuestFormatError:
+                pass
         key = lib.add(q, name)
         self.pages["library"].build_status()
         self.pages["library"].list.refresh(select=key)
@@ -1753,12 +1797,46 @@ class App(tk.Tk):
             messagebox.showerror(APP_TITLE, f"The custom supply files could not be written:\n{exc}", parent=self)
             return []
 
+    def choose_citra(self) -> bool:
+        """Point the editor at a Citra the usual places do not have (a portable Citra keeps its
+        'user' folder next to the program). Remembered in the settings."""
+        folder = filedialog.askdirectory(parent=self, title=_("Choose Citra's folder (portable Citra: the folder "
+                                                              "of the program or its 'user' folder)"))
+        if not folder:
+            return False
+        root = citra_root_of(folder)
+        if root is None:
+            messagebox.showerror(APP_TITLE, _(
+                "No Citra user folder was found there (a folder holding 'sdmc' or 'load').\n\nFor a portable "
+                "Citra, choose the folder of the program (it holds a 'user' folder) or that 'user' folder."),
+                parent=self)
+            return False
+        self.settings.set("citra_dir", str(root))
+        self.refresh_emulator_roots()
+        self.forget_monster_pack()
+        if self.sources.get("packs") is None:
+            found = find_emulator_pack_dirs()
+            if found and self._set_packs(found[0], quiet=True):
+                self.reload_lists()
+        self.set_status(_("Citra folder: {}").format(root))
+        return True
+
+    def citra_dests(self, finder):
+        """``finder()``'s folders; when there is none, offer to choose Citra's folder and look again."""
+        dests = finder()
+        if not dests and messagebox.askyesno(APP_TITLE, _(
+                "Citra's 'load' folder was not found in the usual places.\n\nIf your Citra is portable (or "
+                "somewhere else), choose its folder now: the editor remembers it.\n\nChoose Citra's folder?"),
+                parent=self) and self.choose_citra():
+            dests = finder()
+        return dests
+
     def install_supply_mod(self):
         files = self.export_supply()
         if not files:
             messagebox.showinfo(APP_TITLE, "No quest uses a custom supply box yet.", parent=self)
             return
-        dests = find_emulator_mod_dirs()
+        dests = self.citra_dests(find_emulator_mod_dirs)
         if not dests:
             messagebox.showinfo(APP_TITLE, f"Citra's 'load' folder was not found. Copy\n{SUPPLY_OUTPUT}\ninto "
                                 f"<Citra folder>/load/mods/{G.TITLE_ID}/romfs  (real 3DS with Luma: "
@@ -1772,7 +1850,7 @@ class App(tk.Tk):
         if not ROM_OUTPUT.is_dir():
             messagebox.showinfo(APP_TITLE, "Edit and save a base-game quest first.", parent=self)
             return
-        dests = find_emulator_mod_dirs()
+        dests = self.citra_dests(find_emulator_mod_dirs)
         if not dests:
             messagebox.showinfo(APP_TITLE, f"Citra's 'load' folder was not found. Copy\n{ROM_OUTPUT}\ninto "
                                 f"<Citra folder>/load/mods/{G.TITLE_ID}/romfs", parent=self)
@@ -1858,7 +1936,7 @@ class App(tk.Tk):
         if getattr(self, "_pack_building", False):
             self.set_status(_("Wait until the pack is built."))
             return
-        dests = find_emulator_title_dirs()
+        dests = self.citra_dests(find_emulator_title_dirs)
         if not dests:
             messagebox.showinfo(APP_TITLE, "Citra's 'load' folder was not found. Copy the content of\n"
                                 f"{self.monster_pack_dir()}\ninto <Citra folder>/load/mods/{G.TITLE_ID}/  "
@@ -2096,6 +2174,15 @@ class SettingsDialog(Dialog):
         r.pack(anchor="w", pady=(2, 6))
         ttk.Button(r, text="Find automatically", command=lambda: (self.destroy(), app.find_packs())).pack(side="left")
         ttk.Button(r, text="Choose...", command=lambda: (self.destroy(), app.choose_packs())).pack(side="left", padx=6)
+        mods = find_emulator_title_dirs()
+        citra = mods[0].parent.parent.parent if mods else None
+        ttk.Label(f, text=_("Citra folder (supply files, base-game mod, Monster pack): {}").format(
+            short_path(citra, 70) if citra else _("not found")), style="Muted.TLabel").pack(anchor="w")
+        crow = ttk.Frame(f)
+        crow.pack(anchor="w", pady=(2, 6))
+        ttk.Button(crow, text="Choose Citra's folder...", command=lambda: (self.destroy(), app.choose_citra())).pack(
+            side="left")
+        info(crow, H.CITRA_TIP).pack(side="left", padx=4)
         rom = app.romfs_dir()
         ttk.Label(f, text="Extracted game (optional): " + (short_path(rom, 80) if rom else "not set"),
                   style="Muted.TLabel").pack(anchor="w")

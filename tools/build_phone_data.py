@@ -16,6 +16,7 @@ from mhqe import catalog as C          # noqa: E402
 from mhqe import gamedata as G         # noqa: E402
 from mhqe import helptext as H         # noqa: E402
 from mhqe import rules                 # noqa: E402
+from mhqe import autofill, startpos, strays    # noqa: E402
 
 
 def hidden_item(name: str) -> bool:     # same rule as picker._hidden_item
@@ -46,8 +47,44 @@ def main() -> None:
         hub, star = key.split()
         groups.append({"key": key, "hub": hub, "star": int(star), "label": H.group_label(key),
                        "fee": g["fee"], "reward": g["reward"], "hrp": g["hrp"], "time": g.get("time", 50)})
+    # notebook 1.1: what the PC editor's standard mode also sets
+    for gr in groups:
+        g = H.GROUPS[gr["key"]]
+        gr["rows"] = [g["hp_row"], g["at_row"], g["df_row"]]
+    nando = [[round(r[0], 3), round(r[1], 3), round(r[2], 3)] for r in (G.nando_row(i) for i in range(128))]
+    starts = {}
+    for em in G.MONSTERS:
+        for m in G.MAP_NAMES:
+            ar = startpos.areas(em, m)
+            if ar:
+                starts.setdefault(str(em), {})[str(m)] = [startpos.area_number(m, a) if a else 0 for a in ar]
+    hunters = {}
+    for m in G.MAP_NAMES:
+        opts = []
+        for v in (1, 2):
+            per = startpos._H.get(m)
+            if per and v < len(per) and per[v] != [[0, 100]]:
+                opts.append([v, [[startpos.area_number(m, a) if a else 0, w] for a, w in per[v]]])
+        if opts:
+            hunters[str(m)] = opts
+    supply = {}
+    for no, box in sorted(G.SUPP_SETS.items()):
+        merged = {}
+        for iid, qty in box:
+            merged[iid] = merged.get(iid, 0) + qty
+        if merged:
+            supply[str(no)] = [[i, n] for i, n in merged.items()]
+    auto_supply, small_rows = {}, {}
+    for m in G.MAP_NAMES:
+        for pool in autofill.POOLS:
+            res = autofill.supply_box(m, pool)
+            if res:
+                auto_supply[f"{m}|{pool}"] = res[0]["item_set_no"]
+            res = autofill.small_monsters(m, pool)
+            if res:
+                small_rows[f"{m}|{pool}"] = [res[0]["zako_nando_hp"], res[0]["zako_nando_at"], res[0]["zako_nando_etc"]]
     data = {
-        "version": 1,
+        "version": 2,
         "monsters": monsters,
         "classes": list(C.MONSTER_CLASSES),
         "maps": maps,
@@ -57,6 +94,14 @@ def main() -> None:
         "ranks": [[k, v] for k, v in rules.MONSTER_RANKS.items()],
         "hr": [n for n in rules.HR_CHOICES[1:]],
         "day_only_maps": sorted(rules.DAY_ONLY_MAPS),
+        "night_tested": sorted(rules.NIGHT_TESTED),
+        "nando": nando,
+        "starts": starts,
+        "hunters": hunters,
+        "roaming_maps": sorted({m for m in G.MAP_NAMES if strays.game_has_unstable(m)}),
+        "supply": supply,
+        "auto_supply": auto_supply,
+        "small_rows": small_rows,
         "sprites": {"monster_columns": icons["monster_columns"], "item_cell": icons["item_cell"],
                     "item_columns": icons["item_columns"]},
     }

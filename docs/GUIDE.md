@@ -39,6 +39,10 @@ Monster pack: optional ROM hack that lets large monsters start on maps the game 
 
 Guide: this page.
 
+### Saving
+
+Quests you changed are marked * in the lists. 'Save changes' above each quest list (or Ctrl+S, or Save in the editor) writes them all: the save's quest files hold several quests each, so saving one quest writes its whole file anyway. A full backup is made first.
+
 ### Keys, themes, developer mode
 
 Ctrl+S saves. Ctrl+F searches the tab you are looking at (labels, values, list rows and the (i) texts); on a quest list it jumps to the search box. All text can be selected and copied. 'Undo changes' puts the quest back as it was when you opened it. The checks badge in the top bar warns about mistakes that can stop a quest from loading.
@@ -150,8 +154,12 @@ Stable: only the monsters you listed are in the zone. Unstable: other large mons
 
 To have a monster present for sure, add it as a large monster (and use the arrival patterns).
 
-Chance of roaming monsters: Chance in percent that roaming (stray) large monsters show up. 0 = the environment is Stable; above 0 it is Unstable (checked on 250 game quests).  
-At most at the same time: Most roaming monsters at the same time (1 or 2).  
+Chance at the start of the hunt: Chance in percent, rolled once when the hunt starts, that roaming (stray) large monsters can come during this hunt. 0 = the environment is Stable; above 0 it is Unstable on the quest board (checked on 250 game quests). Read in the game's code.  
+Chance each time one may come: Then, each time the game tries to bring a roaming monster (on a timer), the chance in percent that one comes; 20 less after each one that came. The game's quests use 10, 20, 30, 50, 80 or 100. Read in the game's code (a tester read it as minutes before the monster comes; the code uses it as a chance).  
+How many can come: How many roaming monsters can come during the hunt: 1 or 2 in the game's quests (the game stops at 3). A Qurupeco's call probably counts too: a tester found that a Qurupeco could call one only with 2. Read in the game's code; until 1.7 the editor called it 'at most at the same time'.  
+Only when called (Qurupeco): On: no roaming monster comes on its own (the chance at the start is not rolled); one only comes when it is called, by a Qurupeco. The game sets it in its 11 quests whose target is a Qurupeco or a Crimson Qurupeco ('pekko' comes from Qurupeco's Japanese name). Read in the game's code; until 1.7 the editor called it 'always comes'.
+
+My roaming lists: What each roaming monster of the list is when it comes. Chance: how often it is the one drawn (the chances of a list add up to 100 %). Health, Attack, Toughness: rows of the game's strength table, 0 to 127, as on the Monsters tab (the line under each monster gives the multipliers). Size: in percent, up to 255. Developer mode adds the size spread, stamina and start type (the same settings as a quest's monster), the level (the monster is drawn only for hunters of at least that level, 1 to 9 in the game) and the zenny and HR points it gives. Read in the game's code: when a roaming monster comes, the game builds it from these fields exactly like a quest's monster.  
 'Roaming monsters like another game quest...' copies the roaming settings of a game quest on the same zone. Changing the map offers to replace the small monsters and the roaming settings with the new map's.
 
 ### Developer mode: other gameplay settings
@@ -176,7 +184,7 @@ Rannyu_limite (ren_pattern): A field the game calls Rannyu_limite: 0 in every qu
 
 Field names: this part of the quest record was named one field off in version 1.1 and older; the labels now follow the names of the game's own reader (found by mh3u-quest-studio and checked against every 3DS quest). Only the labels changed: quests made before keep exactly the same bytes.
 
-Roaming list settings: use roaming list (1 when the quest uses a roaming-monster list, 0 otherwise.) / second % (A second percentage next to the chance (10, 20, 30, 50, 80 or 100 in the game's quests). Purpose not confirmed.) / list number (Number of the roaming-monster list of the map. The lists live in the game, so only numbers that a game quest on the same map uses are safe.) / always comes (1 in a few quests whose roaming monster always comes (100 % / 100 %).)
+Roaming list settings: use roaming list (1 in every unstable quest of the game. What it does is not known.) / list number (Number of the roaming-monster list of the map. The lists live in the game, so only numbers that a game quest on the same map uses are safe.)
 
 Quest number: The quest's number. The game identifies quests by it, so two quests can never share a number. Event quests use 20000-29999 and challenge quests 61000-61999. New quests get the first free number automatically.
 
@@ -223,6 +231,10 @@ The line under each slider gives the real multiplier and the rank it matches. Ab
 ### Count
 
 How many copies of this monster arrive one after another. The game uses 1 almost everywhere, and 3 (or 5) in the 'Hunt 3 X in succession' quests, which have a single monster card. To have several copies together or in waves, add several cards. (Shown only when the quest has a single large monster, or in developer mode.)
+
+### Monster data (Now Loading)
+
+How much monster data the quest makes the game load: the files of its large monsters, its small monsters and its roaming monsters (the heaviest ones, as many as can roam at the same time). The real limit is not known; the editor compares with the game's own quests. Above what any quest of the game loads on a map of this kind, the game may stay on 'Now Loading' for ever (seen with a tester's quest: 4 large monsters, 8 small species and a roaming monster on the Flooded Forest). Sizes are those of the monsters' unpacked files, a guide rather than the memory really used.
 
 ### How the monsters arrive
 
@@ -273,6 +285,10 @@ The supply box at the base camp. Each set is a fixed list of items defined by th
 'Make my own box' copies the current box into a box of yours, where you choose every item (up to 40 different items, 99 of each) and give it a name. A quest does not contain its box, only a number: the editor uses one of the 10 box numbers that no game quest uses, and writes your items into a supply file for that number.
 
 The files must be installed: the 'Install the supply files into Citra' button copies them into Citra's load/mods folder; on a real 3DS copy output/MH3U_Supply_Mod/romfs into luma/titles/<title id>/romfs (00040000000B1D00 (EU) or 00040000000AE400 (US)). Without the files the game opens the box it normally has under that number. Every player of a multiplayer quest needs the same files.
+
+### Citra's folder (portable Citra)
+
+Where the editor installs the supply files of your own boxes, the base-game mod and the Monster pack: Citra's 'load/mods' folder. The editor looks in the usual places of Citra, Azahar and Lime3DS, and in the Citra that holds the save folder you chose. A portable Citra keeps everything in a 'user' folder next to the program: choose the folder of the program (or that 'user' folder) here if it is not found. The 'load' folder is made if it does not exist yet.
 
 ### My supply boxes (manager)
 
@@ -348,13 +364,13 @@ They are medians measured on the game's own quests (365 quests of the base game 
 
 ### What it does
 
-The game keeps, inside its program (code.bin), a table of the maps where each large monster may start a quest. A monster put on another map is silently skipped. Each monster's own file also holds its spawn areas, routes between areas and special moves for each map it knows. The Monster pack gives every large monster the maps it is missing: for each new map it borrows the start positions and map data of a 'donor' monster that lives there (same kind of habitat and size where possible), and adds them to the monster's tables. For each new map it also picks, among the game's own start lists for that map, the one offering the most start areas the monster can use. The result: 497 new monster/map combinations: every one of 47 large monsters can start on all 14 maps.
+The game keeps, inside its program (code.bin), a table of the maps where each large monster may start a quest. A monster put on another map is silently skipped. Each monster's own file also holds its spawn areas, routes between areas and special moves for each map it knows. The Monster pack gives every large monster the maps it is missing: for each new map it borrows the start positions and map data of a 'donor' monster that lives there (same kind of habitat and size where possible), and adds them to the monster's tables. For each new map it also picks, among the game's own start lists for that map, the one offering the most start areas the monster can use. The result: 549 new monster/map combinations: every one of 51 large monsters can start on all 14 maps.
 
 The siege maps follow the game's own example: on the Underwater Ruin a monster gets only a start point in area 3, exactly like Abyssal Lagiacrus in the game (which has no other data for that map); on the Great Desert it gets Jhen Mohran's data; on the Tainted Sea Dire Miralis'.
 
 ### What it changes (ROM hack)
 
-It is a mod, built on your PC from your own extracted game: 47 files romfs/arc/enemy/emNNN.arc, a 7 KB patch exefs/code.ips (only new start lists and the extended size table, written in unused space of the program and over the old lists it replaces, one pointer per monster and one for the size table) and mhqe_monster_pack.json. Your ROM and your save are not modified; removing the mod (button 'Remove from Citra') brings the game back exactly. It can not be combined with another code.ips/code.bin mod.
+It is a mod, built on your PC from your own extracted game: 51 files romfs/arc/enemy/emNNN.arc, a 7 KB patch exefs/code.ips (only new start lists and the extended size table, written in unused space of the program and over the old lists it replaces, one pointer per monster and one for the size table) and mhqe_monster_pack.json. Your ROM and your save are not modified; removing the mod (button 'Remove from Citra') brings the game back exactly. It can not be combined with another code.ips/code.bin mod.
 
 ### Great Desert: the Dragonship
 
@@ -380,7 +396,7 @@ The pack adds your starts after the game's own starts of that monster on that ma
 
 ### Experimental: Moga Village and Port Tanzia
 
-Experimental, untested in the game. Quest map 9 is never used by the game's quests (it loads the Arena). With this choice the Monster pack makes it load Moga Village (3 areas, numbered 0 to 2) or Port Tanzia (2 areas, 0 and 1), the hubs, in the same way as a hunting map. Nobody knows yet whether the game accepts it: the quest may crash when it loads, the hunters may appear in an odd place, and there is no base camp or supply box there.
+Experimental. Quest map 9 is never used by the game's quests (it loads the Arena). With this choice the Monster pack makes it load Moga Village (3 areas, numbered 0 to 2) or Port Tanzia (2 areas, 0 and 1), the hubs, in the same way as a hunting map. Port Tanzia was tried in Citra: the quest loads and the hunters can walk between its two areas, but the large monster did not appear. Moga Village is untested. There is no base camp or supply box there.
 
 Large monsters on map 9 use their Arena data (the pack gives every large monster the Arena): their positions are the Arena's, far from the hub's ground, so they may be out of reach or not appear at all. Small monsters: their positions are in the quest; type them in Developer mode (Small monsters > Edit places), inside the area's box shown there. Build and install the pack again after a change. Please report what happens.
 

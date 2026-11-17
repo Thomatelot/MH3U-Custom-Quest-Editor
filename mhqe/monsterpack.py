@@ -689,7 +689,10 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
         by_em.setdefault(em, [])
     starts_out, custom_arrays = [], {}
     redirect, array_sizes = ({}, {})
-    if wanted_starts:
+    wanted_roaming = {int(k): v for k, v in (extras.get("roaming") or {}).items() if v}
+    roam_off, roam_ptrs = GC.find_roaming(code) if wanted_roaming else (0, [])
+    more_roaming = any(idx >= len(roam_ptrs) for idx in wanted_roaming)
+    if wanted_starts or more_roaming:              # room: the game's duplicate start lists are shared
         redirect, array_sizes = shared_start_arrays(code, place, table_va)
         for em in place:                           # every list is written again, pointing to the twins
             if place[em]:
@@ -828,9 +831,36 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
         records.append((table_va - BASE + 4 * em, struct.pack("<I", pos)))
     # big sizes: the size spread table, moved and extended
     roaming = {}
-    wanted = {int(k): v for k, v in (extras.get("roaming") or {}).items() if v}
+    roaming_table = None
+    wanted = wanted_roaming
     if wanted:
-        ptr_off, ptrs = GC.find_roaming(code)
+        ptr_off, ptrs = roam_off, list(roam_ptrs)
+        table_at = ptr_off + BASE                  # where the pointer to each list is written
+        if more_roaming:
+            # numbers past the game's table (214-255): a copy of the table with 256 entries, the two
+            # words of code.bin that point to the table redirected to it (the quest's list number is
+            # a byte and the game does not check it: 0x6289AC, 0x62B760), the old table freed
+            word, lits, i = struct.pack("<I", table_at), [], code.find(struct.pack("<I", table_at))
+            while i >= 0:
+                if i % 4 == 0:
+                    lits.append(i)
+                i = code.find(word, i + 1)
+            if len(lits) != 2:
+                raise PackError("The roaming-monster table is not used as expected in this code.bin: lists past "
+                                f"number {len(ptrs) - 1} are not possible here.")
+            need = 4 * (GC.ROAM_SLOTS)
+            slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= need), None)
+            if slot is None:
+                raise PackError("Not enough free space in code.bin for a bigger roaming-monster table: use the "
+                                f"numbers up to {len(ptrs) - 1}.")
+            new_at = slot[0]
+            slot[0] += (need + 7) // 8 * 8
+            free.append([table_at, table_at + 4 * len(ptrs)])
+            for lit in lits:
+                records.append((lit, struct.pack("<I", new_at)))
+            ptrs += [0] * (GC.ROAM_SLOTS - len(ptrs))
+            roaming_table = {"table": f"0x{new_at:X}", "game_table": f"0x{table_at:X}", "slots": GC.ROAM_SLOTS}
+            log(f"Roaming-monster table moved to make room for lists up to number {GC.ROAM_SLOTS - 1}.")
         for idx in sorted(wanted):
             if not 0 < idx < len(ptrs) or ptrs[idx]:
                 raise PackError(f"Roaming-monster list {idx} is not an empty number of the game.")
@@ -842,8 +872,13 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
             pos = slot[0]
             slot[0] += (len(blob) + 7) // 8 * 8
             records.append((pos - BASE, blob))
-            records.append((ptr_off + 4 * idx, struct.pack("<I", pos)))
+            if roaming_table:
+                ptrs[idx] = pos
+            else:
+                records.append((ptr_off + 4 * idx, struct.pack("<I", pos)))
             roaming[str(idx)] = [list(map(int, e)) for e in wanted[idx]]
+        if roaming_table:
+            records.append((new_at - BASE, struct.pack(f"<{len(ptrs)}I", *ptrs)))
         log(f"Roaming-monster lists of your own: {len(roaming)}.")
     quests = {}
     if extras.get("quests"):
@@ -877,6 +912,7 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
         "big_sizes": big,
         "features": ["big_sizes"] * bool(big) + ["desert_area2"] * bool(desert) + ["siege_bosses"],
         "quests": quests, "roaming": roaming, "starts": starts_out, "map9": hub,
+        "roaming_table": roaming_table,
     }
     (out_dir / MANIFEST).write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     if final_dir.exists():

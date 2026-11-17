@@ -120,3 +120,8 @@ nav.tabs .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--d
 .reward:last-child { border-bottom: 0; }
 .reward input { width: 70px !important; padding: 6px; }
 .count { font-variant-numeric: tabular-nums; }
+
+/* strength rows (notebook 1.1) */
+.rows .row > label.l { min-width: 88px; }
+.rows input[type=number] { width: 84px; }
+.rows .mult { white-space: nowrap; }

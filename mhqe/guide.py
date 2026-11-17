@@ -62,6 +62,11 @@ def _start():
             "(see its own tab in this Guide).\n\n"
             "Guide: this page.")
         )),
+        ("Saving", (
+            _("Quests you changed are marked * in the lists. 'Save changes' above each quest list (or Ctrl+S, or Save in "
+            "the editor) writes them all: the save's quest files hold several quests each, so saving one quest writes "
+            "its whole file anyway. A full backup is made first.")
+        )),
         ("Keys, themes, developer mode", (
             _("Ctrl+S saves. Ctrl+F searches the tab you are looking at (labels, values, list rows and the (i) texts); on a "
             "quest list it jumps to the search box. All text can be selected and copied. 'Undo changes' puts the quest "
@@ -133,8 +138,11 @@ def _general():
             "Deviljho 100 %).")
         )),
         ("Environment: Stable or Unstable", (
-            _(H.ENV_TIP) + _("\n\nChance of roaming monsters: ") + _(H.tip("nora_set_per"))
-            + _("\nAt most at the same time: ") + _(H.tip("nora_set_max"))
+            _(H.ENV_TIP) + _("\n\nChance at the start of the hunt: ") + _(H.tip("nora_set_per"))
+            + _("\nChance each time one may come: ") + _(H.tip("nora_per_type"))
+            + _("\nHow many can come: ") + _(H.tip("nora_set_max"))
+            + _("\nOnly when called (Qurupeco): ") + _(H.tip("nora_pekko"))
+            + _("\n\nMy roaming lists: ") + _(H.ROAM_ROWS_TIP)
             + _("\n'Roaming monsters like another game quest...' copies the roaming settings of a game quest on the same "
             "zone. Changing the map offers to replace the small monsters and the roaming settings with the new map's.")
         )),
@@ -151,9 +159,8 @@ def _general():
             "Field names: this part of the quest record was named one field off in version 1.1 and older; the "
             "labels now follow the names of the game's own reader (found by mh3u-quest-studio and checked against "
             "every 3DS quest). Only the labels changed: quests made before keep exactly the same bytes.\n\n"
-            "Roaming list settings: use roaming list (") + _(H.tip("nora_set_type")) + _(") / second % (")
-            + _(H.tip("nora_per_type")) + _(") / list number (") + _(H.tip("nora_set_table")) + _(") / always comes (")
-            + _(H.tip("nora_pekko")) + _(")\n\n"
+            "Roaming list settings: use roaming list (") + _(H.tip("nora_set_type")) + _(") / list number (")
+            + _(H.tip("nora_set_table")) + _(")\n\n"
             "Quest number: ") + _(H.tip("quest_no"))
         )),
         ("Developer mode: Advanced tab", (
@@ -191,6 +198,7 @@ def _monsters():
             "that any game quest uses, the label is Nightmare: harder than anything in the game.")
         )),
         ("Count", _(H.tip("Num")) + _(" (Shown only when the quest has a single large monster, or in developer mode.)")),
+        ("Monster data (Now Loading)", _(H.LOAD_TIP)),
         ("How the monsters arrive", _(H.ARRIVAL_TIP) + _("\n\n") + _(H.ARRIVAL_NOTE)),
         ("Small monsters", (
             _(H.SPAWN_TIP) + _("\n\nAdd a species, Change..., Remove: edit the list. 'Fill from zone and rank...': ")
@@ -225,6 +233,7 @@ def _supply():
             "Without the files the game opens the box it normally has under that number. Every player of a "
             "multiplayer quest needs the same files.")
         )),
+        ("Citra's folder (portable Citra)", _(H.CITRA_TIP)),
         ("My supply boxes (manager)", (
             _("The 'Supply boxes' button at the top (also 'My supply boxes...' in the Supply Box tab) opens the manager: "
             "rename a box, edit its items, see which quests use it and whether it is installed in Citra, install it, "

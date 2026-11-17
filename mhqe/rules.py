@@ -148,15 +148,35 @@ def set_night(q, night: bool) -> None:
     q.set("category", cat | (NIGHT_BIT if night else DAY_BIT))
 
 
-# maps whose game quests are all by day (night untested there)
+# maps whose game quests are all by day
 DAY_ONLY_MAPS = {7, 8, 9, 10, 11, 12, 15}      # the Great Desert has a night quest (Festival on the Sea of Sand)
+# Of those, the ones with a night version of their own that the game never uses (stage table byte 1,
+# gamecode.STAGE_TABLE): stage 21 = the Underwater Ruin's night files (m07aXXn, archive m21), 22 = the
+# Arena's (m08aXXn, m22), 23 = the Water Arena with other model and material data (m23). The others
+# (maps 9, 10, 11, 15) load the same stage by night as by day.
+UNUSED_NIGHT = {7: 21, 8: 22, 12: 23}
+NIGHT_TESTED = {7}                              # a tester played a night quest on the Underwater Ruin
+
+
+def time_note(q) -> tuple[str, str] | None:
+    """(level, text) about night on a map whose game quests are all by day, or None."""
+    m = q.get("map")
+    if not is_night(q) or m not in DAY_ONLY_MAPS:
+        return None
+    name = G.map_name(m)
+    if m in NIGHT_TESTED:
+        return ("info", f"No quest of the game takes place at night on {name}, but the game has a night version of "
+                        "it, unused: a tester played a night quest there and everything worked, only the light and "
+                        "shading differ from the day.")
+    if m in UNUSED_NIGHT:
+        return ("info", f"No quest of the game takes place at night on {name}, but the game has a night version of "
+                        "it, unused: untested (the Underwater Ruin's unused night version works, a tester found).")
+    return ("info", f"{name} has no night version: by night the game loads the same map as by day (untested).")
 
 
 def time_warning(q) -> str | None:
-    if is_night(q) and q.get("map") in DAY_ONLY_MAPS:
-        return (f"No quest of the game takes place at night on {G.map_name(q.get('map'))}: "
-                "untested, the map may have no night version.")
-    return None
+    note = time_note(q)
+    return note[1] if note else None
 
 
 # ------------------------------------------------------------------ arena carves

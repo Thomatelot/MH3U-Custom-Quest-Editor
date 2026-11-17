@@ -337,15 +337,33 @@ OWN_STARTS = ("Developer mode, Monster pack page > 'My monster starts...' (or 'M
               "To make room in the game's program, the pack then points the game's start lists that are "
               "identical but for the monster number to one copy (the way it already lends start lists, tested "
               "with Zinogre on Sandy Plains). Untested in the game.")
-MAP9_TIP = ("Experimental, untested in the game. Quest map 9 is never used by the game's quests (it loads the "
-            "Arena). With this choice the Monster pack makes it load Moga Village (3 areas, numbered 0 to 2) or "
-            "Port Tanzia (2 areas, 0 and 1), the hubs, in the same way as a hunting map. Nobody knows yet "
-            "whether the game accepts it: the quest may crash when it loads, the hunters may appear in an odd "
-            "place, and there is no base camp or supply box there.\n\n"
+LOAD_TIP = ("How much monster data the quest makes the game load: the files of its large monsters, its small "
+            "monsters and its roaming monsters (the heaviest ones, as many as can roam at the same time). The "
+            "real limit is not known; the editor compares with the game's own quests. Above what any quest of "
+            "the game loads on a map of this kind, the game may stay on 'Now Loading' for ever (seen with a "
+            "tester's quest: 4 large monsters, 8 small species and a roaming monster on the Flooded Forest). "
+            "Sizes are those of the monsters' unpacked files, a guide rather than the memory really used.")
+ROAM_ROWS_TIP = ("What each roaming monster of the list is when it comes. Chance: how often it is the one drawn "
+                 "(the chances of a list add up to 100 %). Health, Attack, Toughness: rows of the game's strength "
+                 "table, 0 to 127, as on the Monsters tab (the line under each monster gives the multipliers). Size: "
+                 "in percent, up to 255. Developer mode adds the size spread, stamina and start type (the same "
+                 "settings as a quest's monster), the level (the monster is drawn only for hunters of at least that "
+                 "level, 1 to 9 in the game) and the zenny and HR points it gives. Read in the game's code: when a "
+                 "roaming monster comes, the game builds it from these fields exactly like a quest's monster.")
+CITRA_TIP = ("Where the editor installs the supply files of your own boxes, the base-game mod and the Monster pack: "
+             "Citra's 'load/mods' folder. The editor looks in the usual places of Citra, Azahar and Lime3DS, and "
+             "in the Citra that holds the save folder you chose. A portable Citra keeps everything in a 'user' "
+             "folder next to the program: choose the folder of the program (or that 'user' folder) here if it "
+             "is not found. The 'load' folder is made if it does not exist yet.")
+MAP9_TIP = ("Experimental. Quest map 9 is never used by the game's quests (it loads the Arena). With this choice "
+            "the Monster pack makes it load Moga Village (3 areas, numbered 0 to 2) or Port Tanzia (2 areas, 0 "
+            "and 1), the hubs, in the same way as a hunting map. Port Tanzia was tried in Citra: the quest loads "
+            "and the hunters can walk between its two areas, but the large monster did not appear. Moga Village "
+            "is untested. There is no base camp or supply box there.\n\n"
             "Large monsters on map 9 use their Arena data (the pack gives every large monster the Arena): their "
             "positions are the Arena's, far from the hub's ground, so they may be out of reach or not appear at "
-            "all. Small monsters: their positions are in the quest; type them in Developer mode (Small monsters "
-            "> Edit places), inside the area's box shown there. Build and install the pack again after a change. "
+            "all. Small monsters: their positions are in the quest; type them in Developer mode (Small monsters >"
+            " Edit places), inside the area's box shown there. Build and install the pack again after a change. "
             "Please report what happens.")
 PLACES_TIP = ("Every place of the quest's small-monster list, one per line: the species, the area, how many "
               "appear there at once, how many times they come back once slain (or again and again) and the "
@@ -475,15 +493,23 @@ TEXT = {
                   "quest's small-monster list). Developer mode only: the list on the Monsters tab "
                   "keeps these in step.",
     "main_zako2": "Second of the two 'main' small-monster species.",
-    "nora_set_type": "1 when the quest uses a roaming-monster list, 0 otherwise.",
-    "nora_set_per": "Chance in percent that roaming (stray) large monsters show up. 0 = the "
-                    "environment is Stable; above 0 it is Unstable (checked on 250 game quests).",
-    "nora_per_type": "A second percentage next to the chance (10, 20, 30, 50, 80 or 100 in the game's "
-                     "quests). Purpose not confirmed.",
-    "nora_set_max": "Most roaming monsters at the same time (1 or 2).",
+    "nora_set_type": "1 in every unstable quest of the game. What it does is not known.",
+    "nora_set_per": "Chance in percent, rolled once when the hunt starts, that roaming (stray) large monsters can "
+        "come during this hunt. 0 = the environment is Stable; above 0 it is Unstable on the quest board "
+        "(checked on 250 game quests). Read in the game's code.",
+    "nora_per_type": "Then, each time the game tries to bring a roaming monster (on a timer), the chance in percent "
+        "that one comes; 20 less after each one that came. The game's quests use 10, 20, 30, 50, 80 or "
+        "100. Read in the game's code (a tester read it as minutes before the monster comes; the code "
+        "uses it as a chance).",
+    "nora_set_max": "How many roaming monsters can come during the hunt: 1 or 2 in the game's quests (the game stops "
+        "at 3). A Qurupeco's call probably counts too: a tester found that a Qurupeco could call one only"
+        " with 2. Read in the game's code; until 1.7 the editor called it 'at most at the same time'.",
     "nora_set_table": "Number of the roaming-monster list of the map. The lists live in the game, "
                       "so only numbers that a game quest on the same map uses are safe.",
-    "nora_pekko": "1 in a few quests whose roaming monster always comes (100 % / 100 %).",
+    "nora_pekko": "On: no roaming monster comes on its own (the chance at the start is not rolled); one only comes "
+        "when it is called, by a Qurupeco. The game sets it in its 11 quests whose target is a Qurupeco "
+        "or a Crimson Qurupeco ('pekko' comes from Qurupeco's Japanese name). Read in the game's code; "
+        "until 1.7 the editor called it 'always comes'.",
     "zako_rows": "Strength of the small monsters: rows of the same difficulty table as the "
                  "large monsters (health / attack / toughness).",
     "hagi_no": "Two values in one number. Low byte: the supply rank (the game's HagiNo): 0 = low rank, "

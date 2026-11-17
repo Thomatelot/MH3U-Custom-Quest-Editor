@@ -13,7 +13,11 @@ your browser...). The app needs no permission and never goes on the Internet.
 - Village or Port, star rank, monster rank, map, time limit (or a frozen clock), fee, reward,
   HR points (the usual values of the game's quests of that rank are filled in for you).
 - Who can join (Hunter Rank, players, no armor), day or night, arena carves.
-- Up to five large monsters with their size and strength, and how they arrive.
+- Where the hunters start (on the maps where the game allows another start), Stable or Unstable
+  (roaming monsters), the supply box (automatic, or one of the game's boxes with its items).
+- Up to five large monsters with their size, strength (a rank, or your own Health / Attack /
+  Toughness rows with the multipliers they give), where each one starts, and how they arrive.
+- Small monsters: as in the game's quests of that map and rank, or none, and their strength.
 - The objective: hunt, capture or slay the monsters, deliver an item, or slay small monsters.
 - Rewards: automatic (chosen on the PC from the game's quests) or your own list.
 
@@ -30,6 +34,10 @@ from the game's quests, and adds the result to your library. A report says what 
 open the quest to check it, then send it to the game as usual.
 
 Texts are written in one language and copied into the game's five languages.
+
+Version 1.1 (with editor 1.8) added the hunters start, Stable / Unstable, the supply box, start areas,
+custom strength rows and the small monsters. Drafts made with 1.0 keep their meaning (what they did not
+hold is taken from the quest copied on the PC); an editor older than 1.8 ignores the new options.
 
 ## For developers
 

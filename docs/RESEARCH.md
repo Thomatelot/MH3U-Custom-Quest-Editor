@@ -78,6 +78,52 @@ lends start lists, tested with Zinogre on Sandy Plains), which frees 6,160 bytes
   a01 x -462..336, z -1081..778; a02 x -1750..1896, z -1232..1244; Port a00 x -2712..1846, z
   -2820..1719; a01 x -2911..583, z -2326..135. Not tried in the game.
 
+## Testers' reports (1.8)
+- Map 9 = Port Tanzia (pack built with the experiment): the quest **loaded** and the hunter could walk and
+  go from area 1 to area 2 (tested in Citra by the author). The large monster (Lagiacrus) was not there.
+  Lagiacrus' em_mappos00 for the Arena (stage 8, area 1) holds (20000, 0, 2000) and (1300, 0, -250):
+  both are outside the Port's area-1 wall box (x up to 583), so it is either placed out of reach or
+  not placed. Whether the game reads em_mappos00 by the stage loaded (27) or by the placement number
+  (8) is not known: a monster archive with positions for stage 27 would tell.
+- Underwater Ruin by day without Ceadeus (seen in the game, "Abyssal Awakening"): area 1 is closed and
+  the way from the camp leads to the end of area 2, in front of area 3.
+- Night versions: byte 1 of the quest map -> stage table is the stage loaded by night; stages 15-25 go
+  through the remap table at 0xC42588 (15-22 -> 1-8, 23 -> 11, 24 -> 12, 25 -> 13). Maps whose game
+  quests are all by day but which have a night stage: the Underwater Ruin (21, archives m21: area files
+  m07aXXn, their own lights and wall pieces), the Arena (22, m22: m08aXXn) and the Water Arena (23, m23:
+  the same file names as m11 with other model and material data). A tester played a night quest on the
+  Underwater Ruin: everything works, only the light and shading differ. Maps 9, 10, 11 (Sacred Land) and
+  15 (Tainted Sea) have the same stage in both bytes. Other stage archives: m09 (stage 9) holds only a
+  camera and a few screen effects; m26 holds the hubs' interiors (stage\interia); m27 a camera.
+
+## Roaming monsters in the code (1.8)
+Quest bytes (live quest +0x21F..+0x224): nora_set_per, nora_per_type, nora_set_type, nora_set_max,
+nora_set_table, nora_pekko.
+- 0x627FF4 (quest start): if nora_set_per > 0 and nora_pekko == 0, roll rand % 100; below nora_set_per,
+  roaming is on for this hunt (flag +0x85C6) and nora_per_type is copied to +0x8700. With nora_pekko
+  set, the flag is cleared: no roaming monster comes on its own.
+- 0x626CF8 (on a timer): nothing when the flag is off or when the number already come (+0x85C7) has
+  reached nora_set_max. Then 0x62897C (stops at 3): rand % 100 < the copy of nora_per_type -> one comes
+  (another flag forces it), and the copy loses 20 (0x628D18).
+- 0x62B724 (also reached for a call): reads the list (pointer table 0xC27900, index = the byte at +0x223,
+  no bound check; the table holds 214 pointers, then 6 zero words, then other data; only the words at
+  0x628D3C and 0x62BA10 point to it), keeps the first 3 entries whose level is not above the hunters'
+  value, draws one by its chance and builds a monster from it like a quest's monster block: species,
+  Settype (f7), Starttype (f8), 1, health, attack and toughness rows, Nando2 (f5), size (a byte), size
+  spread, stamina (f9); zenny and HR points are stored for the reward.
+- The game's 188 lists have 1 to 3 entries; nora_pekko is 1 in the 11 quests whose target is a Qurupeco or
+  a Crimson Qurupeco ("pekko" from its Japanese name). A tester reported that a Qurupeco could call a
+  roaming monster only with nora_set_max = 2 (with 1, one had probably come already).
+- *Now Loading* for ever (the screen still moving, no crash): a tester's quest with 4 large monsters, 8
+  small species and a roaming Brachydios on the Flooded Forest. Unpacked monster archives: 18.7 MB; the
+  game's quests load at most 12.2 MB there, 14.5 MB on any map of several areas, 13.4 MB in the arenas
+  (counting large, small and the heaviest roaming monsters, as many as roam at once). Another quest of
+  10.6 MB (Dire Miralis and Alatreon) loaded on the Tainted Sea. Sizes: data/monster_load.json
+  (tools/build_monster_load.py); identical archives in the EU and US versions.
+- A base-game quest record is shorter than an event slot (its tail is 21 bytes): copied as it is, it
+  has no room for small-monster places. Since 1.8 the copies made from the phone and *New quest* in the
+  library are padded to the event size first, then given the game's list for that quest.
+
 ## What makes a monster (for a future comparison with MHP3rd)
 Each large monster is `romfs/arc/enemy/emNNN.arc` (MT Framework ARC, zlib), about 90-170 files:
 | Part | Files (magic) | Notes |

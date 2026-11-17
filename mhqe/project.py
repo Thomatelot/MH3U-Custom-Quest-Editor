@@ -70,9 +70,58 @@ def write_atomic(path: Path, data: bytes) -> None:
 
 
 # ----------------------------------------------------------- emulator lookup
+# Citra user folders known from the settings (a portable Citra, or the one the save folder is in),
+# looked at before the usual places. Set by the app with set_extra_roots().
+_EXTRA_ROOTS: list[Path] = []
+
+
+def citra_root_of(folder) -> Path | None:
+    """The emulator's user folder (the one holding sdmc/ and load/) for a folder the user chose:
+    a portable Citra's own folder (it keeps everything in 'user' next to the program), that user
+    folder, its sdmc folder or any folder inside sdmc (such as the save folder). None if there is
+    none."""
+    if not folder:
+        return None
+    p = Path(folder)
+    for c in (p, p / "user"):
+        if (c / "sdmc").is_dir() or (c / "load").is_dir():
+            return c
+    for parent in (p, *p.parents):
+        if parent.name.lower() == "sdmc" and parent.parent != parent:
+            return parent.parent
+    return None
+
+
+def _looks_like_citra(root: Path) -> bool:
+    """A Citra user folder (load/ exists, or sdmc/ next to nand/ or sysdata/), not a copy of a real
+    3DS card where no 'load' folder should be created."""
+    return (root / "load").is_dir() or ((root / "sdmc").is_dir() and
+                                        any((root / n).is_dir() for n in ("nand", "sysdata", "config")))
+
+
+def set_extra_roots(chosen=(), derived=()) -> None:
+    """``chosen``: folders the user picked as Citra's folder; ``derived``: folders inside a Citra
+    (the save folder), kept only when they look like Citra's. Both are searched first, and mods go
+    there even before the 'load' folder exists (it is made when installing)."""
+    _EXTRA_ROOTS.clear()
+    for f in chosen:
+        r = citra_root_of(f)
+        if r is not None and r not in _EXTRA_ROOTS:
+            _EXTRA_ROOTS.append(r)
+    for f in derived:
+        r = citra_root_of(f)
+        if r is not None and r not in _EXTRA_ROOTS and _looks_like_citra(r):
+            _EXTRA_ROOTS.append(r)
+
+
+def _has_mods(root: Path) -> bool:
+    return (root / "load").is_dir() or (root in _EXTRA_ROOTS and (root / "sdmc").is_dir())
+
+
 def _emulator_roots() -> list[Path]:
-    """User folders of Citra and its forks on Windows, macOS and Linux (incl. Flatpak installs)."""
-    roots: list[Path] = []
+    """User folders of Citra and its forks on Windows, macOS and Linux (incl. Flatpak installs),
+    after the ones known from the settings (portable Citra)."""
+    roots: list[Path] = list(_EXTRA_ROOTS)
     appdata = os.environ.get("APPDATA")
     home = Path.home()
     names = ("Citra", "Azahar", "Lime3DS", "Mandarine", "PabloMK7-Citra")
@@ -154,17 +203,13 @@ def pack_dir_region(folder: str | Path | None) -> str | None:
 def find_emulator_title_dirs() -> list[Path]:
     """Citra-style ``load/mods/<title id>`` folders of the selected version (where romfs/ and
     exefs/ mods go), for every emulator whose ``load`` folder exists."""
-    return [root / "load" / "mods" / G.TITLE_ID for root in _emulator_roots() if (root / "load").is_dir()]
+    return [root / "load" / "mods" / G.TITLE_ID for root in _emulator_roots() if _has_mods(root)]
 
 
 def find_emulator_mod_dirs() -> list[Path]:
     """Citra-style ``load/mods/<title id>/romfs`` folders (created if the
     emulator's ``load`` folder exists)."""
-    out = []
-    for root in _emulator_roots():
-        if (root / "load").is_dir():
-            out.append(root / "load" / "mods" / G.TITLE_ID / "romfs")
-    return out
+    return [root / "load" / "mods" / G.TITLE_ID / "romfs" for root in _emulator_roots() if _has_mods(root)]
 
 
 # --------------------------------------------------------------------- entries

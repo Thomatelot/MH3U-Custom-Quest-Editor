@@ -12,7 +12,7 @@ from . import autofill, spawns, startpos, strays, supp, waves
 from . import gamedata as G
 from . import monsterpack
 from . import helptext as H
-from . import arena, picker, progress, rules, siege, theme
+from . import arena, loadsize, picker, progress, rules, siege, theme
 from .quest import LANG_NAMES, LANGS, MON_SLOTS, NANDO_MAX, QuestFormatError
 from .validate import worst
 from .widgets import ScrollFrame, Section, StatusDot, Tooltip, center_on, info, make_modal, parse_int
@@ -32,8 +32,17 @@ MODE_TYPES = (0x0001, 0x0081, 0x0101)        # objectives whose 'mode' means som
 UP, DOWN = "▲", "▼"
 
 
+STAR_MAX = 9          # the game's quests go up to 9 stars (Village); Port and event quests up to 8
+
+
 def stars(n: int) -> str:
     return "★" * max(0, min(n, 10))
+
+
+def star_text(n: int) -> str:
+    if n > STAR_MAX:
+        return f"{n}  " + _("(not used by the game)")
+    return f"{n}  {stars(n)}" if n else "0"
 
 
 class RankDialog(tk.Toplevel):
@@ -322,8 +331,8 @@ class GeneralTab(Tab):
         else:
             self.no_lab = self.no_btn = None
         ttk.Label(g, text="Star rank", style="Card.TLabel").grid(row=r, column=0, sticky="w", pady=3)
-        self.star = ttk.Combobox(g, state="readonly", width=16,
-                                 values=[f"{n}  {stars(n)}" if n else "0" for n in range(0, 11)])
+        self._star_vals = list(range(0, STAR_MAX + 1))
+        self.star = ttk.Combobox(g, state="readonly", width=24, values=[star_text(n) for n in self._star_vals])
         self.star.grid(row=r, column=1, sticky="w")
         self.star.bind("<<ComboboxSelected>>", self._star)
         info(g, H.tip("star"), "Card.").grid(row=r, column=2, sticky="w", padx=4)
@@ -443,12 +452,20 @@ class GeneralTab(Tab):
         self.env_text.grid(row=1, column=0, columnspan=4, sticky="w")
         self.env_opts = ttk.Frame(g, style="Card.TFrame")
         self.env_opts.grid(row=2, column=0, columnspan=4, sticky="w", pady=(8, 0))
-        self.field(self.env_opts, 0, "Chance of roaming monsters", "nora_set_per", tip=H.tip("nora_set_per"),
+        self.field(self.env_opts, 0, "Chance at the start of the hunt", "nora_set_per", tip=H.tip("nora_set_per"),
                    width=6, suffix="%")
-        self.field(self.env_opts, 1, "At most at the same time", "nora_set_max", tip=H.tip("nora_set_max"), width=6)
+        self.field(self.env_opts, 1, "Chance each time one may come", "nora_per_type", tip=H.tip("nora_per_type"),
+                   width=6, suffix="%")
+        self.field(self.env_opts, 2, "How many can come", "nora_set_max", tip=H.tip("nora_set_max"), width=6)
+        self.pekko = tk.BooleanVar()
+        pk = ttk.Frame(self.env_opts, style="Card.TFrame")
+        pk.grid(row=3, column=0, columnspan=4, sticky="w", pady=(2, 0))
+        ttk.Checkbutton(pk, text="Only when called (Qurupeco)", variable=self.pekko, style="Card.TCheckbutton",
+                        command=self._pekko).pack(side="left")
+        info(pk, H.tip("nora_pekko"), "Card.").pack(side="left", padx=4)
         self.hooks["nora_set_per"] = self._env_refresh
         self.env_list = ttk.Frame(self.env_opts, style="Card.TFrame")
-        self.env_list.grid(row=2, column=0, columnspan=4, sticky="w", pady=(6, 0))
+        self.env_list.grid(row=4, column=0, columnspan=4, sticky="w", pady=(6, 0))
         ttk.Button(self.env_list, text="Choose the roaming monsters...", command=self._env_table).pack(side="left")
         ttk.Button(self.env_list, text="My roaming lists...", command=self._env_custom).pack(side="left", padx=6)
         ttk.Button(self.env_list, text="Like another game quest...", command=self._env_pick).pack(side="left")
@@ -456,10 +473,9 @@ class GeneralTab(Tab):
         self.env_ref.grid(row=3, column=0, columnspan=4, sticky="w", pady=(6, 0))
         if self.dev:
             dv = ttk.Frame(self.env_opts, style="Card.TFrame")
-            dv.grid(row=3, column=0, columnspan=4, sticky="w", pady=(6, 0))
-            for i, (f, lab) in enumerate((("nora_set_type", "Use roaming list"), ("nora_per_type", "Second %"),
-                                          ("nora_set_table", "List number"), ("nora_pekko", "Always comes"))):
-                self.field(dv, i // 2, lab, f, tip=H.tip(f), width=6, col=i % 2)
+            dv.grid(row=5, column=0, columnspan=4, sticky="w", pady=(6, 0))
+            for i, (f, lab) in enumerate((("nora_set_type", "Use roaming list"), ("nora_set_table", "List number"))):
+                self.field(dv, 0, lab, f, tip=H.tip(f), width=6, col=i)
         if self.dev:
             s4 = Collapsible(body, "Other gameplay settings",
                              "Rarely changed settings. Each (i) says what is known about the field and "
@@ -595,7 +611,10 @@ class GeneralTab(Tab):
         if self.no_lab is not None:
             self.no_lab.configure(text=str(q.get("quest_no")))
             self.no_btn.configure(state="normal" if self.app.source_can_create() else "disabled")
-        self.star.current(max(0, min(10, q.get("star"))))
+        cur = q.get("star")
+        self._star_vals = list(range(0, STAR_MAX + 1)) + ([cur] if cur > STAR_MAX else [])
+        self.star.configure(values=[star_text(n) for n in self._star_vals])
+        self.star.current(self._star_vals.index(cur))
         pr = q.get("prog_no")
         self.rank.configure(values=list(rules.MONSTER_RANKS.values()) + ([f"{pr}  (not used by the game)"]
                                                                           if pr not in rules.MONSTER_RANKS else []))
@@ -699,7 +718,7 @@ class GeneralTab(Tab):
 
     def _star(self, _e=None):
         if not self.loading and self.q is not None:
-            self.q.set("star", self.star.current())
+            self.q.set("star", self._star_vals[self.star.current()])
             self.editor.changed()
 
     def _pick_map(self):
@@ -757,6 +776,7 @@ class GeneralTab(Tab):
             return
         unstable = strays.is_unstable(q)
         self.env.set(1 if unstable else 0)
+        self.pekko.set(bool(q.get("nora_pekko")))
         if unstable:
             self.env_opts.grid()
             idx = q.get("nora_set_table")
@@ -771,6 +791,13 @@ class GeneralTab(Tab):
             self.env_opts.grid_remove()
             self.env_text.configure(text=strays.describe(q))
             self.env_ref.configure(text="")
+
+    def _pekko(self):
+        if self.q is None or self.loading:
+            return
+        self.q.set("nora_pekko", 1 if self.pekko.get() else 0)
+        self._env_refresh()
+        self.editor.changed()
 
     def _env(self):
         q = self.q
@@ -1852,6 +1879,11 @@ class MonstersTab(Tab):
         self.body.columnconfigure(0, weight=1, uniform="m")
         self.body.columnconfigure(1, weight=1, uniform="m")
         ttk.Label(self.body, text="Large monsters", style="H2.TLabel").grid(row=0, column=0, sticky="w", padx=6)
+        lrow = ttk.Frame(self.body)
+        lrow.grid(row=0, column=1, sticky="e", padx=6)
+        self.load_lab = ttk.Label(lrow, text="", style="Muted.TLabel")
+        self.load_lab.pack(side="left")
+        info(lrow, H.LOAD_TIP).pack(side="left", padx=4)
         self.cards = [MonsterCard(self.body, self, i) for i in range(MON_SLOTS)]
         self.add_btn = ttk.Button(self.body, text="+  Add a large monster", command=self._add)
         self.order = Section(self.body, "How the monsters arrive", H.ARRIVAL_TIP)
@@ -1929,6 +1961,11 @@ class MonstersTab(Tab):
             b.show(self.app.icons.monster(em, 27) if em else self.app.icons.blank(27),
                    (G.mon_name(em) if em else "(none)") + (f"  em{em:03d}" if self.dev and em else ""))
         self._zako_text()
+        self._load_text(q)
+
+    def _load_text(self, q):
+        warn = any(level == "warning" for level, _t in loadsize.problems(q))
+        self.load_lab.configure(text=loadsize.summary(q), style="Warn.TLabel" if warn else "Muted.TLabel")
 
     @property
     def n_large(self) -> int:
@@ -2473,6 +2510,7 @@ class BoxManager(tk.Toplevel):
         ttk.Button(bar2, text="Remove the selected file from Citra", command=self._remove_file).pack(side="left", padx=6)
         self.where = ttk.Label(f, text="", style="Muted.TLabel", wraplength=720, justify="left")
         self.where.pack(anchor="w", pady=(8, 0))
+        self.citra_btn = ttk.Button(f, text="Choose Citra's folder...", command=self._choose_citra)
         ttk.Button(f, text="Close", command=self.destroy).pack(anchor="e", pady=(10, 0))
         self.bind("<Escape>", lambda _e: self.destroy())
         self.rows: dict[str, tuple] = {}
@@ -2480,6 +2518,11 @@ class BoxManager(tk.Toplevel):
         center_on(self, app)
         self.deiconify()
         make_modal(self)
+
+    def _choose_citra(self):
+        if self.app.choose_citra():
+            self.fill()
+        self.lift()
 
     # ----------------------------------------------------------------- list
     def fill(self, keep=None):
@@ -2489,8 +2532,13 @@ class BoxManager(tk.Toplevel):
         dests, files = app.citra_supply()
         self.where.configure(text=("Citra mod folder: " + str(dests[0]) if dests else
                                    "Citra's 'load' folder was not found: nothing can be installed or removed "
-                                   "from here. For a real 3DS, the files are in the output folder next to the "
+                                   "from here. A portable Citra (or one in another place): choose its folder "
+                                   "below. For a real 3DS, the files are in the output folder next to the "
                                    "program (see the Supply Box tab)."))
+        if dests:
+            self.citra_btn.pack_forget()
+        else:
+            self.citra_btn.pack(anchor="w", pady=(6, 0), after=self.where)
         for no in app.boxes.numbers():
             items = app.boxes.items(no)
             users = app.supply_users(no)
@@ -3678,10 +3726,14 @@ class RoamingListsDialog(tk.Toplevel):
         f = ttk.Frame(self, padding=14)
         f.pack(fill="both", expand=True)
         ttk.Label(f, text=_("My roaming-monster lists"), style="H2.TLabel").pack(anchor="w")
-        ttk.Label(f, style="Muted.TLabel", wraplength=560, justify="left", text=_(
+        ttk.Label(f, style="Muted.TLabel", wraplength=760, justify="left", text=_(
             "Lists of your own take a number the game leaves empty. They are written into the game by the "
-            "Monster pack: build and install it again after a change. Each monster keeps the strength "
-            "(health, attack, defence) of the list the quest used when you added it.")).pack(anchor="w", pady=(4, 8))
+            "Monster pack: build and install it again after a change. A new monster starts with the strength of "
+            "the list the quest used; change its Health, Attack and Toughness rows (0 to 127, as on the Monsters "
+            "tab) and its size here. The game draws among the first 3 monsters of a list only.\n"
+            "Numbers 214 to 255 (marked +) do not exist in the game: the Monster pack makes room for them by "
+            "moving the game's table of lists (and sharing its duplicate start lists, as for starts of your "
+            "own). Untested in the game.")).pack(anchor="w", pady=(4, 8))
         top = ttk.Frame(f)
         top.pack(anchor="w", fill="x")
         ttk.Label(top, text=_("List")).pack(side="left")
@@ -3713,8 +3765,9 @@ class RoamingListsDialog(tk.Toplevel):
         make_modal(self)
 
     def _fill_box(self, select=None):
-        self.slots = sorted(set(strays.CUSTOM) | set(strays.free_slots()))
-        self.box.configure(values=[(_("{}: ").format(i) + (strays.table_text(i) if strays.is_custom(i) else _("(new list)")))
+        self.slots = sorted(set(strays.CUSTOM) | set(strays.free_slots()) | set(strays.extra_slots()))
+        self.box.configure(values=[(_("{}: ").format(i) + ("+ " if i >= strays.TABLE_SLOTS else "")
+                                    + (strays.table_text(i) if strays.is_custom(i) else _("(new list)")))
                                    for i in self.slots])
         if not self.slots:
             self.msg.configure(text=_("The game has no empty list number left."))
@@ -3727,27 +3780,53 @@ class RoamingListsDialog(tk.Toplevel):
         self.entries = [list(e) for e in strays.CUSTOM.get(idx, [])]
         self._draw()
 
+    # (field index, column title, lowest, highest, developer mode only)
+    COLS = ((strays.CHANCE, "Chance %", 0, 100, False), (strays.HP, "Health", 0, NANDO_MAX, False),
+            (strays.AT, "Attack", 0, NANDO_MAX, False), (strays.DF, "Toughness", 0, NANDO_MAX, False),
+            (strays.SIZE, "Size %", 1, 255, False), (strays.SPREAD, "Size spread", 0, 255, True),
+            (strays.STAMINA, "Stamina", 0, 255, True), (strays.START, "Start type", 0, 15, True),
+            (strays.LEVEL, "Level", 0, 99, True), (strays.ZENNY, "Zenny", 0, 65535, True),
+            (strays.POINTS, "HR points", 0, 65535, True))
+
     def _draw(self):
         for w in self.rows.winfo_children():
             w.destroy()
-        self.chances = []
-        for i, e in enumerate(self.entries):
-            ttk.Button(self.rows, text=G.mon_name(e[strays.EM]), width=24,
-                       command=lambda i=i: self._change(i)).grid(row=i, column=0, sticky="w", pady=1)
-            v = tk.StringVar(value=str(e[strays.CHANCE]))
-            v.trace_add("write", lambda *_a: self._check())
-            ttk.Spinbox(self.rows, from_=1, to=100, width=5, textvariable=v).grid(row=i, column=1, padx=6)
-            ttk.Label(self.rows, text="%").grid(row=i, column=2, sticky="w")
-            ttk.Button(self.rows, text="\u00d7", width=3, command=lambda i=i: self._remove(i)).grid(row=i, column=3, padx=6)
-            self.chances.append(v)
+        dev = self.app.dev_mode.get()
+        cols = [c for c in self.COLS if dev or not c[4]]
+        ttk.Label(self.rows, text=_("Monster"), style="Muted.TLabel").grid(row=0, column=0, sticky="w")
+        for k, (_f, title, _lo, _hi, _d) in enumerate(cols, start=1):
+            ttk.Label(self.rows, text=_(title), style="Muted.TLabel").grid(row=0, column=k, sticky="w", padx=3)
+        info(self.rows, H.ROAM_ROWS_TIP).grid(row=0, column=len(cols) + 1, sticky="w")
+        self.vars = []
+        self.mult = []
+        for i, e in enumerate(self.entries, start=1):
+            ttk.Button(self.rows, text=G.mon_name(e[strays.EM]), width=22,
+                       command=lambda i=i - 1: self._change(i)).grid(row=2 * i - 1, column=0, sticky="w", pady=(4, 0))
+            row = {}
+            for k, (fi, _t, lo, hi, _d) in enumerate(cols, start=1):
+                v = tk.StringVar(value=str(e[fi]))
+                v.trace_add("write", lambda *_a: self._check())
+                ttk.Spinbox(self.rows, from_=lo, to=hi, width=6 if hi > 999 else 5, textvariable=v).grid(
+                    row=2 * i - 1, column=k, padx=3, pady=(4, 0), sticky="w")
+                row[fi] = (v, lo, hi)
+            ttk.Button(self.rows, text="\u00d7", width=3, command=lambda i=i - 1: self._remove(i)).grid(
+                row=2 * i - 1, column=len(cols) + 1, padx=6, pady=(4, 0))
+            lab = ttk.Label(self.rows, text="", style="Muted.TLabel")
+            lab.grid(row=2 * i, column=1, columnspan=len(cols), sticky="w", padx=3)
+            self.vars.append(row)
+            self.mult.append(lab)
         self._check()
 
     def _read(self):
-        for e, v in zip(self.entries, self.chances):
-            try:
-                e[strays.CHANCE] = max(0, min(100, parse_int(v.get())))
-            except ValueError:
-                e[strays.CHANCE] = 0
+        for e, row in zip(self.entries, self.vars):
+            for fi, (v, lo, hi) in row.items():
+                try:
+                    e[fi] = max(lo, min(hi, parse_int(v.get())))
+                except ValueError:
+                    e[fi] = lo
+        for e, lab in zip(self.entries, getattr(self, "mult", [])):
+            lab.configure(text="   ".join(_(mult_text(e[fi], col, what)) for fi, col, what in
+                                         ((strays.HP, 0, "HP"), (strays.AT, 1, "attacks"), (strays.DF, 2, "takes damage"))))
 
     def _check(self):
         self._read()
@@ -3758,7 +3837,8 @@ class RoamingListsDialog(tk.Toplevel):
         self.save_btn.state(st)
 
     def _add(self):
-        if len(self.entries) >= 8:
+        if len(self.entries) >= strays.MAX_ENTRIES:
+            self.msg.configure(text=_("The game only draws among the first 3 monsters of a list."))
             return
         em = picker.pick_monster(self.app, title=_("Roaming monster"))
         if em:

@@ -32,8 +32,9 @@ class Drafts(unittest.TestCase):
     def test_clean_puts_values_in_range(self):
         d = phone.clean(draft(star=40, time=500, hr=42, players=7, monsters=[{"em": 9999}, {"em": 2, "count": 500}],
                               objective={"kind": "dance"}, rewards={"auto": False, "items": [{"item": 0}]}))
-        self.assertEqual((d["star"], d["time"], d["hr"], d["players"]), (10, 99, None, 4))
-        self.assertEqual(d["monsters"], [{"em": 2, "count": 99, "size": 100, "strength": None}])
+        self.assertEqual((d["star"], d["time"], d["hr"], d["players"]), (9, 99, None, 4))
+        self.assertEqual(d["monsters"], [{"em": 2, "count": 99, "size": 100, "strength": None, "rows": None,
+                                          "start": None}])
         self.assertEqual(d["objective"]["kind"], "hunt")
         self.assertTrue(d["rewards"]["auto"])           # no usable item: automatic
 

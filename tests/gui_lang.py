@@ -148,7 +148,16 @@ def run():
         app.after(1500, lambda: grab_toplevel("13_roaming_picker"))
         gen._env_table()
         settle(0.4)
-        app.after(1500, lambda: grab_toplevel("14_my_roaming_lists"))
+        def _fill_lists():
+            from mhqe import editor as E, strays
+            tops = [w for w in app.winfo_children() if isinstance(w, E.RoamingListsDialog)]
+            if tops:
+                dlg = tops[-1]
+                like = strays.game_tables()[2][0]
+                dlg.entries = [strays.make_entry(em, ch, like) for em, ch in ((1, 50), (2, 30), (7, 20))]
+                dlg._draw()
+            grab_toplevel("14_my_roaming_lists")
+        app.after(1500, _fill_lists)
         gen._env_custom()
         settle(0.4)
     else:

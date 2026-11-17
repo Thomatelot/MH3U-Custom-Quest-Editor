@@ -83,6 +83,11 @@ def problems(q) -> list[tuple[str, str]]:
             out.append(("warning", "Every Great Desert quest of the game is a Dragonship fight against a Jhen "
                                    "Mohran. Without one, the Dragonship and its scripts are untested: try it "
                                    "in the emulator."))
+            if SHIP_OBJ not in (t1, t2):
+                out.append(("warning", "No Dragonship integrity (objective B): on the Great Desert the ship may be "
+                                       "destroyed and the quest fail as soon as it starts. Objective B 'Dragonship "
+                                       "integrity' 1000 with the 'Single objective' pattern keeps it, as in the "
+                                       "game's quests."))
         elif not ship_ok(q):
             out.append(("error", "This Great Desert quest is not set up like the game's Dragonship fights, so "
                                  "the Dragonship can be destroyed as soon as the quest starts. Use 'Set up the "

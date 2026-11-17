@@ -5,15 +5,33 @@ into the map besides the targets. In the game's quest list the environment is wr
 "Unstable" exactly when the chance (``nora_set_per``) is above 0: this was checked on the
 250 base-game quests that the wiki lists with an Environment.
 
-    nora_set_type   1 when the quest uses the roaming-monster table, 0 otherwise
-    nora_set_per    chance in percent that roaming monsters show up (0 = stable)
-    nora_per_type   a second percentage: 10 / 20 / 30 / 50 / 80 / 100 in the game's quests
-    nora_set_max    most roaming monsters at the same time (1 or 2)
-    nora_set_table  number of the roaming-monster list. The lists are stored in the game's program
-                    (see gamecode.py); data/roaming_tables.json holds what each one contains, so
-                    the editor can show the species and let any list be chosen. The Monster pack
-                    can add lists of your own in the unused numbers.
-    nora_pekko      1 in a few quests that always have a visitor (chance 100 / 100)
+What the game does with them (read in code.bin 1.0, EU = US; quest bytes in this order):
+
+    nora_set_per    rolled once when the quest starts (0x627FF4): below it, roaming monsters
+                    are on for this hunt. 0 = Stable.
+    nora_per_type   then, each time the game tries to bring one (on a timer, 0x626F7C), the chance
+                    in percent that it comes; 20 less after each one that came (0x628D18).
+                    10 / 20 / 30 / 50 / 80 / 100 in the game's quests. (A tester read it as
+                    minutes; the code uses it as a chance.)
+    nora_set_type   1 in every unstable quest of the game; read elsewhere (0x590F30), not known.
+    nora_set_max    how many roaming monsters can come during the hunt (0x626CF8; the game's
+                    quests use 1 or 2, the code stops at 3). Until 1.7 the editor called it "at
+                    most at the same time". A tester found that a Qurupeco could call one only
+                    with 2: the call counts as one of them.
+    nora_set_table  number of the roaming-monster list (a byte, no bound check: 0x62B760).
+                    The lists are stored in the game's program (see gamecode.py);
+                    data/roaming_tables.json holds what each one contains. Only the first 3
+                    monsters of a list are drawn (0x62B79C; the game's lists have 1 to 3).
+    nora_pekko      1: no roaming monster comes on its own (the start roll is skipped,
+                    0x628008); it only comes when called. Set in the game's 11 quests whose
+                    target is a Qurupeco or a Crimson Qurupeco ("pekko" is from its Japanese
+                    name). Until 1.7 the editor called it "always comes".
+
+A list entry is 15 u16 (gamecode.ROAM_FIELDS). When one is drawn (0x62B920) the game builds a
+large monster from it with the same fields as a quest's monster: species, Settype (f7), Starttype
+(f8), health, attack and toughness rows, Nando2 (f5), size, size spread, stamina (f9); zenny and
+HR points are the reward for slaying it; 'level' keeps the entry out of the draw for hunters below
+it.
 """
 from __future__ import annotations
 
@@ -56,7 +74,9 @@ def references(map_id: int, star: int, anywhere: bool = False) -> list[dict]:
     out = [s for s in _sets() if s["map"] == map_id and s["per"] > 0 and s["type"] == 1]
     if not out and anywhere:
         out = [s for s in _sets() if s["per"] > 0 and s["type"] == 1]
-    out.sort(key=lambda s: (s["map"] != map_id, abs(s["star"] - star), s["no"]))
+    # quests whose roaming monster only comes when a Qurupeco calls it last: copied into a quest
+    # without a Qurupeco, no roaming monster would ever come
+    out.sort(key=lambda s: (s["map"] != map_id, bool(s.get("pekko")), abs(s["star"] - star), s["no"]))
     return out
 
 
@@ -97,22 +117,46 @@ def reference_of(q):
 def describe(q) -> str:
     if not is_unstable(q):
         return "Stable: no large monsters besides the ones listed in the Monsters tab."
-    mx = q.get("nora_set_max")
-    return (f"Unstable: {q.get('nora_set_per')} % chance of roaming monsters, up to {mx} at the same time.")
+    if q.get("nora_pekko"):
+        return (f"Unstable: roaming monsters only come when called (a Qurupeco), {q.get('nora_set_max')} at most.")
+    return (f"Unstable: {q.get('nora_set_per')} % chance at the start of the hunt, then {q.get('nora_per_type')} % "
+            f"each time one may come, {q.get('nora_set_max')} at most.")
 
 
 def problems(q, pack: dict | None = None) -> list[str]:
     """Why the roaming monsters of this quest may not show up."""
+    return [text for _level, text in problem_levels(q, pack)]
+
+
+def problem_levels(q, pack: dict | None = None) -> list[tuple[str, str]]:
+    """[(level, text)]: 'error' for a list number the game cannot read, else 'warning'."""
     if not is_unstable(q):
         return []
     idx = q.get("nora_set_table")
     t = table(idx)
+    in_pack = idx in {int(k) for k in (pack or {}).get("roaming", {})}
+    if idx >= TABLE_SLOTS and not in_pack:
+        return [("error", f"Roaming-monster list {idx} is past the end of the game's table: without the Monster "
+                 "pack built with this list, the game reads a wrong address and may crash. Build and install "
+                 "the pack.")]
     if not t:
-        return [f"Roaming-monster list {idx} is empty in the game: no monster will roam."]
+        return [("warning", f"Roaming-monster list {idx} is empty in the game: no monster will roam.")]
+    return [("warning", text) for text in _list_problems(q, idx, t, in_pack, pack)]
+
+
+QURUPECOS = (3, 51)              # Qurupeco, Crimson Qurupeco
+
+
+def _list_problems(q, idx, t, in_pack, pack) -> list[str]:
     out = []
-    if is_custom(idx) and idx not in {int(k) for k in (pack or {}).get("roaming", {})}:
+    if q.get("nora_pekko") and not any(m["Type"] in QURUPECOS for m in q.monsters):
+        out.append("Roaming monsters only come when called, but the quest has no Qurupeco: none will come. "
+                   "Untick 'Only when called (Qurupeco)' on the General tab.")
+    if is_custom(idx) and not in_pack:
         out.append(f"Roaming-monster list {idx} is one of yours: build and install the Monster pack again, "
                    "otherwise the game finds no list there.")
+    if len(t) > MAX_ENTRIES:
+        out.append(f"Roaming-monster list {idx} has {len(t)} monsters: the game only draws among the first 3.")
     from . import monsterpack
     bad = [G.mon_name(em) for em in dict.fromkeys(e[EM] for e in t)
            if G.stage_ok(em, q.get("map")) is False and monsterpack.pair_status(em, q.get("map"), pack)[0] != "pack"]
@@ -139,6 +183,10 @@ def notes(q) -> list[str]:
 # ------------------------------------------------------------- the lists themselves
 CUSTOM: dict[int, list[list[int]]] = {}        # lists of the user's own (Monster pack), slot -> entries
 EM, HP, AT, DF, SIZE, CHANCE, ZENNY, POINTS, LEVEL = 0, 1, 2, 3, 4, 10, 12, 13, 14
+NANDO2, SPREAD, START, STAMINA = 5, 6, 8, 9
+MAX_ENTRIES = 3                 # the game draws among the first 3 monsters of a list only
+TABLE_SLOTS = 214               # numbers 0-213 in the game's pointer table (EU and US)
+LAST_SLOT = 255                 # the quest field is one byte: 214-255 need the Monster pack's bigger table
 
 
 @lru_cache(maxsize=1)
@@ -157,6 +205,12 @@ def game_tables() -> dict[int, list[list[int]]]:
 def free_slots() -> list[int]:
     """List numbers the game leaves empty (room for lists of your own)."""
     return list(_game()["free"])
+
+
+def extra_slots() -> list[int]:
+    """Numbers past the end of the game's table (214-255): the Monster pack moves the table to make
+    room for them."""
+    return list(range(TABLE_SLOTS, LAST_SLOT + 1))
 
 
 def table(idx: int):
@@ -211,6 +265,8 @@ def table_problems(entries) -> list[str]:
     out = []
     if not entries:
         out.append("The list is empty.")
+    if len(entries) > MAX_ENTRIES:
+        out.append("The game only draws among the first 3 monsters of a list: remove the others.")
     if sum(e[CHANCE] for e in entries) != 100:
         out.append("The chances of a list must add up to 100 %.")
     return out

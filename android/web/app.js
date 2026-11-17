@@ -7,7 +7,7 @@
  */
 "use strict";
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 const FORMAT = "mh3u-quest-draft";
 const BUNDLE = "mh3u-quest-drafts";
 const STORE = "mh3u.notebook.drafts";
@@ -40,6 +40,7 @@ const T = {
     pl3: "Jusqu'à 3", naked: "Sans armure ni talisman", time_of_day: "Moment", day: "Jour", night: "Nuit",
     carves: "Découpes d'arène (objets comme des Méga potions au lieu des matériaux)",
     day_only: "Cette carte n'a pas de quête de nuit dans le jeu.",
+    night_ok: "Aucune quête de nuit ici dans le jeu, mais sa version de nuit inutilisée marche (un testeur l'a jouée).",
     monsters: "Grands monstres", add_monster: "＋ Ajouter un monstre", no_monster: "Aucun grand monstre.",
     count: "Nombre", size: "Taille", count_hint: "arrivent l'un après l'autre",
     cards_hint: "Pour avoir deux fois le même monstre, ajoutez-le deux fois (comme dans les quêtes du jeu).", custom_size: "Autre taille (%)", strength: "Force",
@@ -89,6 +90,24 @@ const T = {
       "Brute Wyverns": "Wyvernes brutales", "Leviathans": "Léviathans", "Fanged Beasts": "Bêtes à crocs",
       "Fanged Wyverns": "Wyvernes à crocs", "Elder Dragons": "Dragons anciens", "Small monsters": "Petits monstres", "Other": "Autres" },
     low: "Rang inférieur", high: "Rang supérieur",
+    env_card: "Chasseurs et monstres errants", hunters: "Départ des chasseurs",
+    hs_copy: "Comme la quête copiée (camp en général)", hs_camp: "Camp de base", hs_fixed: "Toujours en zone {a}",
+    hs_random: "Au hasard : {list}", hs_only_camp: "Sur cette carte, les chasseurs partent toujours du camp.",
+    camp: "camp", zone_n: "zone {n}", environment: "Environnement", stable: "Stable", unstable: "Instable",
+    env_copy: "Comme la quête copiée",
+    unstable_hint: "Des grands monstres errants peuvent arriver : le PC prend ceux des quêtes du jeu de cette carte et de ce rang (liste à changer sur PC).",
+    w_roam: "Aucune quête du jeu n'a de monstres errants sur cette carte : non testé.",
+    supply: "Caisse de ravitaillement", sup_auto: "Automatique", sup_game: "Une caisse du jeu",
+    sup_auto_hint: "Le PC met la caisse des quêtes du jeu sur cette carte et à ce rang (caisse {n}).",
+    sup_choose: "Choisir la caisse…", sup_box: "Caisse {n}", sup_more: "+{n} autres objets",
+    starts_in: "Départ", start_auto: "Habituel (le PC écarte les copies)", start_area: "Zone {n}",
+    start_entrance: "Son entrée (hors de la carte)", usual: "(habituel)",
+    strength_custom: "Personnalisée…", hp: "Santé", atk: "Attaque", def: "Résistance",
+    m_hp: "PV ×{x}", m_atk: "attaques ×{x}", m_def: "dégâts reçus ×{x}",
+    rows_hint: "Lignes 0 à 127 du tableau de force du jeu (comme les curseurs du PC).",
+    small_card: "Petits monstres", small_auto: "Comme les quêtes du jeu", small_none: "Aucun",
+    small_auto_hint: "Le PC reprend les petits monstres d'une quête du jeu de cette carte et de ce rang.",
+    small_strength: "Force des petits monstres", small_str_auto: "Auto : rang de la quête",
   },
   en: {
     app: "MH3U Quest Notebook", my_quests: "My quests", new_quest: "＋ New quest",
@@ -105,6 +124,7 @@ const T = {
     pl3: "Up to 3", naked: "No armor or talismans", time_of_day: "Time of day", day: "Day", night: "Night",
     carves: "Arena carves (items such as Mega Potions instead of monster parts)",
     day_only: "This map has no night quest in the game.",
+    night_ok: "No night quest here in the game, but its unused night version works (a tester played it).",
     monsters: "Large monsters", add_monster: "＋ Add a monster", no_monster: "No large monster.",
     count: "Count", size: "Size", count_hint: "arriving one after another",
     cards_hint: "To have the same monster twice, add it twice (as the game's quests do).", custom_size: "Other size (%)", strength: "Strength",
@@ -151,6 +171,24 @@ const T = {
     ranks: ["Low rank (Village)", "Low rank (Port)", "High rank (Village)", "High rank (Port)", "G rank"],
     sizes: ["Tiny (20 %)", "Small (40 %)", "Normal (100 %)", "King Size (125 %)", "Giant (200 %)"],
     classes: {}, low: "Low Rank", high: "High Rank",
+    env_card: "Hunters and roaming monsters", hunters: "Hunters start",
+    hs_copy: "Like the copied quest (usually the camp)", hs_camp: "Base camp", hs_fixed: "Always in area {a}",
+    hs_random: "At random: {list}", hs_only_camp: "On this map the hunters always start at the base camp.",
+    camp: "camp", zone_n: "area {n}", environment: "Environment", stable: "Stable", unstable: "Unstable",
+    env_copy: "Like the copied quest",
+    unstable_hint: "Roaming large monsters may show up: the PC takes those of the game's quests on this map and rank (the list can be changed on the PC).",
+    w_roam: "No quest of the game has roaming monsters on this map: untested.",
+    supply: "Supply box", sup_auto: "Automatic", sup_game: "A game box",
+    sup_auto_hint: "The PC puts the box of the game's quests on this map and rank (box {n}).",
+    sup_choose: "Choose the box…", sup_box: "Box {n}", sup_more: "+{n} more items",
+    starts_in: "Starts in", start_auto: "Usual (the PC spreads copies)", start_area: "Area {n}",
+    start_entrance: "Its entrance (off the map)", usual: "(usual)",
+    strength_custom: "Custom…", hp: "Health", atk: "Attack", def: "Toughness",
+    m_hp: "HP ×{x}", m_atk: "attacks ×{x}", m_def: "takes damage ×{x}",
+    rows_hint: "Rows 0 to 127 of the game's strength table (as the PC sliders).",
+    small_card: "Small monsters", small_auto: "Like the game's quests", small_none: "None",
+    small_auto_hint: "The PC takes the small monsters of a game quest of this map and rank.",
+    small_strength: "Small monsters' strength", small_str_auto: "Auto: the quest's rank",
   },
 };
 
@@ -220,6 +258,33 @@ function groupLabel(g) {
   const r = g.star <= 2 ? t("low") : g.star <= 5 ? t("high") : `G${g.star - 5}★`;
   return `${t("port")} ${g.star}★ (${r})`;
 }
+const poolOf = d => d.rank <= 1 ? "LR" : d.rank <= 3 ? "HR" : "G";   // as phone.py pool_of
+const areaName = a => a === 0 ? t("camp") : t("zone_n", { n: a });
+function hunterOpts(map) {                 // [[value, label]] of the starts that do something on this map
+  return (DATA.hunters[String(map)] || []).map(([v, pairs]) => [v, pairs.length === 1
+    ? t("hs_fixed", { a: pairs[0][0] })
+    : t("hs_random", { list: pairs.map(([a, w]) => `${areaName(a)} ${w} %`).join(", ") })]);
+}
+const startsOf = (em, map) => (DATA.starts[String(em)] || {})[String(map)] || null;
+function rowsText(rows) {                  // ["HP ×0.4", ...] as the PC shows them
+  const r = rows.map((v, i) => (DATA.nando[v] || [0, 0, 0])[i]);
+  return [t("m_hp", { x: r[0] }), t("m_atk", { x: r[1] }), t("m_def", { x: r[2] })];
+}
+function rowsEditor(rows, onchange) {
+  const labs = rowsText(rows);
+  return h("div", { class: "rows" }, ["hp", "atk", "def"].map((k, i) =>
+    h("div", { class: "row" }, h("label", { class: "l" }, t(k)),
+      numInput(rows[i], 0, 127, v => { rows[i] = v; onchange(); }), h("span", { class: "muted mult" }, labs[i]))),
+    h("div", { class: "muted" }, t("rows_hint")));
+}
+function autoSupply(d) { return DATA.auto_supply[`${d.map}|${poolOf(d)}`] || null; }
+function smallRowsAuto(d) { return (DATA.small_rows[`${d.map}|${poolOf(d)}`] || [10, 8, 2]).slice(); }
+function boxItems(no) { return DATA.supply[String(no)] || []; }
+function fixForMap(d) {                    // choices that depend on the map
+  if (d.hunters && !hunterOpts(d.map).some(o => o[0] === d.hunters)) d.hunters = null;
+  for (const m of d.monsters) { const st = startsOf(m.em, d.map); if (m.start != null && (!st || m.start >= st.length)) m.start = null; }
+}
+function maxStar(hub) { return hub === "Village" ? 9 : 8; }   // the game's own quests: Village 1-9, Port 1-8
 function rankFor(hub, star) {              // what the game's own quests use (checked on the EU quests)
   if (hub === "Village") return star <= 5 ? 0 : 2;
   return star <= 2 ? 1 : star <= 5 ? 3 : 4;
@@ -244,13 +309,14 @@ const mapImg = id => h("img", { class: "mapimg", src: `img/maps/map${String(id).
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function newDraft() {
   const g = groupFor("Village", 1), now = new Date().toISOString();
-  return { format: FORMAT, version: 1, app: "MH3U Quest Notebook " + APP_VERSION, id: uid(), created: now, updated: now,
+  return { format: FORMAT, version: 2, app: "MH3U Quest Notebook " + APP_VERSION, id: uid(), created: now, updated: now,
     lang: L(), name: "", client: "", description: "", objective_text: "", objective_auto: true, sub_objective: "",
     failure: "", star: 1, hub: "Village", rank: 0, rank_auto: true, map: 1, time: g ? g.time : 50,
     fee: g ? g.fee : 0, reward: g ? g.reward : 0, hrp: g ? g.hrp : 0, money_auto: true,
     hr: null, players: 4, naked: false, night: false, arena_carves: false,
     monsters: [], arrival: 0, objective: { kind: "hunt", item: 0, em: 0, count: 1 },
-    rewards: { auto: true, items: [] }, notes: "" };
+    rewards: { auto: true, items: [] }, notes: "",
+    hunters: null, environment: "stable", small: "auto", small_rows: null, supply: null };
 }
 function onStarHub(d) {
   const g = groupFor(d.hub, d.star);
@@ -309,7 +375,8 @@ function issues(d) {
     if (m && !m.maps.includes(d.map)) out.push(["w", t("w_pack", { m: monName(em), map: mapName(d.map) })]);
     if (SIEGE.includes(em)) out.push(["w", t("w_siege", { m: monName(em) })]);
   }
-  if (d.night && DATA.day_only_maps.includes(d.map)) out.push(["w", t("w_night")]);
+  if (d.night && DATA.day_only_maps.includes(d.map) && !DATA.night_tested.includes(d.map)) out.push(["w", t("w_night")]);
+  if (d.environment === "unstable" && !DATA.roaming_maps.includes(d.map)) out.push(["w", t("w_roam")]);
   if (d.hr && d.players !== 4 && d.naked) out.push(["w", t("w_rules")]);
   if (!d.rewards.auto && d.rewards.items.length) {
     const tot = d.rewards.items.reduce((a, r) => a + (+r.chance || 0), 0);
@@ -411,6 +478,7 @@ function remove(d) {
 const TABS = [["quest", "📜"], ["monsters", "🐉"], ["goal", "🎯"], ["rewards", "💰"], ["texts", "✒️"], ["send", "📤"]];
 function openDraft(id) {
   cur = drafts[id]; if (!cur) return;
+  cur.star = Math.max(1, Math.min(cur.star || 1, maxStar(cur.hub)));   // older drafts could hold 10
   view = "edit"; tab = "quest";
   pushScreen("edit");
   renderEdit();
@@ -470,9 +538,9 @@ function tabQuest(main) {
     field(t("quest_name"), textInput("name", { max: 60 })),
     h("div", { class: "row" }, h("label", { class: "l" }, t("hub")),
       seg([["Village", t("village")], ["Port", t("port")]], d.hub, v => {
-        d.hub = v; if (d.hub === "Village" && d.star > 9) d.star = 9; onStarHub(d); changed(true); })),
+        d.hub = v; d.star = Math.min(d.star, maxStar(d.hub)); onStarHub(d); changed(true); })),
     h("div", { class: "row" }, h("label", { class: "l" }, t("star")),
-      h("div", { class: "stars" }, Array.from({ length: d.hub === "Village" ? 9 : 10 }, (_, i) => i + 1).map(n =>
+      h("div", { class: "stars" }, Array.from({ length: maxStar(d.hub) }, (_, i) => i + 1).map(n =>
         h("button", { class: n === d.star ? "on" : "", onclick: () => { d.star = n; onStarHub(d); changed(true); } }, n)))),
     field(t("rank"), select(t("ranks").map((l, i) => [i, l]), d.rank, v => { d.rank = v; d.rank_auto = false; changed(true); })),
   ));
@@ -498,13 +566,50 @@ function tabQuest(main) {
   main.appendChild(h("div", { class: "card" },
     h("h2", null, t("who")),
     field(t("time_of_day"), seg([[false, t("day")], [true, t("night")]], d.night, v => { d.night = v; changed(true); })),
-    dayOnly ? h("div", { class: d.night ? "warn" : "muted" }, t("day_only")) : null,
+    dayOnly ? h("div", { class: d.night && !DATA.night_tested.includes(d.map) ? "warn" : "muted" },
+      t(DATA.night_tested.includes(d.map) ? "night_ok" : "day_only")) : null,
     field(t("hr_min"), select([[null, t("any")]].concat(DATA.hr.map(n => [n, t("hr_n", { n })])), d.hr, v => { d.hr = v; changed(true); })),
     field(t("players"), select([[4, t("pl4")], [1, t("pl1")], [2, t("pl2")], [3, t("pl3")]], d.players, v => { d.players = v; changed(true); })),
     h("label", { class: "check" }, h("input", { type: "checkbox", checked: d.naked, onchange: e => { d.naked = e.target.checked; changed(true); } }), t("naked")),
     h("label", { class: "check" }, h("input", { type: "checkbox", checked: d.arena_carves, onchange: e => { d.arena_carves = e.target.checked; changed(false); } }), t("carves")),
     (d.hr && d.players !== 4 && d.naked) ? h("div", { class: "warn" }, t("w_rules")) : null,
   ));
+  const hs = hunterOpts(d.map);
+  const env = d.environment === undefined ? null : d.environment;
+  main.appendChild(h("div", { class: "card" },
+    h("h2", null, t("env_card")),
+    hs.length ? field(t("hunters"), select([[null, t("hs_copy")], [0, t("hs_camp")]].concat(hs), d.hunters == null ? null : d.hunters,
+      v => { d.hunters = v; changed(true); })) : h("div", { class: "muted" }, t("hs_only_camp")),
+    field(t("environment"), (env === null ? select : seg)((env === null ? [[null, t("env_copy")]] : []).concat(
+      [["stable", t("stable")], ["unstable", t("unstable")]]), env, v => { d.environment = v; changed(true); })),
+    env === "unstable" ? h("div", { class: DATA.roaming_maps.includes(d.map) ? "muted" : "warn" },
+      DATA.roaming_maps.includes(d.map) ? t("unstable_hint") : t("w_roam")) : null,
+  ));
+  const box = d.supply, auto = autoSupply(d);
+  const items = boxItems(box == null ? auto : box);
+  main.appendChild(h("div", { class: "card" },
+    h("h2", null, t("supply")),
+    seg([[false, t("sup_auto")], [true, t("sup_game")]], box != null, v => {
+      if (v && d.supply == null) d.supply = auto || Number(Object.keys(DATA.supply)[0]);
+      if (!v) d.supply = null;
+      changed(true); }),
+    box == null ? h("p", { class: "muted" }, t("sup_auto_hint", { n: auto == null ? "?" : auto }))
+      : h("button", { class: "pick", onclick: pickSupply }, items.length ? itemSprite(items[0][0]) : h("div", { class: "qicon" }, "?"),
+          h("div", { class: "grow" }, h("b", null, t("sup_box", { n: box })), h("div", { class: "sub" }, t("sup_choose")))),
+    h("div", { class: "muted" }, items.slice(0, 8).map(([i, n]) => `${itemName(i)} ×${n}`).join(", ")
+      + (items.length > 8 ? "  " + t("sup_more", { n: items.length - 8 }) : "")),
+  ));
+}
+function pickSupply() {
+  const d = cur, auto = autoSupply(d);
+  const mk = no => { const it = boxItems(no); return { key: Number(no), name: t("sup_box", { n: no }) + (Number(no) === auto ? "  " + t("usual") : ""),
+    sub: it.slice(0, 5).map(([i, n]) => `${itemName(i)} ×${n}`).join(", ") + (it.length > 5 ? " …" : ""),
+    search: no + " " + it.map(([i]) => itemName(i)).join(" "), on: Number(no) === d.supply,
+    icon: () => it.length ? itemSprite(it[0][0]) : h("div", { class: "qicon" }, "?") }; };
+  const all = Object.keys(DATA.supply);
+  const first = auto != null ? [[t("sup_auto"), [mk(auto)]]] : [];
+  picker(t("sup_choose"), first.concat([[null, all.filter(no => Number(no) !== auto).map(mk)]]), no => { d.supply = no; changed(true); },
+    { limit: 60, total: all.length });
 }
 
 function tabMonsters(main) {
@@ -519,13 +624,15 @@ function tabMonsters(main) {
     const sizeOpts = DATA.sizes.map(([_l, s], k) => [s, t("sizes")[k]]);
     if (!sizeOpts.some(o => o[0] === m.size)) sizeOpts.push([m.size, m.size + " %"]);
     sizeOpts.push(["custom", t("custom_size") + "…"]);
-    const strOpts = [[null, t("strength_auto", { g: g ? `${t(g.hub === "Village" ? "village" : "port")} ${g.star}★` : "" })]].concat(DATA.groups.map(x => [x.key, groupLabel(x)]));
+    const strOpts = [[null, t("strength_auto", { g: g ? `${t(g.hub === "Village" ? "village" : "port")} ${g.star}★` : "" })]].concat(DATA.groups.map(x => [x.key, groupLabel(x)]), [["custom", t("strength_custom")]]);
+    const st = startsOf(m.em, d.map);
+    const startOpts = st ? [[null, t("start_auto")]].concat(st.map((a, k) => [k, (a === 0 ? t("start_entrance") : t("start_area", { n: a })) + (k === 0 ? " " + t("usual") : "")])) : null;
     main.appendChild(h("div", { class: "card moncard" },
       h("div", { class: "head" }, monSprite(m.em),
         h("div", { class: "grow" }, h("b", null, monName(m.em)),
           h("span", { class: onMap ? "muted" : "warn" }, onMap ? t("on_map") : t("needs_pack")),
           SIEGE.includes(m.em) ? h("div", { class: "warn" }, t("siege_note")) : null),
-        h("button", { class: "btn small", onclick: () => pickMonster(em => { m.em = em; changed(true); }) }, "⇄")),
+        h("button", { class: "btn small", onclick: () => pickMonster(em => { m.em = em; m.start = null; changed(true); }) }, "⇄")),
       d.monsters.length > 1 ? null : h("div", { class: "row" }, h("label", { class: "l" }, t("count")),
         h("div", { class: "stepper" },
           h("button", { onclick: () => { m.count = Math.max(1, m.count - 1); changed(true); } }, "−"),
@@ -536,7 +643,12 @@ function tabMonsters(main) {
         if (v === "custom") askNumber(t("custom_size"), m.size, 1, 255, s => { m.size = s; changed(true); });
         else { m.size = v; changed(true); }
       })),
-      field(t("strength"), select(strOpts, m.strength || null, v => { m.strength = v; changed(true); })),
+      startOpts ? field(t("starts_in"), select(startOpts, m.start == null ? null : m.start, v => { m.start = v; changed(true); })) : null,
+      field(t("strength"), select(strOpts, m.rows ? "custom" : (m.strength || null), v => {
+        if (v === "custom") { const gg = DATA.groups.find(x => x.key === m.strength) || g; m.rows = gg ? gg.rows.slice() : [30, 20, 10]; }
+        else { m.strength = v; m.rows = null; }
+        changed(true); })),
+      m.rows ? rowsEditor(m.rows, () => changed(true)) : null,
       h("div", { class: "btns" },
         i > 0 ? h("button", { class: "btn small", onclick: () => { [d.monsters[i - 1], d.monsters[i]] = [d.monsters[i], d.monsters[i - 1]]; changed(true); } }, "▲") : null,
         i < d.monsters.length - 1 ? h("button", { class: "btn small", onclick: () => { [d.monsters[i + 1], d.monsters[i]] = [d.monsters[i], d.monsters[i + 1]]; changed(true); } }, "▼") : null,
@@ -550,12 +662,19 @@ function tabMonsters(main) {
         const first = d.monsters[0], n = Math.min(4, first.count);
         d.monsters = Array.from({ length: n }, () => Object.assign({}, first, { count: 1 }));
       }
-      if (d.monsters.length < 5) d.monsters.push({ em, count: 1, size: 100, strength: null });
+      if (d.monsters.length < 5) d.monsters.push({ em, count: 1, size: 100, strength: null, rows: null, start: null });
       fixArrival(d); changed(true); }) }, t("add_monster")));
   if (d.monsters.length > 1) main.appendChild(h("p", { class: "muted" }, t("cards_hint")));
   const opts = ARRIVALS[largeMons(d).length];
   if (opts) main.appendChild(h("div", { class: "card", style: "margin-top:12px" }, h("h2", null, t("arrival")),
     select(opts.map(o => [o[0], t(o[2])]), d.arrival, v => { d.arrival = v; changed(true); })));
+  const small = d.small === "none" ? "none" : "auto";
+  main.appendChild(h("div", { class: "card", style: "margin-top:12px" }, h("h2", null, t("small_card")),
+    seg([["auto", t("small_auto")], ["none", t("small_none")]], small, v => { d.small = v; changed(true); }),
+    small === "auto" ? h("p", { class: "muted" }, t("small_auto_hint")) : null,
+    small === "auto" ? field(t("small_strength"), select([[null, t("small_str_auto")], ["custom", t("strength_custom")]],
+      d.small_rows ? "custom" : null, v => { d.small_rows = v === "custom" ? smallRowsAuto(d) : null; changed(true); })) : null,
+    small === "auto" && d.small_rows ? rowsEditor(d.small_rows, () => changed(true)) : null));
 }
 function fixArrival(d) {
   const opts = ARRIVALS[largeMons(d).length];
@@ -672,7 +791,7 @@ function picker(title, groups, onpick, opts) {
 function pickMap() {
   picker(t("choose_map"), [[null, DATA.maps.map(m => ({ key: m.id, name: mapName(m.id), search: m.en + " " + m.fr,
     on: m.id === cur.map, icon: () => mapImg(m.id) }))]], id => {
-    cur.map = id; if (cur.night && DATA.day_only_maps.includes(id)) cur.night = false; changed(true); });
+    cur.map = id; if (cur.night && DATA.day_only_maps.includes(id)) cur.night = false; fixForMap(cur); changed(true); });
 }
 function pickMonster(fn, small) {
   const mk = m => ({ key: m.id, name: monName(m.id), search: m.en + " " + m.fr,
@@ -701,7 +820,7 @@ function fileName(d) {
 }
 function exportText(d) {
   const out = JSON.parse(JSON.stringify(d));
-  out.format = FORMAT; out.version = 1; out.app = "MH3U Quest Notebook " + APP_VERSION; out.lang = d.lang || L();
+  out.format = FORMAT; out.version = 2; out.app = "MH3U Quest Notebook " + APP_VERSION; out.lang = d.lang || L();
   out.objective.type = OBJ[out.objective.kind];
   return JSON.stringify(out, null, 1);
 }

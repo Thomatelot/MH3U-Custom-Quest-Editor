@@ -96,6 +96,15 @@ lends start lists, tested with Zinogre on Sandy Plains), which frees 6,160 bytes
   15 (Tainted Sea) have the same stage in both bytes. Other stage archives: m09 (stage 9) holds only a
   camera and a few screen effects; m26 holds the hubs' interiors (stage\interia); m27 a camera.
 
+## Start records seen by the testers (1.8)
+A tester described the start lists of code.bin (56-byte records, see above): +0 monster, +4 1, +8 FF,
++9 area, +11 form ("Super 1/2/3"), +12 a byte they call "+", +52 01 01. Values in the game's lists:
+(form, byte 12) = (0, 0) 251 times, (0, 1) 116, (2, 1) 6, (3, 1) 4, (0, 2) 2, (2, 0) 2, (1, 0) 1
+(Brachydios, Volcano area 7). Which list belongs to which map is the monster's placement list
+(monster -> stage -> start list, read by the pack). The position inside the area comes from the
+monster's em_mappos00; since 1.8 a start of your own in an area where the monster has none gets the
+positions of the lowest-numbered large monster that has some there.
+
 ## Roaming monsters in the code (1.8)
 Quest bytes (live quest +0x21F..+0x224): nora_set_per, nora_per_type, nora_set_type, nora_set_max,
 nora_set_table, nora_pekko.

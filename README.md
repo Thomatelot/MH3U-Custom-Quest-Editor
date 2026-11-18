@@ -273,12 +273,15 @@ and picks the game's start list offering the most start areas.
   sizes from +100 % to +1900 %, so *Size %* accepts up to **2000 %** in Developer mode. Such a quest needs
   the pack installed. Checked against the game's code, **not tried in the game**: a giant may clip
   through walls or be hard to reach.
-* **Starts of your own (Developer mode):** *My monster starts...* adds start records for a large
-  monster: another area of a map (one where it has positions), or one of the game's special forms (form 1
-  = Brachydios' start in "Clashing Fists!", 2 and 3 = the charged Zinogre and Stygian Zinogre; on other
-  monsters the effect is unknown). They come after the game's own starts, so the game's quests keep their
-  numbers. To make room, the pack points the game's start lists that are identical but for the monster
-  number to one copy. Checked byte by byte by the tests, **not tried in the game**.
+* **Starts of your own (Developer mode):** *Add a new start...* (end of a monster card's *Starts in* list)
+  or *My monster starts...* adds start records for a large monster: another area of a map, and a kind of
+  start, by the testers' names: Normal (00 00), Normal+ (00 01), Super 1 (01 00, Brachydios' charged
+  start), Super 1+ (01 01), Super 2 / Super 3 (02 01 / 03 01, the charged Zinogre and Stygian Zinogre; on
+  other monsters the effect is unknown). In an area where the monster has no position of its own, the pack
+  copies another monster's positions there; the base camp of most maps has none. They come after the
+  game's own starts, so the game's quests keep their numbers. To make room, the pack points the game's
+  start lists that are identical but for the monster number to one copy. Checked byte by byte by the
+  tests, **not tried in the game**.
 * **Experimental: Moga Village / Port Tanzia (Developer mode).** Quest map 9 is never used by the game's
   quests; the pack can make it load the Village or the Port (3 bytes of the program). Port Tanzia loads
   in Citra and the hunters can walk between its areas, but the large monster did not appear (it uses its

@@ -58,6 +58,16 @@ game** unless said otherwise.
   * the arena variants (no game quest uses them) use a quest of the same arena (Arena, Water Arena);
   * a quest made from a game quest now gets the small monsters of that quest (before, the copy had no
     room for them and the quest came without any). The same for *New quest* in the library.
+* **Starts of your own (Developer mode), testers' request:**
+  * *Add a new start...* at the end of a monster card's *Starts in* list opens *My monster starts* with
+    a new start for that monster and map;
+  * the kind of start is chosen by the testers' names, bytes 11 and 12 of the start record: Normal
+    (00 00), Normal+ (00 01), Super 1 (01 00, Brachydios' charged start), Super 1+ (01 01), Super 2 and
+    Super 3 (02 01, 03 01, the charged Zinogres), for every monster (unknown effect outside the
+    monsters the game gives them to);
+  * any area where some large monster has positions: where this monster has none, the Monster pack
+    copies the positions of another monster there (shown in the list). The base camp of most maps has
+    none, so it stays out. Untested in the game.
 * **Phone notebook 1.1** (new APK, same signature: install it over the old one). New options, as in the
   editor's standard mode: where the hunters start, Stable / Unstable (roaming monsters), the supply box (a
   game box, with its items), where each large monster starts, custom Health / Attack / Toughness rows

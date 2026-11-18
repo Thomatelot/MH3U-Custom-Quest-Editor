@@ -647,6 +647,21 @@ def run():
     shot("32_boxes_no_citra", window=mgr)
     mgr.destroy()
     A.find_emulator_mod_dirs = orig_fe
+    from mhqe import startpos
+    saved_starts = list(startpos.CUSTOM)
+    own = E.OwnStartsDialog(app, em=1, map_id=1, add=True)
+    settle(0.6)
+    check(len(own.items) == len(saved_starts) + 1 and own.items[-1]["em"] == 1, "'Add a new start' adds a start")
+    borrowed = [k for k, (a, d) in enumerate(startpos.start_area_choices(1, 1)) if d]
+    own.area_box.current(borrowed[0])
+    own._set("area", own._areas[borrowed[0]])
+    own.kind_box.current(3)
+    own._set_kind()
+    settle(0.3)
+    check(own.items[-1]["form"] == 1 and own.items[-1]["flag"] == 0, "kind Super 1 sets bytes 01 00")
+    shot("34_own_start_borrowed", own)
+    own.destroy()
+    startpos.CUSTOM[:] = saved_starts
     dlg = A.SettingsDialog(app)
     settle(0.5)
     shot("33_settings", dlg)

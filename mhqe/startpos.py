@@ -106,6 +106,29 @@ def spawn_areas(em: int, map_id: int, pack: dict | None = None) -> list[int]:
     return []
 
 
+def borrow_donor(em: int, map_id: int, area: int, pack: dict | None = None) -> int | None:
+    """For a start of your own in an area where the monster has no position: the large monster
+    whose positions in that area the Monster pack copies (the lowest number that has some), or None
+    when the monster has its own there or no monster has any (the base camp of most maps). The pack
+    uses the same rule (monsterpack.borrow_donor)."""
+    if area in spawn_areas(em, map_id, pack):
+        return None
+    internal = str(G.MAP_TO_INTERNAL.get(map_id))
+    for k in sorted(_S, key=int):
+        if int(k) != em and area in _S[k].get(internal, []):
+            return int(k)
+    return None
+
+
+def start_area_choices(em: int, map_id: int, pack: dict | None = None) -> list[tuple[int, int | None]]:
+    """[(area, donor)] a start of your own can use: the monster's own areas (donor None), then the
+    areas where only other monsters have positions (copied from the donor by the pack)."""
+    own = spawn_areas(em, map_id, pack)
+    internal = str(G.MAP_TO_INTERNAL.get(map_id))
+    every = sorted({a for st in _S.values() for a in st.get(internal, [])} | set(own))
+    return [(a, None if a in own else borrow_donor(em, map_id, a, pack)) for a in every]
+
+
 def game_start_count(em: int, map_id: int, pack: dict | None = None) -> int | None:
     """How many starts the game (or the pack, for a monster it adds) has for this monster here."""
     internal = G.MAP_TO_INTERNAL.get(map_id)
@@ -136,7 +159,13 @@ def custom_problems(x: dict, pack: dict | None = None) -> list[str]:
     if game_start_count(x["em"], x["map"], pack) is None:
         out.append(_("This monster does not go on this map (not in the game; the pack adds it once built)."))
     elif ar and x["area"] not in ar:
-        out.append(_("The monster has no position in this area of this map."))
+        donor = borrow_donor(x["em"], x["map"], x["area"], pack)
+        if donor is None:
+            out.append(_("No monster has a position in this area of this map (the base camp of most maps): "
+                         "the game would not know where to put it."))
+        else:
+            out.append(_("The monster has no position of its own in this area: the pack copies those of {}. "
+                         "Untested: it may stand still or not leave the area.").format(G.mon_name(donor)))
     if x.get("form") and x["form"] not in {74: (1,), 41: (2, 3), 72: (2, 3)}.get(x["em"], ()):
         out.append(_("The game never gives this form to this monster: unknown effect, it may crash."))
     return out

@@ -448,6 +448,15 @@ FORM_MONSTERS = {74: (1,), 41: (2, 3), 72: (2, 3)}      # the forms the game its
 MAX_STARTS = 16
 
 
+def borrow_donor(mons: dict, em: int, stage: int, area: int) -> int | None:
+    """The large monster whose positions in this area a start of your own copies when ``em`` has
+    none there: the lowest number that has some (startpos.borrow_donor makes the same choice)."""
+    for e2 in sorted(mons):
+        if e2 != em and is_large(e2) and area in mons[e2].spawn.stages.get(stage, {}):
+            return e2
+    return None
+
+
 def start_key(x: dict) -> tuple:
     flag = x.get("flag")
     return (int(x["em"]), int(x["map"]), int(x["area"]), int(x.get("form", 0)), -1 if flag is None else int(flag))
@@ -647,9 +656,16 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
         by_em.setdefault(p["em"], []).append(p)
     content_hash = hashlib.sha256()
     final = {}                                     # monsters whose tables change: their new data
-    for em, items in sorted(by_em.items()):
+    borrow: dict[int, dict[int, set]] = {}         # starts of your own in an area without positions
+    for x in extras.get("starts") or []:
+        st = G.MAP_TO_INTERNAL.get(int(x["map"])) if int(x["map"]) != G.HUB_MAP else None
+        if st is not None:
+            borrow.setdefault(int(x["em"]), {}).setdefault(st, set()).add(int(x["area"]))
+    borrowed = {}                                  # (em, stage, area) -> monster the positions come from
+    for em in sorted(set(by_em) | set(borrow)):
+        items = by_em.get(em, [])
         add = [p for p in items if p["tables"]]
-        if not add:
+        if not add and em not in borrow:
             continue
         m = copy.deepcopy(mons[em])
         final[em] = m
@@ -664,7 +680,20 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
                         and (tb.stages or k == "em_arearoute00"):          # keep the monster's own data
                     tb.stages[st] = d.tables[k].stages[st]
                     changed.add(k)
+        for st, areas in sorted(borrow.get(em, {}).items()):
+            mine = m.spawn.stages.get(st)
+            if mine is None:
+                continue                           # not on this map: reported with the starts below
+            for area in sorted(areas - set(mine)):
+                donor = borrow_donor(mons, em, st, area)
+                if donor is None:
+                    continue                       # nobody has positions there: reported below
+                mine[area] = copy.deepcopy(mons[donor].spawn.stages[st][area])
+                borrowed[(em, st, area)] = donor
+                changed.add("em_mappos00")
+            m.spawn.stages[st] = dict(sorted(mine.items()))
         if not changed:
+            final.pop(em, None)
             continue
         repl = {m.names[k]: (m.spawn.build() if k == "em_mappos00" else m.tables[k].build())
                 for k in sorted(changed)}
@@ -738,14 +767,15 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
             for i, x in enumerate(mine):
                 area = int(x["area"])
                 if areas_ok and area not in areas_ok:
-                    raise PackError(f"Your start for {G.mon_name(em)} on {G.map_name(int(x['map']))}: area "
-                                    f"{area} is not one where it has positions (it has {sorted(areas_ok)}).")
+                    raise PackError(f"Your start for {G.mon_name(em)} on {G.map_name(int(x['map']))}: no monster "
+                                    f"has positions in area {area} (the base camp of most maps), so the game "
+                                    "would not know where to put it.")
                 flag = x.get("flag")
                 new.append(custom_start_record(base_recs[0], area, int(x.get("form", 0)),
                                                None if flag is None else int(flag)))
                 starts_out.append({"em": em, "map": int(x["map"]), "stage": st, "area": area,
                                    "form": int(x.get("form", 0)), "flag": None if flag is None else int(flag),
-                                   "index": len(base_recs) + i})
+                                   "index": len(base_recs) + i, "positions_from": borrowed.get((em, st, area))})
             sentinel = 0xC5700000 + len(custom_arrays)
             custom_arrays[sentinel] = b"".join(base_recs + new) + end
             lst[k] = (st, sentinel)

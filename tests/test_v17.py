@@ -169,7 +169,7 @@ class PackBuild(unittest.TestCase):
         out = self.tmp / "keep"
         MP.build(ROMFS, out, log=lambda s: None)
         with self.assertRaises(MP.PackError):
-            MP.build(ROMFS, out, log=lambda s: None, extras={"starts": [{"em": 74, "map": 1, "area": 2}]})
+            MP.build(ROMFS, out, log=lambda s: None, extras={"starts": [{"em": 74, "map": 1, "area": 0}]})   # the camp: nobody has positions there
         self.assertTrue((out / MP.MANIFEST).is_file())
         self.assertFalse(out.with_name(out.name + ".building").exists())
 

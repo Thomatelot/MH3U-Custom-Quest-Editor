@@ -1275,7 +1275,10 @@ class MonsterCard(ttk.Frame):
         if m["Starttype"] not in values:
             values.append(m["Starttype"])
         self._start_values = values
-        self.start_box.configure(values=[startpos.choice_text(v, ar, mp, m['Type'], pack) for v in values])
+        texts = [startpos.choice_text(v, ar, mp, m['Type'], pack) for v in values]
+        if self.own_btn is not None and monsterpack.is_large(m["Type"]) and G.MAP_TO_INTERNAL.get(mp):
+            texts.append(_("Add a new start... (Monster pack)"))     # opens My monster starts
+        self.start_box.configure(values=texts)
         if self.own_btn is not None:
             self.own_btn.state(["!disabled"] if monsterpack.is_large(m["Type"]) else ["disabled"])
         self.start_box.current(values.index(m["Starttype"]))
@@ -1309,14 +1312,17 @@ class MonsterCard(ttk.Frame):
     def _start_pick(self, _e=None):
         i = self.start_box.current()
         m = self.q.monsters[self.slot]
+        if i == len(self._start_values):          # "Add a new start..."
+            self._own_starts(add=True)
+            return
         if 0 <= i < len(self._start_values) and self._start_values[i] != m["Starttype"]:
             self.q.set_monster(self.slot, Starttype=self._start_values[i])
             self.tab.do_load(self.q)
             self.tab.editor.changed()
 
-    def _own_starts(self):
+    def _own_starts(self, add=False):
         m = self.q.monsters[self.slot]
-        dlg = OwnStartsDialog(self.tab.app, em=m["Type"], map_id=self.q.get("map"))
+        dlg = OwnStartsDialog(self.tab.app, em=m["Type"], map_id=self.q.get("map"), add=add)
         self.tab.wait_window(dlg)
         if dlg.use is not None and dlg.use != m["Starttype"]:
             self.q.set_monster(self.slot, Starttype=dlg.use)
@@ -3522,12 +3528,22 @@ class OwnStartsDialog(tk.Toplevel):
     """Developer mode: monster starts of your own (another area, a special form), written into the
     game by the Monster pack after the game's own starts of that monster on that map."""
 
-    FORM_CHOICES = [(0, "Normal"), (1, "Special form 1 (Brachydios' start in 'Clashing Fists!')"),
-                    (2, "Special form 2 (charged Zinogre / Stygian Zinogre)"),
-                    (3, "Special form 3 (charged Zinogre / Stygian Zinogre)")]
-    FLAG_CHOICES = [(None, "As its usual start"), (0, "0"), (1, "1")]
+    # (form = byte 11, byte 12 or None = as the monster's usual start, text): the testers' names
+    KINDS = [(0, None, "As its usual start"), (0, 0, "Normal (00 00)"), (0, 1, "Normal+ (00 01)"),
+             (1, 0, "Super 1 (01 00): Brachydios' charged start"), (1, 1, "Super 1+ (01 01)"),
+             (2, 1, "Super 2 (02 01): charged Zinogre / Stygian Zinogre"),
+             (3, 1, "Super 3 (03 01): charged Zinogre / Stygian Zinogre")]
 
-    def __init__(self, app, em=None, map_id=None):
+    @classmethod
+    def kind_text(cls, form, flag):
+        for f, b, t in cls.KINDS:
+            if (f, b) == (form, flag):
+                return _(t)
+        if flag is None:
+            return _("Super {} (byte 12 as its usual start)").format(form)
+        return _("Form {}, byte 12 {}").format(form, flag)
+
+    def __init__(self, app, em=None, map_id=None, add=False):
         super().__init__(app)
         self.app, self.use = app, None
         self.pack_man, _inst = app.monster_pack()
@@ -3544,18 +3560,19 @@ class OwnStartsDialog(tk.Toplevel):
             "A start of your own puts a large monster in another area of a map, or gives it one of the game's "
             "special forms. The Monster pack adds it after the game's own starts of that monster on that map "
             "(their numbers do not change): build and install the pack again after a change, then choose the "
-            "new number in the card's 'Starts in' list. The position inside the area is the monster's own. "
-            "Special forms: the game only gives form 1 to Brachydios and forms 2 and 3 to Zinogre and "
-            "Stygian Zinogre; on another monster the effect is unknown and the game may crash. Byte 12 of a "
-            "start: its meaning is unknown (0 or 1 in the game).")).pack(anchor="w", pady=(4, 8))
+            "new number in the card's 'Starts in' list. The position inside the area is the monster's own; in "
+            "an area where it has none, the pack copies the positions of another monster (marked in the list). "
+            "The base camp of most maps has no monster position, so no start can go there. Kinds: bytes 11 "
+            "and 12 of a start. The game only uses Super 1 for Brachydios and Super 2 and 3 for Zinogre and "
+            "Stygian Zinogre; on another monster the effect is unknown and the game may crash. The meaning of "
+            "byte 12 alone ('+') is unknown: the game uses 0 and 1 on ordinary starts too.")).pack(anchor="w", pady=(4, 8))
         body = ttk.Frame(f)
         body.pack(fill="both", expand=True)
-        cols = ("map", "area", "form", "flag", "no")
+        cols = ("map", "area", "kind", "no")
         self.tree = ttk.Treeview(body, columns=cols, show="tree headings", height=9, selectmode="browse")
         self.tree.heading("#0", text=_("Monster"))
         self.tree.column("#0", width=170)
-        for c, t, w in zip(cols, (_("Map"), _("Area"), _("Form"), _("Byte 12"), _("Number")),
-                           (140, 60, 140, 175, 90)):
+        for c, t, w in zip(cols, (_("Map"), _("Area"), _("Kind"), _("Number")), (140, 70, 230, 90)):
             self.tree.heading(c, text=t)
             self.tree.column(c, width=w, anchor="w")
         self.tree.pack(side="left", fill="both", expand=True)
@@ -3571,19 +3588,13 @@ class OwnStartsDialog(tk.Toplevel):
         self.map_box.grid(row=1, column=1, sticky="w")
         self.map_box.bind("<<ComboboxSelected>>", lambda _e: self._set("map", self.maps[self.map_box.current()]))
         ttk.Label(form, text=_("Area")).grid(row=2, column=0, sticky="w", pady=2)
-        self.area_box = ttk.Combobox(form, state="readonly", width=26)
+        self.area_box = ttk.Combobox(form, state="readonly", width=46)
         self.area_box.grid(row=2, column=1, sticky="w")
         self.area_box.bind("<<ComboboxSelected>>", lambda _e: self._set("area", self._areas[self.area_box.current()]))
-        ttk.Label(form, text=_("Form")).grid(row=3, column=0, sticky="w", pady=2)
-        self.form_box = ttk.Combobox(form, state="readonly", width=46, values=[_(t) for _v, t in self.FORM_CHOICES])
-        self.form_box.grid(row=3, column=1, sticky="w")
-        self.form_box.bind("<<ComboboxSelected>>",
-                           lambda _e: self._set("form", self.FORM_CHOICES[self.form_box.current()][0]))
-        ttk.Label(form, text=_("Byte 12")).grid(row=4, column=0, sticky="w", pady=2)
-        self.flag_box = ttk.Combobox(form, state="readonly", width=26, values=[_(t) for _v, t in self.FLAG_CHOICES])
-        self.flag_box.grid(row=4, column=1, sticky="w")
-        self.flag_box.bind("<<ComboboxSelected>>",
-                           lambda _e: self._set("flag", self.FLAG_CHOICES[self.flag_box.current()][0]))
+        ttk.Label(form, text=_("Kind")).grid(row=3, column=0, sticky="w", pady=2)
+        self.kind_box = ttk.Combobox(form, state="readonly", width=46)
+        self.kind_box.grid(row=3, column=1, sticky="w")
+        self.kind_box.bind("<<ComboboxSelected>>", lambda _e: self._set_kind())
         self.msg = ttk.Label(form, text="", style="Warn.TLabel", wraplength=330, justify="left")
         self.msg.grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 0))
         bar = ttk.Frame(f)
@@ -3598,7 +3609,9 @@ class OwnStartsDialog(tk.Toplevel):
         ttk.Button(bar, text=_("Cancel"), command=self.destroy).pack(side="left")
         self._fill()
         mine = [i for i, x in enumerate(self.items) if x["em"] == em and x["map"] == map_id]
-        if mine:
+        if add and em:
+            self.after_idle(self._add)
+        elif mine:
             self._select(mine[-1])
         elif self.items:
             self._select(0)
@@ -3623,8 +3636,7 @@ class OwnStartsDialog(tk.Toplevel):
             area = startpos.area_label(x["map"], x["area"])
             self.tree.insert("", "end", iid=str(i), text=G.mon_name(x["em"]), values=(
                 G.map_name(x["map"]), area.replace("area ", "") if area.startswith("area ") else area,
-                _(dict(self.FORM_CHOICES)[x["form"]].split(" (")[0]),
-                _(dict(self.FLAG_CHOICES)[x["flag"]]),
+                self.kind_text(x["form"], x["flag"]).split(":")[0],
                 _("start {}").format(n) if n is not None else "?"))
 
     def _cur(self):
@@ -3639,7 +3651,7 @@ class OwnStartsDialog(tk.Toplevel):
     def _show(self):
         i = self._cur()
         state = "readonly" if i is not None else "disabled"
-        for w in (self.map_box, self.area_box, self.form_box, self.flag_box):
+        for w in (self.map_box, self.area_box, self.kind_box):
             w.configure(state=state)
         if i is None:
             self.mon_btn.configure(text=_("(add a start)"), state="disabled")
@@ -3648,14 +3660,27 @@ class OwnStartsDialog(tk.Toplevel):
         x = self.items[i]
         self.mon_btn.configure(text=G.mon_name(x["em"]), state="normal")
         self.map_box.current(self.maps.index(x["map"]) if x["map"] in self.maps else 0)
-        self._areas = startpos.spawn_areas(x["em"], x["map"], self.pack_man) or [x["area"]]
-        if x["area"] not in self._areas:
-            self._areas = sorted(set(self._areas) | {x["area"]})
-        self.area_box.configure(values=[_(startpos.area_label(x["map"], a)) for a in self._areas])
+        choices = startpos.start_area_choices(x["em"], x["map"], self.pack_man)
+        if x["area"] not in [a for a, _d in choices]:
+            choices = sorted(choices + [(x["area"], None)])
+        self._areas = [a for a, _d in choices]
+        self.area_box.configure(values=[_(startpos.area_label(x["map"], a)) + (
+            "  " + _("(positions of {})").format(G.mon_name(d)) if d else "") for a, d in choices])
         self.area_box.current(self._areas.index(x["area"]))
-        self.form_box.current([v for v, _t in self.FORM_CHOICES].index(x["form"]))
-        self.flag_box.current([v for v, _t in self.FLAG_CHOICES].index(x["flag"]))
+        self._kinds = [(f, b) for f, b, _t in self.KINDS]
+        if (x["form"], x["flag"]) not in self._kinds:
+            self._kinds.append((x["form"], x["flag"]))
+        self.kind_box.configure(values=[self.kind_text(f, b) for f, b in self._kinds])
+        self.kind_box.current(self._kinds.index((x["form"], x["flag"])))
         self.msg.configure(text="\n".join(startpos.custom_problems(x, self.pack_man)))
+
+    def _set_kind(self):
+        i = self._cur()
+        if i is None:
+            return
+        self.items[i]["form"], self.items[i]["flag"] = self._kinds[self.kind_box.current()]
+        self._fill()
+        self._select(i)
 
     def _set(self, key, value):
         i = self._cur()

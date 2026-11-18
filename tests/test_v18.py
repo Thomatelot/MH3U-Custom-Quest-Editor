@@ -313,5 +313,52 @@ class RoamingSettings(unittest.TestCase):
         self.assertTrue([p for p in strays.problems(q) if "no Qurupeco" in p])
 
 
+@unittest.skipUnless(ROMFS, "MHQE_ROMFS not set")
+class BorrowedPositions(unittest.TestCase):
+    """A start of your own in an area where the monster has no position: the pack copies the
+    positions of another monster there (testers' request: any area, any kind)."""
+    def test_editor_and_pack_agree(self):
+        from mhqe import monsterpack as MP, startpos
+        game = MP.GameFiles(ROMFS)
+        mons = {em: MP.MonsterData(game.archive(em).read_bytes()) for em in range(1, 86)
+                if game.archive(em).is_file()}
+        for em in (1, 7, 15, 41, 74):
+            for m in (1, 2, 3, 4, 5):
+                st = G.MAP_TO_INTERNAL[m]
+                if st not in mons[em].spawn.stages:
+                    continue
+                for area, donor in startpos.start_area_choices(em, m):
+                    if donor is not None:
+                        self.assertEqual(MP.borrow_donor(mons, em, st, area), donor, (em, m, area))
+
+    def test_build_with_a_borrowed_area(self):
+        from mhqe import monsterpack as MP, startpos
+        sys.path.insert(0, os.path.dirname(__file__))
+        em, m = 1, 1                                   # Rathian on the Deserted Island
+        own = set(startpos.spawn_areas(em, m))
+        area, donor = next((a, d) for a, d in startpos.start_area_choices(em, m) if d)
+        self.assertNotIn(area, own)
+        tmp = Path(tempfile.mkdtemp())
+        starts = [{"em": em, "map": m, "area": area, "form": 1, "flag": 0}]
+        man = MP.build(ROMFS, tmp / "p", log=lambda s: None, extras={"starts": starts})
+        x = man["starts"][0]
+        self.assertEqual((x["area"], x["positions_from"]), (area, donor))
+        from mhqe import arc
+        a = arc.read(tmp / "p" / "romfs" / "arc" / "enemy" / f"em{em:03d}.arc")
+        e = next(e for e in a.entries if e.leaf == "em_mappos00")
+        st = MP.SpawnTable.parse(e.data).stages[G.MAP_TO_INTERNAL[m]]
+        self.assertIn(area, st)
+        self.assertEqual(sorted(st), sorted(st))
+        donor_pos = MP.MonsterData(MP.GameFiles(ROMFS).archive(donor).read_bytes()).spawn.stages[
+            G.MAP_TO_INTERNAL[m]][area].pos
+        self.assertEqual(st[area].pos, donor_pos)
+        self.assertEqual(set(st) - {area}, own)       # its own areas unchanged
+
+    def test_base_camp_is_refused(self):
+        from mhqe import startpos
+        probs = startpos.custom_problems({"em": 1, "map": 3, "area": 0, "form": 0, "flag": None})
+        self.assertTrue(any("base camp" in p for p in probs))
+
+
 if __name__ == "__main__":
     unittest.main()

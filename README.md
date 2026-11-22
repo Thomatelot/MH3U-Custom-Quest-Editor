@@ -18,6 +18,18 @@ Sandy Plains.
 </p>
 <p align="center"><em>Custom quests played in Citra (click a picture for the full size).</em></p>
 
+New in 1.8.1: **fix for the Monster pack with starts of your own** (1.8.0 made monsters like Qurupeco
+disappear: build and install the pack again), **reward tables A and B** as the game reads them (each at
+100 %, with materials in A and other items in B when filled automatically), and **Settings > Go back,
+clean up Citra...**: back to the previous version of the editor, the editor's mods removed from Citra, or
+the game as it was before the editor, with a copy of everything kept.
+
+New in 1.8: a **Save button** on the quest lists, **portable Citra** support, a **monster data** meter
+against *Now Loading* hangs, **roaming monsters read from the game's code** (their real settings, their
+strength, lists 214-255), **night versions** of the Underwater Ruin and the arenas, **starts of your own
+in any area** with the testers' kinds (Normal, Super 1...), better imports from the **phone notebook 1.1**,
+and many testers' fixes.
+
 New in 1.7: **any small monster on any map** (boulders included) and **every small-monster place
 editable** (area, how many at once, how many times they come back, variant, position), **roaming monsters
 on one-area maps** like the Arena, Volvidon among the Fanged Beasts, and, in Developer mode with the

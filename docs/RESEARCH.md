@@ -55,6 +55,7 @@ for that stage (Bullfango has none at all; Uroktor on the Volcano), so any speci
 work; untested.
 
 ## Your own start records (1.7)
+**Corrected in 1.8.1, see "Start positions" below: the record does hold the position, written at boot.**
 The pack appends records to a monster's start list for a map: a copy of its first record there with
 +9 (area), +11 (form) and +12 changed; the record has no position, the game takes it from the
 monster's em_mappos00, so the area must be one of those. With the whole pack only a few hundred bytes of
@@ -101,9 +102,9 @@ A tester described the start lists of code.bin (56-byte records, see above): +0 
 +9 area, +11 form ("Super 1/2/3"), +12 a byte they call "+", +52 01 01. Values in the game's lists:
 (form, byte 12) = (0, 0) 251 times, (0, 1) 116, (2, 1) 6, (3, 1) 4, (0, 2) 2, (2, 0) 2, (1, 0) 1
 (Brachydios, Volcano area 7). Which list belongs to which map is the monster's placement list
-(monster -> stage -> start list, read by the pack). The position inside the area comes from the
-monster's em_mappos00; since 1.8 a start of your own in an area where the monster has none gets the
-positions of the lowest-numbered large monster that has some there.
+(monster -> stage -> start list, read by the pack). ~~The position inside the area comes from the
+monster's em_mappos00~~ (wrong, see "Start positions (1.8.1)"); since 1.8 a start of your own in an area
+where the monster has none gets the em_mappos00 data of a large monster that has some there.
 
 ## Roaming monsters in the code (1.8)
 Quest bytes (live quest +0x21F..+0x224): nora_set_per, nora_per_type, nora_set_type, nora_set_max,
@@ -132,6 +133,44 @@ nora_set_table, nora_pekko.
 - A base-game quest record is shorter than an event slot (its tail is 21 bytes): copied as it is, it
   has no room for small-monster places. Since 1.8 the copies made from the phone and *New quest* in the
   library are padded to the event size first, then given the game's list for that quest.
+
+## Start positions (1.8.1)
+- In code.bin, bytes +16..+43 of every start record are zero. One of the game's static initialisers
+  (0xAA0FD8, EU and US; listed in the table of relative offsets that ends the code segment, 0xAFE2B8..
+  0xAFF5CC, 1,222 functions) writes them at boot for the 346 records of the 152 start lists
+  (0xC31018..0xC37CEC): x, y, z, 0 (floats), the facing (+36, 0-65535 = one turn) and two words. So the
+  start point of a monster is in its start record, not in em_mappos00 (whose points are close but not the
+  same: Qurupeco on the Misty Peaks, area 6: start (-2155.5, -22.5, -4156.0), em_mappos00 (-2136.7, 0,
+  -3929.1)). Six records are left at 0, 0, 0: Diablos, Black Diablos and Azure Rathalos in Sandy Plains
+  area 6, and the three pack leaders (Great Jaggi, Baggi, Wroggi) in Deserted Island area 9.
+- Found with a tester's broken pack (*HYPER PECO*, Qurupeco with two starts of its own on the Misty Peaks):
+  1.8.0 had freed the "duplicate" start lists (identical in the file but for +0) and put its own lists
+  there; running the initialisers in an emulator (unicorn) rewrites 2,132 of the pack's bytes, among them
+  Qurupeco's new start list (its start points became Alatreon's) and placement lists. A pack without
+  starts of your own had none rewritten, which is why it worked.
+- data/start_records.json (tools/build_start_records.py) holds the start lists as they are after boot,
+  for both versions, and for each map and area the monsters the game starts there. A start of your own
+  copies the monster's start list with its positions, then a game record of the area (the monster's own,
+  else an ordinary one of the lowest-numbered monster there) with the monster's own bytes outside the
+  position (+8 is 0x10-0x12 for the pack leaders Great Jaggi, Baggi and Wroggi).
+- Room: the six readers of the placement table (0x5C330C, 0x627110, 0x627490, 0x62D2E8, 0x62D970,
+  0x631048) walk a monster's list from its start and stop at the first entry of the stage. The pack
+  writes the lists as chains: [entries of list n that differ from list n-1] ... [list 1] [0xFF]. With
+  every monster on every map this leaves about 4.3 KB free (it was 0.4 KB), about fifteen monster/map
+  pairs with starts of your own. The pack refuses to write anything inside 0xC31008..the end of the last
+  start list.
+- Hubs (map 9 = Port Tanzia): Lagiacrus' Arena start point (-938, 1, -1817) is inside the walls of the
+  Port's area 1 (x -2911..583, z -2326..135), and neither it nor Barroth (tested by the author and a
+  tester) appeared: large monsters do not come to the hubs, whatever the position.
+
+## Reward tables A and B (1.8.1)
+The 64 reward slots of a quest (4 bytes: u16 item, u8 quantity, u8 chance %) are two tables that alternate:
+even slots = table A, odd slots = table B (a tester's finding, with the Wii U files). Each ends at its first
+empty slot; the other goes on (in "Forecast: Lagombi" table B ends at slot 15 and table A has two more
+lines at 16 and 18). Checked on the 365 base-game and 38 event quests: no table has a line after a gap,
+every table adds up to 100 % (one adds up to 110), rows at 0 % come first in a table and are not counted
+(the fixed rewards: the monster's scale, a Conqueror's Seal...). Table A holds the materials, table B the
+other items, except in the G Rank quests with several monsters.
 
 ## What makes a monster (for a future comparison with MHP3rd)
 Each large monster is `romfs/arc/enemy/emNNN.arc` (MT Framework ARC, zlib), about 90-170 files:

@@ -314,13 +314,13 @@ The Challenge gear tab appears on those quests (in Developer mode on every quest
 
 ### Reward tables A and B
 
-Each line: an item, how many, and its chance in percent. At the end of the quest the game draws several times from the table. Table A is the main reward; table B is drawn separately.
+Each line: an item, how many, and its chance in percent. The quest holds two tables, A and B (up to 32 lines each), and the game draws from each one on its own: in every table of the game's quests the chances add up to 100 %. Lines at 0 % come first and are given every time (the monster's scale, a Conqueror's Seal...). In the game's quests table A holds the monster's materials and table B the other items (bones, spheres, charms...). In the quest file the two tables alternate line by line (found by a tester); editors before 1.8.1 showed them as one list and stopped at the first gap, so an older quest may show items moved from A to B: check the totals.
 
-Add..., Edit..., Remove and ▲ ▼ edit a table (up to 32 lines). The total chance of a table is shown under it.
+Add..., Edit..., Remove and ▲ ▼ edit a table (up to 32 lines). The total chance of a table is shown under it, in orange when it is not 100 %: 'To 100 %' scales the chances (rows at 0 % stay at 0).
 
 ### Fill from the quest's monsters and rank
 
-Builds table A from the game's own quests: the materials of each large monster of the quest, then the other items the game gives at that rank and zone (armor spheres, charms, ores, bones, bugs...). Each item belongs to the few monsters whose quests give it, so shared materials go to the right monsters. The dialog says what it is based on. Everything stays editable.
+Builds both tables from the game's own quests: table A with the materials of each large monster of the quest (and a few other items when the monsters have few), table B with the other items the game gives at that rank and zone (armor spheres, charms, ores, bones, bugs...). Each item belongs to the few monsters whose quests give it, so shared materials go to the right monsters; an item that a single game quest gives belongs to its monster (Ceadeus Fur). Each table adds up to 100 %. The dialog says what it is based on. Everything stays editable.
 
 ### Text tab
 
@@ -392,15 +392,15 @@ Since 1.5 Ceadeus, Goldbeard Ceadeus, Jhen Mohran and Hallowed Jhen Mohran can b
 
 Developer mode: 'Add a new start...' at the end of a monster card's 'Starts in' list, or Monster pack page > 'My monster starts...'. A start of your own puts a large monster in another area of a map, or gives it another kind of start. Kinds (bytes 11 and 12 of a start record, the testers' names): Normal (00 00), Normal+ (00 01), Super 1 (01 00, Brachydios' charged start in 'Clashing Fists!'), Super 1+ (01 01), Super 2 and Super 3 (02 01, 03 01: the charged Zinogre and Stygian Zinogre). The game only gives Super 1 to Brachydios and Super 2 and 3 to the Zinogres: on another monster the effect is unknown and the game may crash. Byte 12 alone is 0, 1 or 2 on the game's ordinary starts, meaning unknown.
 
-Areas: those where the monster has positions, and those where only other large monsters have some: the pack then copies the positions of the lowest-numbered one into this monster's data for that map (untested: the monster may stand still or not leave the area). No monster has positions in the base camp of most maps, so no start can go there.
+Where it appears: a start is a point of the map (the game keeps it in its start lists, filled in when the game starts). In an area where the monster has no start of its own, the pack gives it the start point of a monster the game starts there (shown in the list; if the monster has no data for that area either, the pack copies that monster's). Untested: the monster may stand still or not leave the area. The game starts no monster in the base camp of most maps, so no start can go there.
 
-The pack adds your starts after the game's own starts of that monster on that map, so the numbers the game's quests use do not change; yours get the next numbers (the dialog shows them). To make room in the game's program, the pack then points the game's start lists that are identical but for the monster number to one copy (the way it already lends start lists, tested with Zinogre on Sandy Plains). Untested in the game.
+The pack adds your starts after the game's own starts of that monster on that map, so the numbers the game's quests use do not change; yours get the next numbers (the dialog shows them). Each start of your own copies the monster's whole start list on that map, in the little free room of the game's program: about fifteen monster/map pairs fit (more starts on the same pair cost little). 1.8.0 made room by sharing the game's duplicate start lists, which the game rewrites when it starts: the monster lost its start (Qurupeco, Alatreon in the Great Desert). Fixed in 1.8.1: build and install the pack again.
 
 ### Experimental: Moga Village and Port Tanzia
 
-Experimental. Quest map 9 is never used by the game's quests (it loads the Arena). With this choice the Monster pack makes it load Moga Village (3 areas, numbered 0 to 2) or Port Tanzia (2 areas, 0 and 1), the hubs, in the same way as a hunting map. Port Tanzia was tried in Citra: the quest loads and the hunters can walk between its two areas, but the large monster did not appear. Moga Village is untested. There is no base camp or supply box there.
+Experimental. Quest map 9 is never used by the game's quests (it loads the Arena). With this choice the Monster pack makes it load Moga Village (3 areas, numbered 0 to 2) or Port Tanzia (2 areas, 0 and 1), the hubs, in the same way as a hunting map. Port Tanzia was tried in Citra: the quest loads and the hunters can walk between its two areas, but no large monster appears: Lagiacrus and Barroth were tried (Lagiacrus' start point in the Arena, -938, 1, -1817, lies inside the walls of the Port's area 1, so it is not a matter of position). Moga Village is untested. There is no base camp or supply box there.
 
-Large monsters on map 9 use their Arena data (the pack gives every large monster the Arena): their positions are the Arena's, far from the hub's ground, so they may be out of reach or not appear at all. Small monsters: their positions are in the quest; type them in Developer mode (Small monsters > Edit places), inside the area's box shown there. Build and install the pack again after a change. Please report what happens.
+So use map 9 for gathering, deliveries or small monsters: their positions are in the quest; type them in Developer mode (Small monsters > Edit places), inside the area's box shown there. Build and install the pack again after a change. Please report what happens.
 
 ### New quests and roaming lists
 
@@ -442,6 +442,14 @@ Before the first save, copy your save's extra data folder (the 'user' folder abo
 Every save first makes a full backup of quest1..quest4 (backups/full/) and keeps a separate copy of every quest it replaces, edits or clears (backups/quests/), so a single quest can be put back in its slot. backups/original/ keeps the very first version of each file and is never deleted. Restoring a backup backs up the current files first. Everything is listed in In-game quests > Backups.
 
 Old backups are cleaned up automatically to save space: by default the 20 most recent full backups and the 5 most recent copies of each quest are kept (Settings > Backups). Never deleted, whatever the settings: backups/original/, the very first full backup and the first copy of every quest (marked with a lock). The cleanup only ever deletes inside backups/full and backups/quests.
+
+### Going back, cleaning up Citra
+
+Settings > Go back, clean up Citra...:
+• Go back to version ...: the program files of the version you had before the last update (kept in update_backups/). Your quests, boxes and settings do not change.
+• Remove the editor's mods from Citra: the base-game quests, supply boxes and Monster pack that the editor put in <Citra>/load/mods/<title id>. Other mods (a font, .quest_btl files...) are left alone; your event quests stay in the game.
+• Go back to before the editor: the same, plus your save's event quest files put back as they were before your first change (from backups/original/). To remove the editor itself afterwards, delete its folder.
+Every file removed or replaced is copied first to backups/cleanup/<date>/ in the editor's folder, and 'Put back the last clean-up' copies it back. Close Citra first.
 
 ### Good habits
 

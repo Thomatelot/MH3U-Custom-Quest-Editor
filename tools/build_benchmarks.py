@@ -117,12 +117,12 @@ def build_autofill(base, event, supp_dir):
     templates = []
     for q in every:
         pl = pool_of(q)
-        if pl == "Tutorial" or not (q.reward1 or q.reward2):
+        if pl == "Tutorial" or not (q.reward_a or q.reward_b):
             continue
         templates.append({
             "no": q.get("quest_no"), "name": q.get_text("name", 0), "map": q.get("map"), "pool": pl,
             "star": q.get("star"), "mons": [m["Type"] for m in q.monsters if m["Type"]],
-            "r1": [list(r) for r in q.reward1], "r2": [list(r) for r in q.reward2],
+            "a": [list(r) for r in q.reward_a], "b": [list(r) for r in q.reward_b],
         })
     used = {q.get("item_set_no") for q in every}
     present = set()

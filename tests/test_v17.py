@@ -110,8 +110,11 @@ class PackBuild(unittest.TestCase):
                 o += 8
                 if st == 0xFF:
                     break
+                if st in lst:                           # the game takes the first entry of a stage
+                    continue
                 recs, end = MP._records_at(code, q)
-                lst[st] = ([r[4:] for r in recs], end)
+                # without the position (+16..+43): zero in the game's file, written at boot
+                lst[st] = ([r[4:16] + r[44:] for r in recs], end)
             out[em] = lst
         return out
 
@@ -134,42 +137,78 @@ class PackBuild(unittest.TestCase):
                     self.assertEqual(len(rb[0]), len(ra[0]) + 1)
                     self.assertEqual(x["index"], len(ra[0]))
                     self.assertEqual((rb[0][-1][5], rb[0][-1][7]), (x["area"], x["form"]))
+                    # the new list carries the start positions (the game's own list gets them at boot)
+                    p = MP.resolve_list(code, struct.unpack_from("<I", code, self.table - MP.BASE + 4 * em)[0])[st]
+                    recs, _end = MP._records_at(code, p)
+                    rt = MP.runtime_starts(self.game.code, self.game.region)
+                    q0 = MP.resolve_list(self.code0, struct.unpack_from("<I", self.code0, self.table - MP.BASE
+                                                                        + 4 * em)[0])[st]
+                    for r, r0 in zip(recs, rt.get(q0) or MP._records_at(self.code0, q0)[0]):
+                        self.assertEqual(r[16:44], r0[16:44], (em, st))
+                    if st != MP.DESERT:                 # the Great Desert list of the pack has none (1.4)
+                        self.assertTrue(any(recs[-1][16:28]), (em, st))
                 else:
                     self.assertEqual(len(rb[0]), len(ra[0]))
 
-    def test_the_games_own_pointers_still_see_their_start_lists(self):
-        """Start lists freed for your starts: no word of the game's code (other than the old placement
-        lists the pack replaces) may point to one."""
+    def test_nothing_is_written_over_the_games_start_lists(self):
+        """1.8.0 shared the game's duplicate start lists and wrote over the freed ones, but a static
+        initialiser writes the start positions there at boot: nothing may go there."""
         man = MP.build(ROMFS, self.tmp / "own", log=lambda s: None,
-                       extras={"starts": [{"em": 74, "map": 1, "area": 9, "form": 1}]})
-        self.assertTrue(man["starts"])
-        code0 = self.game.code
-        code = _apply_ips(code0, (self.tmp / "own" / "exefs" / "code.ips").read_bytes())
-        place = MP.read_placement(code0, self.table)
-        sizes = {}
-        for lst in place.values():
-            for _st, q in lst:
-                recs, _end = MP._records_at(code0, q)
-                sizes[q] = 56 * (len(recs) + 1)
-        old_entries = set()
+                       extras={"starts": [{"em": 74, "map": 1, "area": 9, "form": 1},
+                                          {"em": 3, "map": 13, "area": 8, "form": 1, "flag": 0}],
+                               "roaming": {230: [[1, 2, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]}})
+        self.assertEqual(len(man["starts"]), 2)
+        self.assertIn("start_positions", man["features"])
+        self.assertFalse(MP.broken_starts(man))
+        place = MP.read_placement(self.game.code, self.table)
+        lo, hi = MP.start_lists_span(self.game.code, place)
+        data = (self.tmp / "own" / "exefs" / "code.ips").read_bytes()
+        i = 5
+        while data[i:i + 3] != b"EOF":
+            off, n = int.from_bytes(data[i:i + 3], "big"), int.from_bytes(data[i + 3:i + 5], "big")
+            self.assertTrue(off + n <= lo - MP.BASE or off >= hi - MP.BASE, hex(off + MP.BASE))
+            i += 5 + n
+        # every placement list reads as the default pack's, but the two starts of your own
+        code = _apply_ips(self.game.code, data)
         for em in range(86):
-            p = struct.unpack_from("<I", code0, self.table - MP.BASE + 4 * em)[0]
-            if p:
-                o = p - MP.BASE
-                while struct.unpack_from("<I", code0, o)[0] != 0xFF:
-                    old_entries.add(o + 4)
-                    o += 8
-        for o in range(0, len(code) - 3, 4):
-            v = struct.unpack_from("<I", code, o)[0]
-            if v in sizes and code[o:o + 4] == code0[o:o + 4] and o not in old_entries:
-                a = v - MP.BASE
-                self.assertEqual(code[a:a + sizes[v]], code0[a:a + sizes[v]], hex(o + MP.BASE))
+            pa = struct.unpack_from("<I", self.code0, self.table - MP.BASE + 4 * em)[0]
+            pb = struct.unpack_from("<I", code, self.table - MP.BASE + 4 * em)[0]
+            ra = MP.resolve_list(self.code0, pa) if pa else {}
+            rb = MP.resolve_list(code, pb) if pb else {}
+            self.assertEqual(set(ra), set(rb), em)
+            for st in ra:
+                if (em, st) not in {(74, 1), (3, 12)}:
+                    self.assertEqual(MP._records_at(self.code0, ra[st]), MP._records_at(code, rb[st]), (em, st))
+
+    def test_old_packs_with_starts_are_flagged(self):
+        old = {"features": ["big_sizes", "desert_area2", "siege_bosses"], "starts": [{"em": 3}]}
+        self.assertTrue(MP.broken_starts(old))
+        self.assertFalse(MP.is_current(old))
+        self.assertFalse(MP.broken_starts({"features": ["big_sizes", "desert_area2", "siege_bosses"], "starts": []}))
+        from mhqe import arc as arcmod, validate
+        from mhqe.quest import Quest
+        region = MP.detect_region(ROMFS)
+        a = arcmod.read(Path(ROMFS) / "arc" / "quest" / region / "quest00.arc")
+        q = Quest(next(e.data for e in a.entries if e.leaf.startswith("q_") and Quest(e.data).monsters[0]["Type"]))
+        texts = [i.text for i in validate.validate_quest(q, monster_pack=old)]
+        self.assertTrue(any("1.8.0" in t for t in texts))
+
+    def test_chained_placement_lists(self):
+        lists = {1: [(1, 10), (2, 20), (3, 30)], 2: [(1, 11), (2, 20), (3, 30)], 3: [(1, 10), (2, 20)]}
+        todo = dict(lists)
+        chain = MP.next_chain(todo, 1 << 20)
+        self.assertFalse(todo)
+        blob, offs = MP.chain_blob(chain)
+        code = bytes(0x100) + blob
+        for em, lst in lists.items():
+            self.assertEqual(MP.resolve_list(code, MP.BASE + 0x100 + offs[em]), dict(lst))
+        self.assertLess(len(blob), sum(8 * (len(v) + 1) for v in lists.values()))
 
     def test_a_wrong_area_keeps_the_pack_built_before(self):
         out = self.tmp / "keep"
         MP.build(ROMFS, out, log=lambda s: None)
         with self.assertRaises(MP.PackError):
-            MP.build(ROMFS, out, log=lambda s: None, extras={"starts": [{"em": 74, "map": 1, "area": 0}]})   # the camp: nobody has positions there
+            MP.build(ROMFS, out, log=lambda s: None, extras={"starts": [{"em": 74, "map": 1, "area": 0}]})   # the camp: the game starts no monster there
         self.assertTrue((out / MP.MANIFEST).is_file())
         self.assertFalse(out.with_name(out.name + ".building").exists())
 

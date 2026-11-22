@@ -78,9 +78,14 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
     if q.get("map") == G.HUB_MAP and hub in G.HUBS:
         name = _(G.HUBS[hub]["name"])
         if pack_installed:
-            add("warning", _("Experimental: map 9 loads {} (Monster pack). Untested: the game may crash when the "
-                             "quest loads. Large monsters use their Arena positions, far from the ground there; "
-                             "small monsters need positions you type (Developer mode, Edit places).").format(name))
+            add("warning", _("Experimental: map 9 loads {} (Monster pack). The quest loads and you can walk "
+                             "(tested in Port Tanzia), but no large monster appears there: Lagiacrus and Barroth "
+                             "were tried in the game. Use it for gathering or small monsters (positions you type, "
+                             "Developer mode, Edit places).").format(name))
+            if any(m["Type"] for m in q.monsters):
+                add("warning", _("Map 9 ({}): the large monsters of this quest will not appear (tested with "
+                                 "Lagiacrus and Barroth in Port Tanzia), so a hunt or slay objective can not be "
+                                 "completed.").format(name))
         else:
             add("error", _("Map 9 loads {} only with the Monster pack installed: install it (else it is the "
                            "Arena).").format(name))
@@ -104,6 +109,10 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
                     "way from the base camp leads to the end of area 2 (seen in the game). The game's quests "
                     "without Ceadeus start the hunters in area 3 (General tab: Hunters start 2).")
 
+    if monsterpack.broken_starts(monster_pack) and any(m["Type"] for m in q.monsters):
+        add("error", _("The Monster pack was built by version 1.8.0 with starts of your own or roaming lists "
+                       "214-255: it breaks the starts of some monsters (Qurupeco, Alatreon in the Great Desert...). "
+                       "Build it again and install it (Monster pack page)."))
     mons = q.monsters
     first_done = False
     seen_empty = False
@@ -198,13 +207,19 @@ def validate_quest(q: Quest, taken_numbers=(), *, in_pack: bool = True,
         if which == 2 and clr == 0 and typ != siege.SHIP_OBJ:
             add("info", "Objective B is filled but the pattern is 'Single objective'.")
 
-    for table, rewards in ((1, q.reward1), (2, q.reward2)):
+    for table in "AB":
+        rewards = q.rewards(table)
         for iid, num, per in rewards:
             if iid >= len(G.ITEMS):
-                add("warning", f"Reward table {table}: unknown item id {iid}.")
+                add("warning", _("Reward table {}: unknown item id {}.").format(table, iid))
                 break
-        if len(rewards) == 0 and table == 1:
-            add("info", "Reward table 1 is empty.")
+        total = sum(per for _i, _n, per in rewards)
+        if rewards and total != 100 and any(per for _i, _n, per in rewards):
+            add("info", _("Reward table {}: the chances add up to {} %. In every table of the game's quests they "
+                          "add up to 100 % (rows at 0 % apart, given every time): Rewards tab, 'To 100 %'.")
+                .format(table, total))
+    if not q.reward_a and not q.reward_b:
+        add("info", "The reward tables are empty.")
 
     reward, penalty = q.get("reward_money"), q.get("penalty")
     if penalty != math.ceil(reward / 3):

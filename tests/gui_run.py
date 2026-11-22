@@ -396,12 +396,13 @@ def run():
     sup._auto()
     check(q2.get("item_set_no") in __import__("mhqe.gamedata", fromlist=["x"]).SUPP_SETS, "supply auto-filled with a game box")
     rew._auto()
-    check(len(q2.reward1) > 0, "rewards auto-filled")
+    check(len(q2.reward_a) > 0 and len(q2.reward_b) > 0, "rewards auto-filled, tables A and B")
+    check(all(sum(c for _i, _n, c in t) == 100 for t in (q2.reward_a, q2.reward_b)), "each table adds up to 100 %")
     sp = {m["Type"] for m in q2.monsters if m["Type"]}
     from mhqe import autofill as AF
-    mats = set().union(*(AF.owners_of(i) for i, _q, _c in q2.reward1))
+    mats = set().union(*(AF.owners_of(i) for i, _q, _c in q2.reward_a))
     check(len(sp & mats) >= min(2, len(sp)), f"rewards hold materials of every monster ({sp & mats} of {sp})")
-    check(any(not AF.owners_of(i) for i, _q, _c in q2.reward1), "rewards also hold non-monster items")
+    check(any(not AF.owners_of(i) for i, _q, _c in q2.reward_b), "table B holds non-monster items")
     app.editor.nb.select(3)
     settle(0.4)
     shot("27_rewards_auto")
@@ -667,6 +668,52 @@ def run():
     shot("33_settings", dlg)
     dlg.destroy()
 
+    # ---- 1.8.1: reward tables A and B, 'To 100 %', clean-up window
+    key = next(e.key for e in app.sources["packs"].entries() if e.group in A.EVENT_PACKS and e.quest is not None)
+    app.open_editor("packs", key)
+    settle(0.5)
+    q3 = app.editor.quest
+    rt = next(t for t in app.editor.tabs if isinstance(t, E.RewardsTab))
+    keep_a, keep_b = q3.reward_a, q3.reward_b
+    q3.set_rewards("A", [(92, 1, 0), (91, 2, 30), (303, 1, 30)])
+    q3.set_rewards("B", [(239, 2, 50), (37, 1, 50)])
+    rt.load(q3)
+    settle(0.2)
+    check(set(rt.trees) == {"A", "B"} and len(rt.trees["A"].get_children()) == 3, "reward tables A and B shown")
+    check("disabled" not in rt.fix_btns["A"].state() and "disabled" in rt.fix_btns["B"].state(),
+          "'To 100 %' offered only for a table that does not add up to 100 %")
+    rt._to_100("A")
+    check(sum(c for _i, _n, c in q3.reward_a) == 100 and q3.reward_a[0] == (92, 1, 0), "'To 100 %' scales table A")
+    app.editor.nb.select(rt)
+    settle(0.3)
+    shot("35_rewards_a_b")
+    q3.set_rewards("A", keep_a)
+    q3.set_rewards("B", keep_b)
+    app.show_home()
+    settle(0.3)
+    fake_c = Path(tempfile.mkdtemp(prefix="fakecitra_")) / "load" / "mods" / G.TITLE_ID
+    (fake_c / "romfs" / "quest" / "eu").mkdir(parents=True)
+    (fake_c / "romfs" / "quest" / "eu" / "q_01101.quest").write_bytes(b"x")
+    (fake_c / "romfs" / "quest" / "btl").mkdir(parents=True)
+    (fake_c / "romfs" / "quest" / "btl" / "q_01101.quest_btl").write_bytes(b"other mod")
+    A.find_all_title_dirs = lambda: [fake_c]
+    cl = A.CleanupDialog(app)
+    settle(0.5)
+    shot("36_cleanup", cl)
+    from mhqe import cleanup as CL
+    cl._remove(CL.editor_mod_files([fake_c]), [fake_c])
+    settle(0.3)
+    check(not (fake_c / "romfs" / "quest" / "eu" / "q_01101.quest").exists()
+          and (fake_c / "romfs" / "quest" / "btl" / "q_01101.quest_btl").exists(),
+          "clean-up removes the editor's quest file and keeps another mod's file")
+    lc = CL.last_cleanup(A.APP_DIR / "backups")
+    check(lc is not None, "the clean-up is kept in the editor's backups")
+    cl._put_back(lc[0])
+    check((fake_c / "romfs" / "quest" / "eu" / "q_01101.quest").exists(), "'Put back' restores it")
+    import shutil as _sh
+    _sh.rmtree(lc[0], ignore_errors=True)
+    cl.destroy()
+
 
 try:
     run()
@@ -678,5 +725,8 @@ finally:
     except Exception:
         pass
 
+if os.environ.get("MHQE_MISSES"):
+    from mhqe import i18n as _i18n
+    Path(os.environ["MHQE_MISSES"]).write_text("\n".join(sorted(_i18n.MISSES)), encoding="utf-8")
 print("\n".join(errors) if errors else "ALL GOOD")
 sys.exit(1 if any(e.startswith(("FAILED", "ERROR", "callback", "Traceback")) for e in errors) else 0)

@@ -107,7 +107,9 @@ what it does, with the values the game's own quests use; the built-in **Guide** 
   times they come back, variant, position).
 * **Supply Box:** the game's boxes, or **your own named boxes** (any items; the game has room for 10).
   A portable Citra is found through the save folder, or with *Choose Citra's folder...* (Settings).
-* **Rewards:** auto-fill from the game's own quests by monster and rank, then edit freely.
+* **Rewards:** tables A and B as the game reads them (they alternate in the quest file), auto-fill from
+  the game's own quests by monster and rank (materials in A, other items in B, each at 100 %), then edit
+  freely.
 * **Text:** quest name, client, description, objectives in the 5 languages.
 * **Safety:** checks that warn about mistakes that can stop a quest from loading (including a quest that
   loads more monster data than any game quest on that kind of map, which can leave the game on *Now
@@ -195,8 +197,15 @@ nobody has tried yet.
 updates the editor in one click. Only the program files are replaced: your library, custom supply
 boxes, roaming lists, base-game edits, settings, backups and mods stay as they are. Before anything is
 written, a zip of your files and a copy of the old program go to `update_backups/`; if writing fails, the
-old version is put back at once, and *Go back to version ...* in the same window undoes an update later.
-(A copy made with `git clone` is updated with git instead.)
+old version is put back at once, and *Go back to version ...* (in the same window, in Settings, and in
+*Settings > Go back, clean up Citra...*) undoes an update later. (A copy made with `git clone` is updated
+with git instead.)
+
+*Settings > Go back, clean up Citra...* can also remove the editor's files from Citra's mods folder
+(base-game quests, supply boxes, Monster pack; other mods are left alone), or put the game back as it was
+before the editor (the same, plus your save's event quest files as they were before your first change).
+Everything removed or replaced is copied first to `backups/cleanup/`, and *Put back the last clean-up*
+undoes it.
 
 <p align="center"><img src="docs/images/night-theme.png" width="640" alt="Night theme"></p>
 
@@ -277,15 +286,17 @@ and picks the game's start list offering the most start areas.
   or *My monster starts...* adds start records for a large monster: another area of a map, and a kind of
   start, by the testers' names: Normal (00 00), Normal+ (00 01), Super 1 (01 00, Brachydios' charged
   start), Super 1+ (01 01), Super 2 / Super 3 (02 01 / 03 01, the charged Zinogre and Stygian Zinogre; on
-  other monsters the effect is unknown). In an area where the monster has no position of its own, the pack
-  copies another monster's positions there; the base camp of most maps has none. They come after the
-  game's own starts, so the game's quests keep their numbers. To make room, the pack points the game's
-  start lists that are identical but for the monster number to one copy. Checked byte by byte by the
-  tests, **not tried in the game**.
+  other monsters the effect is unknown). A start is a point of the map: in an area where the monster has
+  no start of its own, the pack gives it the start point of a monster the game starts there; the base camp
+  of most maps has none. They come after the game's own starts, so the game's quests keep their numbers.
+  About fifteen monster/map pairs fit. Checked byte by byte by the tests (and the game's start-up code run
+  in an emulator), **not tried in the game**. 1.8.0 broke the pack when it had starts of your own (no
+  Qurupeco or Alatreon in the Great Desert): build and install it again.
 * **Experimental: Moga Village / Port Tanzia (Developer mode).** Quest map 9 is never used by the game's
   quests; the pack can make it load the Village or the Port (3 bytes of the program). Port Tanzia loads
-  in Citra and the hunters can walk between its areas, but the large monster did not appear (it uses its
-  Arena positions, outside the Port). Moga Village is untested. Small monsters need positions you type.
+  in Citra and the hunters can walk between its areas, but no large monster appears there (Lagiacrus and
+  Barroth were tried; Lagiacrus' start point is inside the Port's walls, so it is not the position). Use it
+  for gathering or small monsters. Moga Village is untested. Small monsters need positions you type.
 * **Multiplayer:** every player needs the same pack. Built from the same game version it is identical
   for everybody: compare the **fingerprint** on the page.
 * **Real 3DS:** copy the content of the pack folder into `luma\titles\<title id>\` (game patching

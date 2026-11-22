@@ -318,31 +318,38 @@ class BorrowedPositions(unittest.TestCase):
     """A start of your own in an area where the monster has no position: the pack copies the
     positions of another monster there (testers' request: any area, any kind)."""
     def test_editor_and_pack_agree(self):
+        """The start point the dialog names is the one the pack copies."""
         from mhqe import monsterpack as MP, startpos
         game = MP.GameFiles(ROMFS)
-        mons = {em: MP.MonsterData(game.archive(em).read_bytes()) for em in range(1, 86)
-                if game.archive(em).is_file()}
-        for em in (1, 7, 15, 41, 74):
-            for m in (1, 2, 3, 4, 5):
+        rt = MP.runtime_starts(game.code, game.region)
+        self.assertIsNotNone(rt)
+        place = MP.read_placement(game.code, MP.find_placement_table(game.code, game.layout))
+        for em in (1, 3, 7, 15, 41, 74):
+            for m in (1, 2, 3, 4, 5, 13):
                 st = G.MAP_TO_INTERNAL[m]
-                if st not in mons[em].spawn.stages:
+                own = dict(place[em]).get(st)
+                if own is None:
                     continue
                 for area, donor in startpos.start_area_choices(em, m):
-                    if donor is not None:
-                        self.assertEqual(MP.borrow_donor(mons, em, st, area), donor, (em, m, area))
+                    _r, owner = MP.start_template(rt, place, em, st, area, rt[own])
+                    self.assertEqual(owner, donor, (em, m, area))
+                self.assertNotIn(0, [a for a, _d in startpos.start_area_choices(em, m)] if m != 7 else [])
 
     def test_build_with_a_borrowed_area(self):
         from mhqe import monsterpack as MP, startpos
         sys.path.insert(0, os.path.dirname(__file__))
-        em, m = 1, 1                                   # Rathian on the Deserted Island
-        own = set(startpos.spawn_areas(em, m))
-        area, donor = next((a, d) for a, d in startpos.start_area_choices(em, m) if d)
-        self.assertNotIn(area, own)
+        em, m = 3, 13                                  # Qurupeco on the Misty Peaks (HYPER PECO, a tester's quest)
+        own = set(startpos.areas(em, m, game_only=True))
+        choices = dict(startpos.start_area_choices(em, m))
+        self.assertEqual(choices.get(8), 1)            # area 8: Rathian's start point
+        self.assertNotIn(8, own)
         tmp = Path(tempfile.mkdtemp())
-        starts = [{"em": em, "map": m, "area": area, "form": 1, "flag": 0}]
+        starts = [{"em": em, "map": m, "area": 4, "form": 0, "flag": None},
+                  {"em": em, "map": m, "area": 8, "form": 1, "flag": 0}]
         man = MP.build(ROMFS, tmp / "p", log=lambda s: None, extras={"starts": starts})
-        x = man["starts"][0]
-        self.assertEqual((x["area"], x["positions_from"]), (area, donor))
+        x = man["starts"][1]
+        self.assertEqual((x["area"], x["start_from"], x["index"]), (8, 1, 3))
+        area, donor = 8, 1
         from mhqe import arc
         a = arc.read(tmp / "p" / "romfs" / "arc" / "enemy" / f"em{em:03d}.arc")
         e = next(e for e in a.entries if e.leaf == "em_mappos00")
@@ -352,7 +359,7 @@ class BorrowedPositions(unittest.TestCase):
         donor_pos = MP.MonsterData(MP.GameFiles(ROMFS).archive(donor).read_bytes()).spawn.stages[
             G.MAP_TO_INTERNAL[m]][area].pos
         self.assertEqual(st[area].pos, donor_pos)
-        self.assertEqual(set(st) - {area}, own)       # its own areas unchanged
+        self.assertEqual(set(st) - {area}, set(startpos.spawn_areas(em, m)))       # its own areas unchanged
 
     def test_base_camp_is_refused(self):
         from mhqe import startpos

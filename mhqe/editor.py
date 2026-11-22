@@ -2726,13 +2726,13 @@ class RewardsTab(Tab):
         auto = ttk.Frame(body)
         auto.grid(row=1, column=0, columnspan=2, sticky="w", padx=6, pady=(8, 0))
         ttk.Button(auto, text="Fill from the quest's monsters and rank...", command=self._auto).pack(side="left")
-        info(auto, "Builds table A from the game's own quests: the materials of each large monster of this "
-                   "quest, plus the other items the game gives at that rank and zone (spheres, charms, "
-                   "ores, bones, bugs...). The dialog says what it is based on. Everything stays editable.").pack(
-            side="left", padx=4)
-        for table in (1, 2):
-            s = Section(body, f"Reward table {'AB'[table - 1]}", H.tip("rewards"))
-            s.grid(row=0, column=table - 1, sticky="nsew", padx=6)
+        info(auto, "Builds both tables from the game's own quests: table A with the materials of each large "
+                   "monster of this quest, table B with the other items the game gives at that rank and zone "
+                   "(spheres, charms, ores, bones, bugs...). The dialog says what it is based on. Everything "
+                   "stays editable.").pack(side="left", padx=4)
+        for table in "AB":
+            s = Section(body, _("Reward table {}").format(table), H.tip("rewards"))
+            s.grid(row=0, column="AB".index(table), sticky="nsew", padx=6)
             tree = ttk.Treeview(s.body, columns=("qty", "chance"), height=12, selectmode="browse",
                                 style="Item.Treeview")
             tree.heading("#0", text="Item", anchor="w")
@@ -2750,12 +2750,25 @@ class RewardsTab(Tab):
                               (UP, lambda t: self._move(t, -1)), (DOWN, lambda t: self._move(t, 1))):
                 ttk.Button(bar, text=text, command=lambda c=cmd, t=table: c(t),
                            width=3 if len(text) == 1 else None).pack(side="left", padx=(0, 4))
-            tot = ttk.Label(bar, text="", style="Card.Muted.TLabel")
-            tot.pack(side="right")
+            bar2 = ttk.Frame(s.body, style="Card.TFrame")
+            bar2.pack(fill="x", pady=(4, 0))
+            fix = ttk.Button(bar2, text=_("To 100 %"), command=lambda t=table: self._to_100(t))
+            fix.pack(side="right")
+            Tooltip(fix, _("Scale the chances so that they add up to 100 %, as in every table of the game's quests "
+                           "(rows at 0 % stay at 0: given every time)."))
+            tot = ttk.Label(bar2, text="", style="Card.Muted.TLabel")
+            tot.pack(side="left")
             self.trees[table], self.totals[table] = tree, tot
+            self.fix_btns = getattr(self, "fix_btns", {})
+            self.fix_btns[table] = fix
 
     def _rows(self, t):
-        return list(self.q.reward1 if t == 1 else self.q.reward2)
+        return list(self.q.rewards(t))
+
+    def _to_100(self, t):
+        rows = self._rows(t)
+        if rows:
+            self._write(t, autofill.to_100(rows))
 
     def _auto(self):
         q = self.q
@@ -2774,7 +2787,7 @@ class RewardsTab(Tab):
         plan = autofill.reward_plan(q, pool)
         if not plan:
             return
-        if any(self._rows(t) for t in (1, 2)) and not messagebox.askyesno(
+        if any(self._rows(t) for t in "AB") and not messagebox.askyesno(
                 "Quest rewards", "Replace the current reward tables?", parent=self):
             return
         autofill.apply_reward_plan(q, plan)
@@ -2782,7 +2795,7 @@ class RewardsTab(Tab):
         self.editor.changed()
 
     def load(self, q):
-        for t in (1, 2):
+        for t in "AB":
             self._fill(t, self._rows(t))
 
     def _fill(self, t, rows):
@@ -2793,11 +2806,14 @@ class RewardsTab(Tab):
             tree.insert("", "end", iid=str(i), text="  " + name, image=self.app.icons.item(iid),
                         values=(qty, f"{ch} %"), tags=("odd",) if i % 2 else ())
         total = sum(r[2] for r in rows)
-        self.totals[t].configure(text=f"{len(rows)}/32 items · {total} %")
+        off = bool(rows) and total != 100 and any(r[2] for r in rows)
+        self.totals[t].configure(text=f"{len(rows)}/32 items · {total} %", style="Card.Warn.TLabel" if off
+                                 else "Card.Muted.TLabel")
+        self.fix_btns[t].configure(state="normal" if off else "disabled")
 
     def _write(self, t, rows, select=None):
         try:
-            self.q.set_reward_table(t, rows)
+            self.q.set_rewards(t, rows)
         except QuestFormatError as exc:
             messagebox.showerror("Rewards", str(exc), parent=self)
             return
@@ -3560,9 +3576,11 @@ class OwnStartsDialog(tk.Toplevel):
             "A start of your own puts a large monster in another area of a map, or gives it one of the game's "
             "special forms. The Monster pack adds it after the game's own starts of that monster on that map "
             "(their numbers do not change): build and install the pack again after a change, then choose the "
-            "new number in the card's 'Starts in' list. The position inside the area is the monster's own; in "
-            "an area where it has none, the pack copies the positions of another monster (marked in the list). "
-            "The base camp of most maps has no monster position, so no start can go there. Kinds: bytes 11 "
+            "new number in the card's 'Starts in' list. A start is a point of the map, kept in the game's start "
+            "lists: in an area where the monster has no start of its own, the pack gives it the start point of a "
+            "monster the game starts there (marked in the list). The game starts no monster in the base camp of "
+            "most maps, so no start can go there. A start of your own copies the monster's whole start list on "
+            "that map: about fifteen monster/map pairs fit. Kinds: bytes 11 "
             "and 12 of a start. The game only uses Super 1 for Brachydios and Super 2 and 3 for Zinogre and "
             "Stygian Zinogre; on another monster the effect is unknown and the game may crash. The meaning of "
             "byte 12 alone ('+') is unknown: the game uses 0 and 1 on ordinary starts too.")).pack(anchor="w", pady=(4, 8))
@@ -3665,7 +3683,7 @@ class OwnStartsDialog(tk.Toplevel):
             choices = sorted(choices + [(x["area"], None)])
         self._areas = [a for a, _d in choices]
         self.area_box.configure(values=[_(startpos.area_label(x["map"], a)) + (
-            "  " + _("(positions of {})").format(G.mon_name(d)) if d else "") for a, d in choices])
+            "  " + _("(start point of {})").format(G.mon_name(d)) if d else "") for a, d in choices])
         self.area_box.current(self._areas.index(x["area"]))
         self._kinds = [(f, b) for f, b, _t in self.KINDS]
         if (x["form"], x["flag"]) not in self._kinds:
@@ -3689,7 +3707,7 @@ class OwnStartsDialog(tk.Toplevel):
         x = self.items[i]
         x[key] = value
         if key in ("em", "map"):
-            ar = startpos.spawn_areas(x["em"], x["map"], self.pack_man)
+            ar = [a for a, _d in startpos.start_area_choices(x["em"], x["map"], self.pack_man)]
             if ar and x["area"] not in ar:
                 x["area"] = ar[0]
         self._fill()
@@ -3710,7 +3728,7 @@ class OwnStartsDialog(tk.Toplevel):
             if not em or not monsterpack.is_large(em):
                 return
         mp = self.map_hint if self.map_hint in self.maps else self.maps[0]
-        ar = startpos.spawn_areas(em, mp, self.pack_man)
+        ar = [a for a, _d in startpos.start_area_choices(em, mp, self.pack_man)]
         x = {"em": em, "map": mp, "area": ar[0] if ar else 1, "form": 0, "flag": None}
         if len([y for y in self.items if y["em"] == em and y["map"] == mp]) >= 8:
             return
@@ -3757,8 +3775,7 @@ class RoamingListsDialog(tk.Toplevel):
             "the list the quest used; change its Health, Attack and Toughness rows (0 to 127, as on the Monsters "
             "tab) and its size here. The game draws among the first 3 monsters of a list only.\n"
             "Numbers 214 to 255 (marked +) do not exist in the game: the Monster pack makes room for them by "
-            "moving the game's table of lists (and sharing its duplicate start lists, as for starts of your "
-            "own). Untested in the game.")).pack(anchor="w", pady=(4, 8))
+            "moving the game's table of lists. Untested in the game.")).pack(anchor="w", pady=(4, 8))
         top = ttk.Frame(f)
         top.pack(anchor="w", fill="x")
         ttk.Label(top, text=_("List")).pack(side="left")

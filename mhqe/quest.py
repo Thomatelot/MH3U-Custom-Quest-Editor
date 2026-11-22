@@ -35,8 +35,8 @@ MON_SIZE = len(MON_FIELDS)
 NANDO_FIELDS = ("Nando_hp", "Nando_at", "Nando_etc")
 NANDO_MAX = 127
 
-REWARD_SLOTS = 32
-REWARD_REGION = REWARD_SLOTS * 4 * 2          # Reward1 + Reward2, 4 bytes/slot
+REWARD_SLOTS = 32                             # rows per reward table (A and B alternate in 64 slots)
+REWARD_REGION = REWARD_SLOTS * 4 * 2          # 64 slots of 4 bytes
 MIN_AFTER_REWARDS = 94                        # fixed cluster that must follow
 
 CLR_PATTERNS = {0: "Single objective", 1: "Objective A and B",
@@ -285,45 +285,51 @@ class Quest:
         self.set_monster(slot, **{k: values[k] for k in MON_FIELDS})
 
     # ----------------------------------------------------------------- rewards
-    def _read_rewards(self, table: int) -> list[tuple[int, int, int]]:
-        start = self._rewards_start + (table - 1) * REWARD_SLOTS * 4
+    # 64 slots of 4 bytes (u16 item, u8 quantity, u8 chance %). The game reads them as two tables that
+    # alternate: even slots = table A, odd slots = table B (found by a tester, checked on all 403 quests
+    # of the game: each table's chances add up to 100 %, rows at 0 % come first and add nothing). A table
+    # ends at its first empty slot; the other table goes on.
+    def _read_column(self, col: int) -> list[tuple[int, int, int]]:
         recs = []
         for i in range(REWARD_SLOTS):
-            iid, num, per = struct.unpack_from("<HBB", self.data, start + i * 4)
-            if iid == 0 or (iid == 5 and num == 0 and per == 0):
+            iid, num, per = struct.unpack_from("<HBB", self.data, self._rewards_start + (2 * i + col) * 4)
+            if iid == 0:
                 break
             recs.append((iid, num, per))
         return recs
 
     @property
-    def reward1(self) -> list[tuple[int, int, int]]:
-        return self._read_rewards(1)
+    def reward_a(self) -> list[tuple[int, int, int]]:
+        return self._read_column(0)
 
     @property
-    def reward2(self) -> list[tuple[int, int, int]]:
-        return self._read_rewards(2)
+    def reward_b(self) -> list[tuple[int, int, int]]:
+        return self._read_column(1)
 
-    def set_reward_table(self, table: int, records) -> None:
-        """Write (item_id, quantity, chance%) rows. The list ends at the first
-        item id 0, so the slot after the last row is cleared."""
-        if table not in (1, 2):
-            raise QuestFormatError("reward table must be 1 or 2")
+    def rewards(self, table: str) -> list[tuple[int, int, int]]:
+        return self._read_column("AB".index(table))
+
+    def set_rewards(self, table: str, records) -> None:
+        """Write (item_id, quantity, chance%) rows into table 'A' or 'B'. The table ends at the first empty
+        slot, so the slot after the last row is cleared."""
+        if table not in ("A", "B"):
+            raise QuestFormatError("reward table must be A or B")
+        col = "AB".index(table)
         records = [(int(i), int(n), int(p)) for i, n, p in records]
         if len(records) > REWARD_SLOTS:
             raise QuestFormatError(f"at most {REWARD_SLOTS} rewards per table")
         for iid, num, per in records:
             if not (1 <= iid <= 0xFFFF and 0 <= num <= 255 and 0 <= per <= 255):
                 raise QuestFormatError("reward values out of range")
-        start = self._rewards_start + (table - 1) * REWARD_SLOTS * 4
-        old = len(self._read_rewards(table))
+        old = len(self._read_column(col))
+        at = lambda i: self._rewards_start + (2 * i + col) * 4          # noqa: E731
         for i, (iid, num, per) in enumerate(records):
-            struct.pack_into("<HBB", self.data, start + i * 4, iid, num, per)
+            struct.pack_into("<HBB", self.data, at(i), iid, num, per)
         if len(records) != old:
-            # zero removed rows and the terminator slot after the new list;
-            # untouched bytes past an unchanged list are left exactly as found
-            clear_to = min(max(old, len(records) + 1), REWARD_SLOTS)
-            for i in range(len(records), clear_to):
-                struct.pack_into("<HBB", self.data, start + i * 4, 0, 0, 0)
+            # zero removed rows and the slot after the new list; untouched bytes past an unchanged
+            # list are left exactly as found
+            for i in range(len(records), min(max(old, len(records) + 1), REWARD_SLOTS)):
+                struct.pack_into("<HBB", self.data, at(i), 0, 0, 0)
 
     # -------------------------------------------------------------- objectives
     def objective(self, which: int) -> tuple[int, int, int, int]:
@@ -385,8 +391,8 @@ def identity_rewrite(data: bytes) -> bytes:
         q.set(name, q.get(name))
     for slot, mon in enumerate(q.monsters):
         q.set_monster(slot, **mon)
-    q.set_reward_table(1, q.reward1)
-    q.set_reward_table(2, q.reward2)
+    q.set_rewards("A", q.reward_a)
+    q.set_rewards("B", q.reward_b)
     for field in STRING_FIELDS:
         for lang in range(NLANG):
             q.set_text(field, q.get_raw_text(field, lang), langs=[lang])

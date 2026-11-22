@@ -106,27 +106,34 @@ def spawn_areas(em: int, map_id: int, pack: dict | None = None) -> list[int]:
     return []
 
 
+try:
+    _T = json.loads((G.DATA_DIR / "start_records.json").read_text(encoding="utf-8")).get("area_starts", {})
+except (OSError, ValueError):
+    _T = {}
+
+
 def borrow_donor(em: int, map_id: int, area: int, pack: dict | None = None) -> int | None:
-    """For a start of your own in an area where the monster has no position: the large monster
-    whose positions in that area the Monster pack copies (the lowest number that has some), or None
-    when the monster has its own there or no monster has any (the base camp of most maps). The pack
-    uses the same rule (monsterpack.borrow_donor)."""
-    if area in spawn_areas(em, map_id, pack):
+    """For a start of your own in an area where the monster's start list on this map has no start:
+    the monster whose start point the Monster pack copies there (the game starts it in that area; an
+    ordinary start of the lowest-numbered monster first, as monsterpack.start_template), or None when
+    the monster has a start there itself or the game starts no monster there (the base camp of most
+    maps)."""
+    if area in (areas(em, map_id, pack, game_only=True) or []):
         return None
-    internal = str(G.MAP_TO_INTERNAL.get(map_id))
-    for k in sorted(_S, key=int):
-        if int(k) != em and area in _S[k].get(internal, []):
-            return int(k)
+    for e2 in _T.get(str(G.MAP_TO_INTERNAL.get(map_id)), {}).get(str(area), []):
+        if e2 != em:
+            return int(e2)
     return None
 
 
 def start_area_choices(em: int, map_id: int, pack: dict | None = None) -> list[tuple[int, int | None]]:
-    """[(area, donor)] a start of your own can use: the monster's own areas (donor None), then the
-    areas where only other monsters have positions (copied from the donor by the pack)."""
-    own = spawn_areas(em, map_id, pack)
-    internal = str(G.MAP_TO_INTERNAL.get(map_id))
-    every = sorted({a for st in _S.values() for a in st.get(internal, [])} | set(own))
-    return [(a, None if a in own else borrow_donor(em, map_id, a, pack)) for a in every]
+    """[(area, monster)] a start of your own can use: the areas of the monster's own starts on this map
+    (monster None), then the areas where the game starts another monster (its start point is copied).
+    The game starts no monster in the base camp of most maps: no start can go there."""
+    own = areas(em, map_id, pack, game_only=True) or []
+    every = sorted({int(a) for a in _T.get(str(G.MAP_TO_INTERNAL.get(map_id)), {})} | set(own))
+    out = [(a, None if a in own else borrow_donor(em, map_id, a, pack)) for a in every]
+    return [(a, d) for a, d in out if a in own or d is not None]
 
 
 def game_start_count(em: int, map_id: int, pack: dict | None = None) -> int | None:
@@ -155,25 +162,25 @@ def custom_problems(x: dict, pack: dict | None = None) -> list[str]:
     if G.MAP_TO_INTERNAL.get(x["map"]) is None:
         out.append(_("This map has no monster starts."))
         return out
-    ar = spawn_areas(x["em"], x["map"], pack)
     if game_start_count(x["em"], x["map"], pack) is None:
         out.append(_("This monster does not go on this map (not in the game; the pack adds it once built)."))
-    elif ar and x["area"] not in ar:
+    elif x["area"] not in (areas(x["em"], x["map"], pack, game_only=True) or []):
         donor = borrow_donor(x["em"], x["map"], x["area"], pack)
         if donor is None:
-            out.append(_("No monster has a position in this area of this map (the base camp of most maps): "
-                         "the game would not know where to put it."))
+            out.append(_("The game starts no monster in this area of this map (the base camp of most maps): "
+                         "there is no start point to give it."))
         else:
-            out.append(_("The monster has no position of its own in this area: the pack copies those of {}. "
-                         "Untested: it may stand still or not leave the area.").format(G.mon_name(donor)))
+            out.append(_("The monster has no start of its own in this area: the pack gives it the start point "
+                         "of {}. Untested: it may stand still or not leave the area.").format(G.mon_name(donor)))
     if x.get("form") and x["form"] not in {74: (1,), 41: (2, 3), 72: (2, 3)}.get(x["em"], ()):
         out.append(_("The game never gives this form to this monster: unknown effect, it may crash."))
     return out
 
 
-def areas(em: int, map_id: int, pack: dict | None = None) -> list[int] | None:
+def areas(em: int, map_id: int, pack: dict | None = None, game_only: bool = False) -> list[int] | None:
     """Start area of each position for this monster on this map (index = Starttype), from the
-    game's own table, or from the monster pack for a combination the pack adds. None if unknown."""
+    game's own table, or from the monster pack for a combination the pack adds. None if unknown.
+    game_only: without the starts of your own."""
     internal = G.MAP_TO_INTERNAL.get(map_id)
     if internal is None:
         return None
@@ -185,7 +192,7 @@ def areas(em: int, map_id: int, pack: dict | None = None) -> list[int] | None:
                 break
     mine = sorted((x for x in (pack or {}).get("starts") or [] if x["em"] == em and x["stage"] == internal),
                   key=lambda x: x["index"])
-    if out is None or not mine:
+    if out is None or not mine or game_only:
         return out
     out = list(out[:mine[0]["index"]])          # yours come right after the game's starts
     for x in mine:

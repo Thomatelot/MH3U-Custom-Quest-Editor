@@ -152,16 +152,16 @@ class Edits(unittest.TestCase):
         self.assertEqual(q.get("quest_no"), 1302)
         q.set_monster(1, Type=2, Num=1)
         self.assertEqual(q.monsters[1]["Type"], 2)
-        q.set_reward_table(1, [(5, 1, 100), (6, 2, 50)])
-        self.assertEqual(q.reward1, [(5, 1, 100), (6, 2, 50)])
-        q.set_reward_table(1, [(7, 3, 20)])
-        self.assertEqual(q.reward1, [(7, 3, 20)])
+        q.set_rewards("A", [(5, 1, 100), (6, 2, 50)])
+        self.assertEqual(q.reward_a, [(5, 1, 100), (6, 2, 50)])
+        q.set_rewards("A", [(7, 3, 20)])
+        self.assertEqual(q.reward_a, [(7, 3, 20)])
         q.set_objective(1, 0x0001, 12, 2)
         self.assertEqual(q.objective(1), (1, q.objective(1)[1], 12, 2))
         with self.assertRaises(QuestFormatError):
             q.set("star", 999)
         with self.assertRaises(QuestFormatError):
-            q.set_reward_table(1, [(1, 1, 1)] * 33)
+            q.set_rewards("A", [(1, 1, 1)] * 33)
         self.assertEqual(Quest(q.to_bytes()).get_text("name", 0), "Short")
 
 

@@ -381,15 +381,15 @@ def apply(q, d, *, pack=None, source_no=None, donors=()) -> list[str]:
         if res:
             autofill.apply_supply(q, res[0])
             notes.append(_(res[1]))
-        if d["rewards"]["auto"]:
-            plan = autofill.reward_plan(q, pool)
-            if plan:
-                autofill.apply_reward_plan(q, plan)
-                notes.append(_("Rewards: chosen automatically from the game's quests of the same rank "
-                               "(see the Rewards tab)."))
-    if not d["rewards"]["auto"]:
-        q.set_reward_table(1, d["rewards"]["items"])
-        q.set_reward_table(2, [])
-    elif not autofill.available():
+    if d["rewards"]["auto"] and autofill.available():
+        plan = autofill.reward_plan(q, pool)
+        if plan:
+            autofill.apply_reward_plan(q, plan)
+            notes.append(_("Rewards: chosen automatically from the game's quests of the same rank "
+                           "(see the Rewards tab)."))
+    elif not d["rewards"]["auto"]:
+        q.set_rewards("A", d["rewards"]["items"])           # the phone has one list: table A, table B empty
+        q.set_rewards("B", [])
+    else:
         notes.append(_("Rewards: those of the quest it was copied from were kept."))
     return notes

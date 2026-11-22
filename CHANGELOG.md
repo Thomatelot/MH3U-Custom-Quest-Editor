@@ -1,5 +1,49 @@
 # Changelog
 
+## 1.8.1
+
+Testers' reports. Checked by the tests and the scripted run of the window; **untested in the game**
+unless said otherwise.
+
+* **Fix: starts of your own broke the Monster pack** (a tester's *HYPER PECO*: after building the pack
+  with a Qurupeco start of his own, no Qurupeco appeared anywhere, nor his Alatreon in the Great Desert;
+  removing the starts and building again fixed it). The cause, found in the game's code: the start
+  positions are not in code.bin's start lists but written into them when the game starts (by one of its
+  static initialisers, the same address in the European and North American versions). To make room,
+  1.8.0 shared the game's "duplicate" start lists and wrote its own lists over the freed ones; at boot
+  the game wrote its positions over them again. Now:
+  * nothing is written over the game's start lists any more (the pack checks it; a test runs the game's
+    initialisers in an emulator and finds none of the pack's bytes rewritten);
+  * the room comes from the placement lists instead: the game takes the first entry of a map in a
+    monster's list, so a list can be "what differs, then another monster's list". About 4 KB are free
+    once every monster has every map: about fifteen monster/map pairs with starts of your own;
+  * a start of your own now has a real start point: the monster's own start in that area, else the start
+    point of a monster the game starts there (shown in *My monster starts*; until now its position was
+    0, 0, 0). Areas where the game starts no monster are refused (the base camp of most maps);
+  * a pack built by 1.8.0 with starts of your own or roaming lists 214-255 is flagged on the Monster pack
+    page and in the quest checks: **build the pack again and install it.**
+* **Reward tables A and B** (found by a tester): the 64 reward slots of a quest hold two tables that
+  alternate line by line, A on the even slots and B on the odd ones; each table ends at its first empty
+  line and the other goes on (checked on the game's 403 quests: every table adds up to 100 %). Until now
+  the editor showed one list and stopped at the first gap, so the last lines of some game quests were
+  missing ("Forecast: Lagombi", a tester's Gobul quest) and an older quest may now show some items in
+  table B: check the totals. The Rewards tab shows tables A and B (32 lines each), the total in orange when
+  it is not 100 %, and *To 100 %* to fix it.
+* **Filling the rewards from the monsters:** table A gets the monsters' materials, table B the other items
+  of that rank and zone, each table at 100 % (until now everything went to one list at 200 %). Monsters
+  with few game quests get all their materials: Ceadeus now gets Ceadeus Hide, Ceadeus Scale, Luminous
+  Organ, Ceadeus Fur and Deep Dragongem instead of the hide alone (an item that one game quest gives now
+  belongs to that quest's monster; one that two or three quests give can belong to each of their monsters).
+* **Go back, clean up Citra** (Settings): go back to the version of the editor you had before the last
+  update (also in Settings > Updates); remove the editor's files from Citra's mods folder (base-game
+  quests, supply boxes, Monster pack; other mods are left alone); or go back to the game as it was before
+  the editor (the same, plus the event quest files put back as they were before your first change). Every
+  file removed or replaced is copied first to `backups/cleanup` in the editor's folder, and *Put back the
+  last clean-up* undoes it.
+* **Moga Village and Port Tanzia (map 9):** a tester saw no Barroth appear in Port Tanzia, after
+  Lagiacrus. Lagiacrus' start point is inside the Port's walls, so the hubs simply do not take large
+  monsters: the checks now say so (use map 9 for gathering or small monsters).
+
 ## 1.8.0
 
 Reports from the testers. Checked by the tests and the scripted run of the window; **untested in the

@@ -92,7 +92,7 @@ class DraftToQuest(unittest.TestCase):
         mons = [m for m in q.monsters if m["Type"]]
         self.assertEqual([m["Type"] for m in mons], [1])
         self.assertEqual(q.objective(1)[:1] + q.objective(1)[2:], (1, 1, 1))
-        self.assertTrue(q.reward1)                    # automatic rewards
+        self.assertTrue(q.reward_a and q.reward_b)    # automatic rewards, both tables
 
     def test_copies_become_cards(self):
         d = draft(map=5, star=7, rank=4, monsters=[{"em": 2, "count": 2, "size": 125, "strength": "Port 8"},
@@ -106,8 +106,8 @@ class DraftToQuest(unittest.TestCase):
         self.assertNotEqual(mons[0]["Starttype"], mons[1]["Starttype"])   # copies start apart
         self.assertEqual(q.objective(1)[0], 0x0081)
         self.assertTrue(waves.in_sync(q))
-        self.assertEqual(q.reward1, [(10, 2, 100)])
-        self.assertEqual(q.reward2, [])
+        self.assertEqual(q.reward_a, [(10, 2, 100)])
+        self.assertEqual(q.reward_b, [])
 
     def test_delivery_and_three_rules(self):
         q, notes = self.make(draft(objective={"kind": "deliver", "item": 10, "count": 3}, monsters=[],

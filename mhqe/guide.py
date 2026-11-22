@@ -260,12 +260,15 @@ def _rewards_text():
             "times of a Challenge quest or Grudge Match. Names are the game's own.")
         )),
         ("Reward tables A and B", _(H.tip("rewards")) + _("\n\nAdd..., Edit..., Remove and ▲ ▼ edit a table (up to 32 lines). "
-         "The total chance of a table is shown under it.")),
+         "The total chance of a table is shown under it, in orange when it is not 100 %: 'To 100 %' scales the chances "
+         "(rows at 0 % stay at 0).")),
         ("Fill from the quest's monsters and rank", (
-            _("Builds table A from the game's own quests: the materials of each large monster of the quest, then the "
-            "other items the game gives at that rank and zone (armor spheres, charms, ores, bones, bugs...). Each item "
-            "belongs to the few monsters whose quests give it, so shared materials go to the right monsters. The dialog "
-            "says what it is based on. Everything stays editable.")
+            _("Builds both tables from the game's own quests: table A with the materials of each large monster of the "
+            "quest (and a few other items when the monsters have few), table B with the other items the game gives at "
+            "that rank and zone (armor spheres, charms, ores, bones, bugs...). Each item belongs to the few monsters "
+            "whose quests give it, so shared materials go to the right monsters; an item that a single game quest gives "
+            "belongs to its monster (Ceadeus Fur). Each table adds up to 100 %. The dialog says what it is based on. "
+            "Everything stays editable.")
         )),
         ("Text tab", (
             _("The game stores every text in English, French, German, Italian and Spanish; the console language decides "
@@ -320,6 +323,18 @@ def _files():
             "the 5 most recent copies of each quest are kept (Settings > Backups). Never deleted, whatever the "
             "settings: backups/original/, the very first full backup and the first copy of every quest (marked with "
             "a lock). The cleanup only ever deletes inside backups/full and backups/quests.")
+        )),
+        ("Going back, cleaning up Citra", (
+            _("Settings > Go back, clean up Citra...:\n"
+            "• Go back to version ...: the program files of the version you had before the last update (kept in "
+            "update_backups/). Your quests, boxes and settings do not change.\n"
+            "• Remove the editor's mods from Citra: the base-game quests, supply boxes and Monster pack that the editor "
+            "put in <Citra>/load/mods/<title id>. Other mods (a font, .quest_btl files...) are left alone; your event "
+            "quests stay in the game.\n"
+            "• Go back to before the editor: the same, plus your save's event quest files put back as they were before "
+            "your first change (from backups/original/). To remove the editor itself afterwards, delete its folder.\n"
+            "Every file removed or replaced is copied first to backups/cleanup/<date>/ in the editor's folder, and "
+            "'Put back the last clean-up' copies it back. Close Citra first.")
         )),
         ("Good habits", (
             _("Close Citra before saving. Test on Citra before a real 3DS. Keep one slot per experiment. Share quests as "

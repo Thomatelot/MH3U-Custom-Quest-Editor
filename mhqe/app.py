@@ -24,7 +24,7 @@ from . import autofill, guide, spawns, supp
 from . import gamedata as G
 from . import monsterpack
 from . import helptext as H
-from . import arena, i18n, phone, picker, progress, startpos, strays, theme, updater
+from . import arena, cleanup, i18n, phone, picker, progress, startpos, strays, theme, updater
 from .i18n import _
 from .editor import EditorPage, OwnStartsDialog, stars
 from .finder import Finder
@@ -32,7 +32,7 @@ from .icons import ASSETS, Icons
 from .library import LibrarySource
 from .packs import DATA as PACK_DATA, PackError
 from .project import (APP_DIR, Backups, PackSource, RomSource, Settings, citra_root_of, find_emulator_mod_dirs,
-                      set_extra_roots,
+                      set_extra_roots, find_all_title_dirs,
                       find_emulator_title_dirs, pack_dir_region, regions_with_saves,
                       find_emulator_pack_dirs, find_pack_dir, find_romfs, read_base_numbers, romfs_region)
 from .quest import Quest, QuestFormatError
@@ -471,13 +471,22 @@ class MonsterPackPage(ttk.Frame):
                   text=(_(f"Pack built: {len(built.get('added', []))} monster/map combinations added for "
                           f"{len(built.get('monsters', []))} monsters.")
                         + "  " + _(f"Fingerprint {built.get('fingerprint')}.")
-                        + ("  " + _("Built by an older version of the editor (no big sizes or no Great Desert "
-                                    "area 2): build it again.") if old_pack else "")
+                        + ("  " + (_("Built by version 1.8.0 with starts of your own or roaming lists 214-255: "
+                                     "it breaks the starts of some monsters (Qurupeco, Alatreon in the Great "
+                                     "Desert...). Build it again and install it.")
+                                   if monsterpack.broken_starts(built) else
+                                   _("Built by an older version of the editor (no big sizes or no Great Desert "
+                                     "area 2): build it again.")) if old_pack else "")
                         if built else _("Pack not built yet."))).pack(anchor="w", pady=(4, 0))
         if built and not monsterpack.extras_match(built, app.pack_extras()):
             ttk.Label(f, style="Card.Warn.TLabel", text=_(
                 "Your new base-game quests, roaming-monster lists or monster starts changed since the pack was "
                 "built: build it again, then install it.")).pack(anchor="w")
+        if inst and monsterpack.broken_starts(inst):
+            ttk.Label(f, style="Card.Warn.TLabel", wraplength=900, justify="left", text=_(
+                "The pack installed in Citra was built by version 1.8.0 with starts of your own or roaming lists "
+                "214-255: it breaks the starts of some monsters (Qurupeco, Alatreon in the Great Desert...). "
+                "Build the pack again, then install it.")).pack(anchor="w")
         if inst:
             same = built and built.get("fingerprint") == inst.get("fingerprint")
             ttk.Label(f, style="Card.Ok.TLabel" if same or not built else "Card.Warn.TLabel", text=(
@@ -2207,12 +2216,23 @@ class SettingsDialog(Dialog):
             "backup and the first copy of every quest.")).pack(anchor="w")
         ttk.Label(f, text=f"Library and backups are kept next to the program:\n{short_path(APP_DIR, 90)}",
                   style="Muted.TLabel").pack(anchor="w", pady=(10, 0))
+        crow2 = ttk.Frame(f)
+        crow2.pack(anchor="w", pady=(4, 0))
+        ttk.Button(crow2, text=_("Go back, clean up Citra..."),
+                   command=lambda: (self.destroy(), CleanupDialog(app))).pack(side="left")
+        info(crow2, _("The previous version of the editor, Citra without the editor's mods, or the game as it was "
+                      "before the editor. Everything removed is copied first to the editor's 'backups' folder."))\
+            .pack(side="left", padx=4)
         ttk.Label(f, text="Updates", style="H3.TLabel").pack(anchor="w", pady=(12, 2))
         ur = ttk.Frame(f)
         ur.pack(anchor="w")
         ttk.Label(ur, text=_("Installed version: {}").format(__version__)).pack(side="left")
         ttk.Button(ur, text="Check for updates...", command=lambda: (self.destroy(), UpdateDialog(app))).pack(
             side="left", padx=10)
+        last = updater.last_update(APP_DIR)
+        if last:
+            ttk.Button(ur, text=_("Go back to version {}").format(last[1].get("from", "?")),
+                       command=lambda: (self.destroy(), go_back_version(app, last[0], last[1]))).pack(side="left")
         b = ttk.Frame(f)
         b.pack(fill="x", pady=(14, 0))
         ttk.Button(b, text="OK", style="Accent.TButton", command=self._ok).pack(side="right")
@@ -2382,16 +2402,171 @@ class UpdateDialog(Dialog):
         restart(self.app)
 
     def _undo(self, bdir, info):
-        if not messagebox.askyesno(APP_TITLE, _(
-                "Put back version {} of the program? Your quests, boxes and settings are not changed. "
-                "The editor then restarts.").format(info.get("from", "?")), parent=self):
+        go_back_version(self.app, bdir, info, parent=self)
+
+
+def go_back_version(app, bdir, info, parent=None) -> None:
+    """Put back the program files of the version before the last update, then restart."""
+    if not messagebox.askyesno(APP_TITLE, _(
+            "Put back version {} of the program? Your quests, boxes and settings are not changed. "
+            "The editor then restarts.").format(info.get("from", "?")), parent=parent or app):
+        return
+    try:
+        updater.undo(APP_DIR, bdir)
+    except (OSError, ValueError) as exc:
+        messagebox.showerror(APP_TITLE, str(exc), parent=parent or app)
+        return
+    restart(app)
+
+
+class CleanupDialog(Dialog):
+    """Go back: the previous version of the editor, Citra without the editor's mods, the game as it was
+    before the editor; and put back what the last clean-up removed (cleanup.py)."""
+
+    def __init__(self, app):
+        super().__init__(app, _("Go back, clean up Citra"))
+        self.root_dir = APP_DIR / "backups"
+        f = ttk.Frame(self, padding=18)
+        f.pack(fill="both", expand=True)
+        self.body = f
+        self.fill()
+        self.finish()
+
+    def _event_pairs(self):
+        """[(event quest file, its copy from before your first change)] for both game versions."""
+        out = []
+        for r in G.REGIONS:
+            root = APP_DIR / "backups" if r == "eu" else APP_DIR / "backups" / r
+            dirs = find_emulator_pack_dirs(r)
+            src = self.app.sources.get("packs")
+            if src is not None and pack_dir_region(src.folder) in (r, None) and r == G.REGION:
+                dirs = [Path(src.folder)] + [d for d in dirs if d != Path(src.folder)]
+            for d in dirs[:1]:
+                out += cleanup.changed_event_files(d, root / "original")
+        return out
+
+    def fill(self):
+        f = self.body
+        for w in f.winfo_children():
+            w.destroy()
+        wrap = 640
+        ttk.Label(f, text=_("The editor"), style="H3.TLabel").pack(anchor="w")
+        last = updater.last_update(APP_DIR)
+        ttk.Label(f, style="Muted.TLabel", wraplength=wrap, justify="left", text=_(
+            "Before each update the program files of the version you had are copied to the 'update_backups' "
+            "folder of the editor. If a new version gives you trouble, go back to it: your quests, boxes and "
+            "settings are not changed.")).pack(anchor="w")
+        b = ttk.Frame(f)
+        b.pack(anchor="w", pady=(4, 12))
+        if last:
+            ttk.Button(b, text=_("Go back to version {}").format(last[1].get("from", "?")),
+                       command=lambda: go_back_version(self.app, last[0], last[1], parent=self)).pack(side="left")
+        else:
+            ttk.Label(b, text=_("No update made from the editor yet: nothing to go back to."),
+                      style="Muted.TLabel").pack(side="left")
+        titles = find_all_title_dirs()
+        mods = cleanup.editor_mod_files(titles)
+        pairs = self._event_pairs()
+        ttk.Label(f, text=_("Citra"), style="H3.TLabel").pack(anchor="w")
+        ttk.Label(f, style="Muted.TLabel", wraplength=wrap, justify="left", text=_(
+            "The editor's files in Citra's mods folder: your base-game quests, supply boxes and the Monster pack. "
+            "Removing them leaves your other mods and your save alone; your event quests stay in the game.")
+            ).pack(anchor="w")
+        ttk.Label(f, text=_("Found: {} file(s).").format(len(mods)) + ("  " + ", ".join(
+            short_path(t, 60) for t in titles) if titles else "  " + _("(no mods folder found)"))).pack(anchor="w")
+        b = ttk.Frame(f)
+        b.pack(anchor="w", pady=(4, 12))
+        ttk.Button(b, text=_("Remove the editor's mods from Citra..."), state="normal" if mods else "disabled",
+                   command=lambda: self._remove(mods, titles)).pack(side="left")
+        ttk.Label(f, text=_("Back to the game as it was before the editor"), style="H3.TLabel").pack(anchor="w")
+        ttk.Label(f, style="Muted.TLabel", wraplength=wrap, justify="left", text=_(
+            "Removes the files above and puts back the event quest files (quest1 to quest4) as they were before "
+            "your first change, from the editor's 'backups/original' folder: the quests you added to the game "
+            "go away (they stay in your library and backups). Event quest files changed: {}. To remove the editor "
+            "itself afterwards, delete its folder.").format(len(pairs))).pack(anchor="w")
+        b = ttk.Frame(f)
+        b.pack(anchor="w", pady=(4, 12))
+        ttk.Button(b, text=_("Go back to before the editor..."), state="normal" if mods or pairs else "disabled",
+                   command=lambda: self._before(titles, pairs)).pack(side="left")
+        ttk.Label(f, text=_("Put back"), style="H3.TLabel").pack(anchor="w")
+        lc = cleanup.last_cleanup(self.root_dir)
+        ttk.Label(f, style="Muted.TLabel", wraplength=wrap, justify="left", text=_(
+            "Everything a clean-up removes or replaces is copied first to 'backups/cleanup' in the editor's folder.")
+            + "  " + (_("Last clean-up: {} ({} files).").format(lc[1].get("time", "?"), len(lc[1]["files"]))
+                      if lc else _("No clean-up yet."))).pack(anchor="w")
+        b = ttk.Frame(f)
+        b.pack(fill="x", pady=(4, 0))
+        ttk.Button(b, text=_("Put back the last clean-up"), state="normal" if lc else "disabled",
+                   command=lambda: self._put_back(lc[0])).pack(side="left")
+        ttk.Button(b, text=_("Open the backups folder"), command=lambda: open_folder(self.root_dir)).pack(
+            side="left", padx=6)
+        ttk.Button(b, text=_("Close"), command=self.destroy).pack(side="right")
+
+    def _list(self, files, n=12):
+        lines = [short_path(p, 90) for p in files[:n]]
+        return "\n".join(lines) + ("\n" + _("... and {} more").format(len(files) - n) if len(files) > n else "")
+
+    def _done(self, dest, text, errors):
+        self.app.forget_monster_pack()
+        msg = text + "\n\n" + _("A copy is in:\n{}").format(dest)
+        if errors:
+            messagebox.showwarning(APP_TITLE, msg + "\n\n" + _("Not done (close Citra and try again):\n") +
+                                   "\n".join(errors[:8]), parent=self)
+        else:
+            messagebox.showinfo(APP_TITLE, msg, parent=self)
+        self.fill()
+
+    def _remove(self, mods, titles):
+        if not messagebox.askyesno(APP_TITLE, _("Close Citra first. Remove these {} file(s) from Citra? A copy is "
+                                                "kept in the editor's backups.\n\n{}").format(len(mods), self._list(mods)),
+                                   parent=self):
             return
         try:
-            updater.undo(APP_DIR, bdir)
+            dest, errors = cleanup.remove_mods(mods, titles, self.root_dir)
+        except OSError as exc:
+            messagebox.showerror(APP_TITLE, str(exc), parent=self)
+            return
+        self._done(dest, _("{} file(s) removed from Citra.").format(len(mods) - len(errors)), errors)
+
+    def _before(self, titles, pairs):
+        mods = cleanup.editor_mod_files(titles)
+        text = _("Close Citra first. This removes {} file(s) of the editor from Citra and puts back {} event quest "
+                 "file(s) as they were before your first change. A copy of everything is kept in the editor's "
+                 "backups. Continue?").format(len(mods), len(pairs))
+        if not messagebox.askyesno(APP_TITLE, text, parent=self):
+            return
+        try:
+            dest, errors = cleanup.remove_mods(mods, titles, self.root_dir,
+                                               reason="back to the game as it was before the editor")
+            done, errors2 = cleanup.restore_originals(pairs, dest)
+        except OSError as exc:
+            messagebox.showerror(APP_TITLE, str(exc), parent=self)
+            return
+        src = self.app.sources.get("packs")
+        if src is not None and done:
+            try:
+                self.app.reload_lists()
+            except Exception:                      # noqa: BLE001  (the files are put back whatever the view does)
+                pass
+        self._done(dest, _("{} file(s) removed from Citra, {} event quest file(s) put back.").format(
+            len(mods) - len(errors), done), errors + errors2)
+
+    def _put_back(self, folder):
+        if not messagebox.askyesno(APP_TITLE, _("Close Citra first. Put back the files of the last clean-up where "
+                                                "they were?"), parent=self):
+            return
+        try:
+            n = cleanup.put_back(folder)
         except (OSError, ValueError) as exc:
             messagebox.showerror(APP_TITLE, str(exc), parent=self)
             return
-        restart(self.app)
+        self.app.forget_monster_pack()
+        try:
+            self.app.reload_lists()
+        except Exception:                          # noqa: BLE001
+            pass
+        messagebox.showinfo(APP_TITLE, _("{} file(s) put back.").format(n), parent=self)
+        self.fill()
 
 
 def restart(app):

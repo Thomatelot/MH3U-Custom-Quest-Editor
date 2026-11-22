@@ -206,6 +206,12 @@ def find_emulator_title_dirs() -> list[Path]:
     return [root / "load" / "mods" / G.TITLE_ID for root in _emulator_roots() if _has_mods(root)]
 
 
+def find_all_title_dirs() -> list[Path]:
+    """Existing ``load/mods/<title id>`` folders of both game versions, in every emulator found."""
+    return [root / "load" / "mods" / info["title_id"] for root in _emulator_roots() if _has_mods(root)
+            for info in G.REGIONS.values() if (root / "load" / "mods" / info["title_id"]).is_dir()]
+
+
 def find_emulator_mod_dirs() -> list[Path]:
     """Citra-style ``load/mods/<title id>/romfs`` folders (created if the
     emulator's ``load`` folder exists)."""

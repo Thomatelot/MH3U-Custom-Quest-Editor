@@ -277,18 +277,23 @@ def detect_region(romfs) -> str | None:
     return None
 
 
-def _list_at(code: bytes, va: int):
+def _list_at(code: bytes, va: int, most: int = 32):
+    """[(stage, start list)] of a placement list, each stage once: the game takes the first entry of a
+    stage, and the pack's lists can hold a stage again further on (see next_chain). None if this is not
+    a placement list."""
     o = va - BASE
     if not 0 <= o < len(code) - 8:
         return None
-    out = []
-    for _ in range(32):
+    out, seen = [], set()
+    for _ in range(most):
         st, p = struct.unpack_from("<II", code, o)
         if st == 0xFF:
             return out
         if st > 0x1F:
             return None
-        out.append((st, p))
+        if st not in seen:
+            seen.add(st)
+            out.append((st, p))
         o += 8
     return None
 
@@ -312,7 +317,7 @@ def read_placement(code: bytes, table_va: int) -> dict[int, list[tuple[int, int]
     out = {}
     for em in range(86):
         p = struct.unpack_from("<I", code, table_va - BASE + 4 * em)[0]
-        out[em] = (_list_at(code, p) or []) if p else []
+        out[em] = (_list_at(code, p, 4096) or []) if p else []
     return out
 
 
@@ -435,22 +440,77 @@ def extras_match(manifest: dict | None, extras: dict | None) -> bool:
 
 
 # ----------------------------------------------------------------- your own starts
-# A start record (56 bytes) holds no position: the monster id (+0), 1 (+4), 0xFF (+8), the start
-# area (+9), 0 (+10), the form (+11: 1 = Brachydios' slime-charged start of "Clashing Fists!", 2 and 3
-# = Zinogre's and Stygian Zinogre's charged starts; 0 everywhere else in the game), a flag (+12, 0 or
-# 1 in the game's records, meaning unknown) and 1, 1 at +52. The position inside the area comes from
-# the monster's em_mappos00. The pack can add starts of your own: a copy of the monster's first
-# record on that map with another area, form and flag, appended to its start list (so the game's
-# own start numbers keep their meaning; yours come after them).
+# A start record (56 bytes): the monster id (+0), 1 (+4), 0xFF (+8), the start area (+9), 0 (+10), the
+# form (+11: 1 = Brachydios' slime-charged start of "Clashing Fists!", 2 and 3 = Zinogre's and Stygian
+# Zinogre's charged starts; 0 everywhere else in the game), a byte (+12, 0 or 1 in the game's records,
+# meaning unknown) and 1, 1 at +52. Bytes +16..+43 are zero in code.bin: at boot one of the game's static
+# initialisers (0xAA0FD8, EU and US) writes the start POSITION there (x, y, z, 0, the facing, ...). So
+#   * nothing may be written over the game's start lists: the initialiser would overwrite it at boot
+#     (1.8.0 freed "duplicate" lists for room and broke the starts and lists put there), and
+#   * a list that is not the game's must carry the positions itself: the pack copies them from
+#     data/start_records.json (the game's lists as they are once it runs, tools/build_start_records.py).
+# The pack can add starts of your own: the monster's start list on that map (with its positions),
+# then a copy of a game record of that area (its position: the monster's own record there, else the
+# record of another monster that the game starts there) with your form and byte 12. They come after
+# the game's starts, so the game's own start numbers keep their meaning.
 HUB_NAMES = {"village": "Moga Village", "port": "Port Tanzia"}
 FORMS = {0: "Normal", 1: "Special form 1", 2: "Special form 2", 3: "Special form 3"}
 FORM_MONSTERS = {74: (1,), 41: (2, 3), 72: (2, 3)}      # the forms the game itself uses
 MAX_STARTS = 16
+try:
+    _START_DATA = json.loads((Path(__file__).resolve().parent.parent / "data" / "start_records.json")
+                             .read_text(encoding="utf-8")).get("regions", {})
+except (OSError, ValueError):
+    _START_DATA = {}
+
+
+def runtime_starts(code: bytes, region: str | None) -> dict[int, list[bytes]] | None:
+    """{start list address: [records as the game has them once it runs]} for this code.bin, or None
+    when it is not the EU or US code.bin the editor knows."""
+    r = _START_DATA.get(region or "")
+    if not r or r.get("code_sha1") != hashlib.sha1(code).hexdigest():
+        return None
+    out = {}
+    for k, h in r["arrays"].items():
+        b = bytes.fromhex(h)
+        out[int(k, 16)] = [b[i:i + 56] for i in range(0, len(b), 56)]
+    return out
+
+
+def start_lists_span(code: bytes, place: dict) -> tuple[int, int]:
+    """Address range of the game's start lists (written at boot: the pack never writes there)."""
+    lo, hi = None, None
+    for lst in place.values():
+        for _s, p_ in lst:
+            recs, _end = _records_at(code, p_)
+            lo = p_ if lo is None else min(lo, p_)
+            hi = max(hi or 0, p_ + 56 * (len(recs) + 1))
+    return lo or 0, hi or 0
+
+
+def start_template(rt: dict, place: dict, em: int, stage: int, area: int, own: list[bytes]):
+    """(record, monster) whose start position a start of your own in ``area`` copies: the monster's own
+    record there (monster None), else the record of the lowest-numbered monster that the game starts
+    there (one with a position and byte 8 = 0xFF first), else (None, None)."""
+    for r in own:
+        if r[9] == area:
+            return r, None
+    found = []
+    for e2 in sorted(place):
+        p_ = dict(place[e2]).get(stage)
+        for r in rt.get(p_, []) if p_ else []:
+            if r[9] == area:
+                found.append((r[8] != 0xFF or not any(r[16:28]), e2, r))
+    if not found:
+        return None, None
+    _odd, e2, r = min(found, key=lambda x: (x[0], x[1]))
+    return r, e2
 
 
 def borrow_donor(mons: dict, em: int, stage: int, area: int) -> int | None:
-    """The large monster whose positions in this area a start of your own copies when ``em`` has
-    none there: the lowest number that has some (startpos.borrow_donor makes the same choice)."""
+    """The large monster whose em_mappos00 data for this area a start of your own copies when ``em``
+    has none there: the lowest number that has some (used when the start point comes from a monster
+    without data there either)."""
     for e2 in sorted(mons):
         if e2 != em and is_large(e2) and area in mons[e2].spawn.stages.get(stage, {}):
             return e2
@@ -470,63 +530,102 @@ def _records_at(code: bytes, va: int) -> tuple[list[bytes], bytes]:
     return out, code[o + 56 * k:o + 56 * (k + 1)]
 
 
-def custom_start_record(base: bytes, area: int, form: int, flag: int | None) -> bytes:
-    """flag None: keep the value of the record copied (the monster's usual start)."""
-    r = bytearray(base)
+def custom_start_record(template: bytes, first: bytes, area: int, form: int, flag: int | None) -> bytes:
+    """A start of your own: the monster's usual start record (``first``: its number, byte 8, which is
+    0x10-0x12 for the pack leaders Great Jaggi, Baggi and Wroggi, and the bytes after the position) with
+    the start position of ``template`` (+16..+43: a game record of that area), the area, the form and
+    byte 12 (flag None: the value of ``first``)."""
+    r = bytearray(first)
+    r[16:44] = template[16:44]
     r[9], r[11] = area & 0xFF, form & 0xFF
     if flag is not None:
         r[12] = flag & 0xFF
     return bytes(r)
 
 
-def shared_start_arrays(code: bytes, place: dict, table_va: int) -> tuple[dict[int, int], dict[int, int]]:
-    """Room for your own starts. With the whole pack only a few hundred bytes of code.bin stay free,
-    while many start lists of the game are the same as another one but for the monster number of
-    their records (+0). The pack already gives monsters the start list of another monster (that is
-    how Zinogre starts on Sandy Plains, tested), so such a list can point to its twin and its bytes
-    become free. Only lists that nothing but the placement lists points to are freed (74 of the 152
-    are also read directly by the game's code: those stay). Returns ({freed list: twin}, {list: size})."""
-    arrays = {}
-    for lst in place.values():
-        for _st, ptr in lst:
-            if ptr not in arrays:
-                recs, end = _records_at(code, ptr)
-                arrays[ptr] = (recs, end)
-    entries = set()
-    for em in range(86):
-        o = table_va - BASE + 4 * em
-        p_ = struct.unpack_from("<I", code, o)[0]
-        if not (BASE <= p_ < BASE + len(code)):
-            continue
-        o = p_ - BASE
-        while o + 8 <= len(code):
-            s_, _q = struct.unpack_from("<II", code, o)
-            if s_ == 0xFF:
-                break
-            entries.add(o + 4)
-            o += 8
-    elsewhere = set()
-    for o in range(0, len(code) - 3, 4):
-        v = struct.unpack_from("<I", code, o)[0]
-        if v in arrays and o not in entries:
-            elsewhere.add(v)
-    sizes = {p_: 56 * (len(r) + 1) for p_, (r, _e) in arrays.items()}
-    twin, redirect = {}, {}
-    for p_ in sorted(arrays, key=lambda a: (a not in elsewhere, a)):
-        recs, end = arrays[p_]
-        if not recs:
-            continue
-        key = b"".join(r[4:] for r in recs) + end
-        if key in twin and p_ not in elsewhere:
-            redirect[p_] = twin[key]
-        else:
-            twin.setdefault(key, p_)
-    return redirect, sizes
+# ------------------------------------------------------------ placement lists, shared
+# The game looks a stage up in a monster's placement list from its start and takes the FIRST entry of
+# that stage (the six readers of the table: 0x5C330C, 0x627110, 0x627490, 0x62D2E8, 0x62D970,
+# 0x631048, EU and US). So a list can be "my entries that differ, then another monster's list": the
+# lists are laid out as chains, [entries of list n that differ from list n-1] ... [list 1] [end], and
+# list k starts at its own entries. With every monster on every map this saves about half the room
+# (the pack's free space is what starts of your own and roaming lists use).
+def _chain_delta(lst, res: dict):
+    return [(s_, q) for s_, q in lst if res.get(s_) != q]
+
+
+def next_chain(todo: dict, limit: int) -> list:
+    """Take lists out of ``todo`` ({em: [(stage, ptr)]}) for one chain of at most ``limit`` bytes:
+    [(em, entries written for it)], the first one complete (the base), the others only what differs
+    from the lists before them. A list joins only if it has every stage of the lists before it (it
+    could not hide a stage it does not have)."""
+    if not todo:
+        return []
+    base = min(todo, key=lambda e: (len(todo[e]), e))
+    if 8 * (len(todo[base]) + 1) > limit:
+        return []
+    chain = [(base, list(todo.pop(base)))]
+    res = dict(chain[0][1])
+    size = 8 * (len(chain[0][1]) + 1)
+    while todo:
+        best = None
+        for e, lst in todo.items():
+            if not set(res) <= {s_ for s_, _q in lst}:
+                continue
+            d = _chain_delta(lst, res)
+            if best is None or (len(d), e) < (len(best[1]), best[0]):
+                best = (e, d)
+        if best is None or size + 8 * len(best[1]) > limit:
+            break
+        e, d = best
+        del todo[e]
+        chain.append((e, d))
+        res.update(dict(d))
+        size += 8 * len(d)
+    return chain
+
+
+def chain_blob(chain: list) -> tuple[bytes, dict[int, int]]:
+    """(bytes, {em: offset of its list}) of one chain: the last list's entries first, the base last."""
+    parts, offsets, pos = [], {}, 0
+    for em, entries in reversed(chain):
+        offsets[em] = pos
+        parts.append(b"".join(struct.pack("<II", s_, q) for s_, q in entries))
+        pos += 8 * len(entries)
+    return b"".join(parts) + struct.pack("<II", 0xFF, 0), offsets
+
+
+def chain_bytes(lists: dict) -> int:
+    """Room the placement lists take as one chain (an estimate before the blocks are known)."""
+    todo, total = dict(lists), 0
+    while todo:
+        total += len(chain_blob(next_chain(todo, 1 << 30))[0])
+    return total
+
+
+def resolve_list(code: bytes, va: int) -> dict[int, int]:
+    """{stage: start list} of a placement list as the game reads it (first entry of a stage)."""
+    out, o = {}, va - BASE
+    while True:
+        s_, q = struct.unpack_from("<II", code, o)
+        if s_ & 0xFF == 0xFF:
+            return out
+        out.setdefault(s_, q)
+        o += 8
+
+
+def broken_starts(manifest: dict | None) -> bool:
+    """True for a pack built by 1.8.0 with starts of your own or roaming lists 214-255: it shared the
+    game's duplicate start lists and wrote over them, which the game rewrites at boot (monsters such as
+    Qurupeco or Alatreon in the Great Desert then do not appear)."""
+    man = manifest or {}
+    return bool(man.get("starts") or man.get("roaming_table")) and "start_positions" not in man.get("features", [])
 
 
 def is_current(manifest: dict) -> bool:
     """True when the pack was built with everything this version of the editor adds."""
-    return {"big_sizes", "desert_area2", "siege_bosses"} <= set(manifest.get("features", []))
+    return {"big_sizes", "desert_area2", "siege_bosses"} <= set(manifest.get("features", [])) \
+        and not broken_starts(manifest)
 
 
 def ips(records) -> bytes:
@@ -657,6 +756,14 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
     content_hash = hashlib.sha256()
     final = {}                                     # monsters whose tables change: their new data
     borrow: dict[int, dict[int, set]] = {}         # starts of your own in an area without positions
+    rt = None
+    if extras.get("starts"):
+        rt = runtime_starts(code, game.region)
+        if rt is None:
+            raise PackError("Starts of your own need the code.bin of MH3U 1.0 (European or North American "
+                            "version): this one is not the one the editor knows, so the start points of the "
+                            "game's monsters can not be copied. Remove your starts (My monster starts) and "
+                            "build again.")
     for x in extras.get("starts") or []:
         st = G.MAP_TO_INTERNAL.get(int(x["map"])) if int(x["map"]) != G.HUB_MAP else None
         if st is not None:
@@ -685,7 +792,9 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
             if mine is None:
                 continue                           # not on this map: reported with the starts below
             for area in sorted(areas - set(mine)):
-                donor = borrow_donor(mons, em, st, area)
+                _tpl, owner = start_template(rt, place, em, st, area, [])
+                donor = owner if owner is not None and area in mons[owner].spawn.stages.get(st, {}) \
+                    else borrow_donor(mons, em, st, area)
                 if donor is None:
                     continue                       # nobody has positions there: reported below
                 mine[area] = copy.deepcopy(mons[donor].spawn.stages[st][area])
@@ -717,15 +826,9 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
     for em in wanted_starts:
         by_em.setdefault(em, [])
     starts_out, custom_arrays = [], {}
-    redirect, array_sizes = ({}, {})
     wanted_roaming = {int(k): v for k, v in (extras.get("roaming") or {}).items() if v}
     roam_off, roam_ptrs = GC.find_roaming(code) if wanted_roaming else (0, [])
     more_roaming = any(idx >= len(roam_ptrs) for idx in wanted_roaming)
-    if wanted_starts or more_roaming:              # room: the game's duplicate start lists are shared
-        redirect, array_sizes = shared_start_arrays(code, place, table_va)
-        for em in place:                           # every list is written again, pointing to the twins
-            if place[em]:
-                by_em.setdefault(em, [])
     for em, items in sorted(by_em.items()):
         lst = list(place[em])
         md = final.get(em) or mons.get(em)
@@ -755,8 +858,9 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
             if ptr == DESERT_SENTINEL:
                 base_recs = [desert[i:i + 56] for i in range(0, len(desert) - 56, 56)]
                 end = desert[-56:]
-            else:
-                base_recs, end = _records_at(code, ptr)
+            else:                                   # the game's records, with the positions written at boot
+                _file, end = _records_at(code, ptr)
+                base_recs = list(rt.get(ptr) or [])
             if not base_recs:
                 raise PackError(f"{G.mon_name(em)} has no start record on {G.map_name(int(mine[0]['map']))}.")
             if len(base_recs) + len(mine) > MAX_STARTS:
@@ -766,21 +870,22 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
             new = []
             for i, x in enumerate(mine):
                 area = int(x["area"])
-                if areas_ok and area not in areas_ok:
+                tpl, owner = start_template(rt, place, em, st, area, base_recs)
+                if tpl is None or (areas_ok and area not in areas_ok):
                     raise PackError(f"Your start for {G.mon_name(em)} on {G.map_name(int(x['map']))}: no monster "
-                                    f"has positions in area {area} (the base camp of most maps), so the game "
-                                    "would not know where to put it.")
+                                    f"of the game starts in area {area} (the base camp of most maps), so there "
+                                    "is no start point to give it.")
                 flag = x.get("flag")
-                new.append(custom_start_record(base_recs[0], area, int(x.get("form", 0)),
+                new.append(custom_start_record(tpl, base_recs[0], area, int(x.get("form", 0)),
                                                None if flag is None else int(flag)))
                 starts_out.append({"em": em, "map": int(x["map"]), "stage": st, "area": area,
                                    "form": int(x.get("form", 0)), "flag": None if flag is None else int(flag),
-                                   "index": len(base_recs) + i, "positions_from": borrowed.get((em, st, area))})
+                                   "index": len(base_recs) + i, "positions_from": borrowed.get((em, st, area)),
+                                   "start_from": owner})
             sentinel = 0xC5700000 + len(custom_arrays)
             custom_arrays[sentinel] = b"".join(base_recs + new) + end
             lst[k] = (st, sentinel)
-        lst = [(s_, redirect.get(q, q)) for s_, q in lst]
-        lists[em] = b"".join(struct.pack("<II", s_, q) for s_, q in lst) + struct.pack("<II", 0xFF, 0)
+        lists[em] = lst
     # free space: the padding after two segments, plus the old lists no longer pointed to
     free = [list(r) for r in regions]
     old_users: dict[int, set] = {}
@@ -795,12 +900,6 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
             free.append([p_, p_ + 8 * (len(place[min(users)]) + 1)])
         else:                                       # an old list that stays: its start lists too
             still |= {q for _s, q in place[min(users)]}
-    freed_arrays = [p_ for p_ in redirect if p_ not in still]
-    for p_ in freed_arrays:                        # start lists that now point to their twin
-        free.append([p_, p_ + array_sizes[p_]])
-    if freed_arrays:
-        log(f"Room for your own starts: {sum(array_sizes[p_] for p_ in freed_arrays)} bytes of duplicate "
-            "start lists freed.")
     merged = []
     for a_, b_ in sorted(free):                    # neighbouring old lists form one block
         if merged and a_ <= merged[-1][1]:
@@ -830,35 +929,53 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
             log("Big sizes skipped: not enough free space in code.bin.")
     else:
         log("Big sizes skipped: the size table was not found in this code.bin.")
-    if desert is not None and any(DESERT_SENTINEL_BYTES in b for b in lists.values()):
-        slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= len(desert)), None)
+    def take(size):
+        slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= size), None)
         if slot is None:
+            return None
+        pos = slot[0]
+        slot[0] += (size + 7) // 8 * 8
+        return pos
+
+    def put_at(sentinel, pos):
+        for em in lists:
+            lists[em] = [(s_, pos if q == sentinel else q) for s_, q in lists[em]]
+
+    if desert is not None and any(q == DESERT_SENTINEL for lst in lists.values() for _s, q in lst):
+        pos = take(len(desert))
+        if pos is None:
             raise PackError("Not enough free space in code.bin for the Great Desert start list.")
-        pos = slot[0]
-        slot[0] += (len(desert) + 7) // 8 * 8
         records.append((pos - BASE, desert))
-        lists = {em: b.replace(DESERT_SENTINEL_BYTES, struct.pack("<II", DESERT, pos)) for em, b in lists.items()}
-    for sentinel, blob in custom_arrays.items():     # your own starts: the new start lists
-        slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= len(blob)), None)
-        if slot is None:
-            raise PackError("Not enough free space in code.bin for your own monster starts: remove some.")
-        pos = slot[0]
-        slot[0] += (len(blob) + 7) // 8 * 8
+        put_at(DESERT_SENTINEL, pos)
+    # your own starts (big blocks) before the placement lists, which share their entries (chains)
+    need = sum((len(blob) + 7) // 8 * 8 for blob in custom_arrays.values())
+    room = sum(b_ - a_ for a_, b_ in free) - chain_bytes(lists)
+
+    def no_room():
+        return PackError(f"Not enough room in code.bin for your own monster starts: they need {need} bytes, and "
+                         f"what is left once the pack has given every monster every map (about {max(0, room)} "
+                         "bytes, in pieces) is not enough. Each monster/map pair with a start of your own copies "
+                         "the monster's whole start list on that map (56 bytes a start): about fifteen pairs fit. "
+                         "Remove some (My monster starts), or put several starts on the same pairs.")
+    for sentinel, blob in sorted(custom_arrays.items(), key=lambda kv: -len(kv[1])):
+        pos = take(len(blob))
+        if pos is None:
+            raise no_room()
         records.append((pos - BASE, blob))
-        old = struct.pack("<I", sentinel)
-        lists = {em: b"".join(b[i:i + 4] if i % 8 == 0 or b[i:i + 4] != old else struct.pack("<I", pos)
-                              for i in range(0, len(b), 4)) for em, b in lists.items()}
+        put_at(sentinel, pos)
+    todo = dict(lists)
+    while todo:                                    # one chain of placement lists per free block, biggest first
+        slot = max(free, key=lambda r: r[1] - r[0])
+        chain = next_chain(todo, slot[1] - slot[0])
+        if not chain:
+            raise no_room() if custom_arrays else PackError("Not enough free space in code.bin for the placement lists.")
+        blob, offsets = chain_blob(chain)
+        records.append((slot[0] - BASE, blob))
+        for em, o in offsets.items():
+            records.append((table_va - BASE + 4 * em, struct.pack("<I", slot[0] + o)))
+        slot[0] += (len(blob) + 7) // 8 * 8
     if starts_out:
         log(f"Monster starts of your own: {len(starts_out)}.")
-    for em in sorted(lists, key=lambda e2: -len(lists[e2])):      # biggest first
-        blob = lists[em]
-        slot = next((r for r in sorted(free, key=lambda r: r[1] - r[0]) if r[1] - r[0] >= len(blob)), None)
-        if slot is None:
-            raise PackError("Not enough free space in code.bin for the placement lists.")
-        pos = slot[0]
-        slot[0] += (len(blob) + 7) // 8 * 8
-        records.append((pos - BASE, blob))
-        records.append((table_va - BASE + 4 * em, struct.pack("<I", pos)))
     # big sizes: the size spread table, moved and extended
     roaming = {}
     roaming_table = None
@@ -929,6 +1046,11 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
     left = sum(b_ - a_ for a_, b_ in free)
     log(f"Free space left in code.bin: {left} bytes.")
     records.sort()
+    lo, hi = start_lists_span(code, place)
+    for off, blob in records:                      # never over the game's start lists (written at boot)
+        if off + len(blob) > lo - BASE and off < hi - BASE:
+            raise PackError(f"Internal error: the pack would write at 0x{off + BASE:X}, inside the game's start "
+                            "lists, which the game writes again when it starts. Please report it.")
     patch = ips(records)
     (out_dir / "exefs").mkdir()
     (out_dir / "exefs" / "code.ips").write_bytes(patch)
@@ -940,7 +1062,7 @@ def _build(romfs, out_dir, monsters=None, stages=TARGET_STAGES, log=print, extra
         "added": [{k: p[k] for k in ("em", "stage", "donor", "start_areas")} for p in plan],
         "placement_table": f"0x{table_va:X}",
         "big_sizes": big,
-        "features": ["big_sizes"] * bool(big) + ["desert_area2"] * bool(desert) + ["siege_bosses"],
+        "features": ["big_sizes"] * bool(big) + ["desert_area2"] * bool(desert) + ["siege_bosses", "start_positions"],
         "quests": quests, "roaming": roaming, "starts": starts_out, "map9": hub,
         "roaming_table": roaming_table,
     }
